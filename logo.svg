@@ -1,33 +1,35 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <!-- Minimalist, Cuter Otter App Icon -->
+  <!-- Charming Beady-Eyed Otter App Icon -->
   <defs>
-    <!-- Darker, deeper background -->
+    <!-- Deep, professional dark navy background -->
     <rect id="bg" x="0" y="0" width="512" height="512" rx="120" fill="#0D1B2A" />
   </defs>
   
   <use href="#bg" />
   
-  <!-- Otter Face (filling the frame) -->
+  <!-- Otter Face (filling the frame for presence) -->
   <ellipse cx="256" cy="280" rx="220" ry="200" fill="#CD853F" />
   
-  <!-- Ears (Simple and integrated) -->
-  <circle cx="110" cy="160" r="50" fill="#A0522D" />
-  <circle cx="402" cy="160" r="50" fill="#A0522D" />
+  <!-- Ears -->
+  <circle cx="100" cy="160" r="55" fill="#A0522D" />
+  <circle cx="412" cy="160" r="55" fill="#A0522D" />
   
-  <!-- Eyes (Maximum Cuteness: Large, simple, sparkling) -->
-  <circle cx="175" cy="250" r="45" fill="#1A1A1A" />
-  <circle cx="337" cy="250" r="45" fill="#1A1A1A" />
+  <!-- Muzzle/Cream Area (Soft and inviting) -->
+  <ellipse cx="256" cy="350" rx="130" ry="100" fill="#FDEBD0" />
   
-  <!-- Sparkles in eyes -->
-  <circle cx="195" cy="230" r="15" fill="white" />
-  <circle cx="357" cy="230" r="15" fill="white" />
+  <!-- Beady Eyes (The soul of the icon) -->
+  <circle cx="180" cy="245" r="48" fill="#111" />
+  <circle cx="332" cy="245" r="48" fill="#111" />
   
-  <!-- Muzzle (Simplified) -->
-  <circle cx="256" cy="340" r="80" fill="#FDEBD0" />
+  <!-- Bright Highlights (Extra charm/sparkle) -->
+  <circle cx="202" cy="225" r="14" fill="white" />
+  <circle cx="354" cy="225" r="14" fill="white" />
+  <circle cx="178" cy="265" r="7" fill="white" fill-opacity="0.6" />
+  <circle cx="330" cy="265" r="7" fill="white" fill-opacity="0.6" />
   
-  <!-- Nose (Simplified Heart/Triangle) -->
-  <path d="M240 320 Q 256 300 272 320 L 256 345 Z" fill="#1A1A1A" />
+  <!-- Small, simple nose -->
+  <path d="M236 315 Q 256 295 276 315 L 256 340 Z" fill="#111" />
   
-  <!-- Smile -->
-  <path d="M220 360 Q 256 390 292 360" fill="none" stroke="#1A1A1A" stroke-width="12" stroke-linecap="round" />
+  <!-- Happy, simple smile -->
+  <path d="M220 370 Q 256 400 292 370" fill="none" stroke="#111" stroke-width="12" stroke-linecap="round" />
 </svg>
