@@ -1,6 +1,6 @@
 # Unity Technical Art Course
 
-![Unity Technical Art Course Hero](./hero.png)
+<img src="./hero.png" alt="Unity Technical Art Course Hero" height="400">
 
 Welcome to the **Unity Technical Art Course** repository! This project contains a comprehensive set of notes, lessons, and cheatsheets focused on mastering the intersection of art and engineering in Unity.
 
