@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 9: 3D File Formats & Data Ingestion | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 09</div>
+      <h1>3D File Formats & Data Ingestion</h1>
+      <p class="lesson-subtitle">CAD, DXF, point clouds, and coordinate systems</p>
+    </div>
+
+    <h2>The VRify Challenge</h2>
+    <p>With 250+ clients sending data in different formats without coordination, you're dealing with the classic "garbage in, garbage out" problem. Understanding file formats is essential for building robust ingestion pipelines.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Core Principle</div>
+      <p>The goal isn't just to import data — it's to <strong>normalize</strong> it. Different formats, coordinate systems, units, and structures must all convert to a consistent Unity-friendly format.</p>
+    </div>
+
+    <h2>Mesh/Model Formats</h2>
+
+    <h3>Common Exchange Formats</h3>
+    <table>
+      <tr>
+        <th>Format</th>
+        <th>Full Name</th>
+        <th>Characteristics</th>
+        <th>Unity Support</th>
+      </tr>
+      <tr>
+        <td><strong>FBX</strong></td>
+        <td>Filmbox</td>
+        <td>Industry standard, animations, materials</td>
+        <td>✅ Native import</td>
+      </tr>
+      <tr>
+        <td><strong>OBJ</strong></td>
+        <td>Wavefront Object</td>
+        <td>Simple, widely supported, no animation</td>
+        <td>✅ Native import</td>
+      </tr>
+      <tr>
+        <td><strong>glTF/GLB</strong></td>
+        <td>GL Transmission Format</td>
+        <td>Modern, PBR materials, compact</td>
+        <td>⚠️ Requires package (e.g., GLTFUtility)</td>
+      </tr>
+      <tr>
+        <td><strong>USD</strong></td>
+        <td>Universal Scene Description</td>
+        <td>Pixar format, complex scenes, emerging</td>
+        <td>⚠️ Unity USD package</td>
+      </tr>
+      <tr>
+        <td><strong>DAE</strong></td>
+        <td>COLLADA</td>
+        <td>XML-based, legacy, animations</td>
+        <td>✅ Native but deprecated</td>
+      </tr>
+    </table>
+
+    <h3>CAD Formats</h3>
+    <p>CAD (Computer-Aided Design) formats are different from game/visualization formats. They prioritize <strong>precision</strong> over rendering efficiency.</p>
+
+    <table>
+      <tr>
+        <th>Format</th>
+        <th>Origin</th>
+        <th>Characteristics</th>
+        <th>Import Approach</th>
+      </tr>
+      <tr>
+        <td><strong>STEP</strong> (.stp/.step)</td>
+        <td>ISO Standard</td>
+        <td>Solid models, NURBS surfaces</td>
+        <td>Convert via middleware (PiXYZ, UAT)</td>
+      </tr>
+      <tr>
+        <td><strong>IGES</strong> (.igs/.iges)</td>
+        <td>Legacy Standard</td>
+        <td>Surfaces and curves, older CAD</td>
+        <td>Convert externally</td>
+      </tr>
+      <tr>
+        <td><strong>DWG</strong></td>
+        <td>AutoCAD</td>
+        <td>Proprietary, 2D/3D drawings</td>
+        <td>Export to FBX or use SDK</td>
+      </tr>
+      <tr>
+        <td><strong>DXF</strong></td>
+        <td>AutoCAD Exchange</td>
+        <td>Open format version of DWG</td>
+        <td>Parse directly or convert</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 CAD vs Game Geometry</div>
+      <p>CAD uses <strong>NURBS</strong> (smooth mathematical surfaces) and exact curves. Games need <strong>triangulated meshes</strong>. The conversion process (tessellation) can explode polygon counts if not controlled. A simple mechanical part might become millions of triangles!</p>
+    </div>
+
+    <h2>DXF Deep Dive</h2>
+    <p>You mentioned DXF specifically (and topography lines as closed loops). DXF is particularly relevant for mining/geospatial data.</p>
+
+    <h3>What's in a DXF File</h3>
+    <ul>
+      <li><strong>Points</strong> — individual coordinates</li>
+      <li><strong>Lines</strong> — straight segments between two points</li>
+      <li><strong>Polylines</strong> — connected sequences of lines (open or closed)</li>
+      <li><strong>LWPolylines</strong> — lightweight polylines (2D)</li>
+      <li><strong>Circles, Arcs, Ellipses</strong> — curve primitives</li>
+      <li><strong>3DFaces</strong> — triangular/quad surfaces</li>
+      <li><strong>Text, Dimensions</strong> — annotations</li>
+      <li><strong>Blocks</strong> — reusable component definitions</li>
+    </ul>
+
+    <h3>Topography Contour Lines</h3>
+    <p>Topography data typically comes as <strong>closed polylines</strong> at specific elevations:</p>
+
+    <div class="diagram">
+CONTOUR LINES (overhead view):
+
+Elevation 100m: ─────────────╲
+Elevation 110m:    ──────────╲
+Elevation 120m:       ────────╲
+Elevation 130m:          ─────╲
+                              ╲
+                               Peak
+
+Each contour = closed loop polyline
+All points on that line are at same elevation
+    </div>
+
+    <h3>Processing DXF for Unity</h3>
+    <ol>
+      <li>Parse the DXF structure (entities, layers, blocks)</li>
+      <li>Extract polylines and their elevation data</li>
+      <li>Convert coordinates (see Coordinate Systems below)</li>
+      <li>Either: Generate mesh from contours, or render as lines</li>
+    </ol>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>Contour lines can be rendered as <strong>LineRenderer</strong> components, or you can triangulate them into terrain meshes. Libraries like <code>netDxf</code> (C#) can parse DXF files directly in Unity.</p>
+    </div>
+
+    <h2>Point Cloud Formats</h2>
+    <p>Point clouds are fundamental to mining/surveying — LIDAR scans, drone photogrammetry, etc.</p>
+
+    <table>
+      <tr>
+        <th>Format</th>
+        <th>Characteristics</th>
+        <th>Handling</th>
+      </tr>
+      <tr>
+        <td><strong>LAS/LAZ</strong></td>
+        <td>LIDAR standard, LAZ is compressed</td>
+        <td>LASzip libraries, stream processing</td>
+      </tr>
+      <tr>
+        <td><strong>PLY</strong></td>
+        <td>Polygon File Format, simple</td>
+        <td>Easy to parse, often from photogrammetry</td>
+      </tr>
+      <tr>
+        <td><strong>E57</strong></td>
+        <td>ASTM standard, structured scans</td>
+        <td>Complex, handles scanner metadata</td>
+      </tr>
+      <tr>
+        <td><strong>XYZ/PTS</strong></td>
+        <td>Plain text coordinates</td>
+        <td>Simple parsing, large files</td>
+      </tr>
+      <tr>
+        <td><strong>Potree</strong></td>
+        <td>Hierarchical octree format</td>
+        <td>Streaming-ready, level-of-detail</td>
+      </tr>
+    </table>
+
+    <h3>Point Cloud Challenges</h3>
+    <ul>
+      <li><strong>Scale:</strong> Millions to billions of points — can't render all at once</li>
+      <li><strong>Rendering:</strong> Unity's point primitives are limited; often use billboards or voxels</li>
+      <li><strong>LOD:</strong> Need spatial data structures (octree) for progressive loading</li>
+      <li><strong>Memory:</strong> Browser targets have strict limits</li>
+    </ul>
+
+    <h2>Coordinate Systems</h2>
+    <p>This is where mining/geospatial data gets tricky. Real-world coordinates don't match Unity's coordinate system.</p>
+
+    <div class="diagram">
+COORDINATE SYSTEM DIFFERENCES:
+
+Unity (Left-handed, Y-up):        Geographic (varies):
+       Y                          - WGS84 (lat/long/altitude)
+       │                          - UTM zones (meters)
+       │                          - Local mining grids
+       │_____ X                   - State Plane coordinates
+      /
+     Z
+
+Issues:
+- Unity uses meters but limited float precision (~6 decimal digits)
+- Real-world coordinates can be HUGE (millions of meters from origin)
+- Y/Z axis flipping between systems
+- Different units (feet, meters, survey feet)
+    </div>
+
+    <h3>Origin Shifting</h3>
+    <p>The most important technique for geospatial data:</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Float Precision Problem</div>
+      <p>Unity uses 32-bit floats. At 1 million meters from origin, you lose ~0.1m precision. At 10 million meters, wobbling and jitter become visible. Solution: <strong>shift the origin</strong> to keep everything within ~10km of (0,0,0).</p>
+    </div>
+
+    <pre><code>// Example: Shift real-world coordinates to Unity
+Vector3 worldOrigin = new Vector3(500000, 0, 4500000); // UTM coords
+
+Vector3 ToUnityPosition(Vector3 realWorld) {
+    return new Vector3(
+        realWorld.x - worldOrigin.x,
+        realWorld.y,  // elevation
+        realWorld.z - worldOrigin.z
+    );
+}</code></pre>
+
+    <h2>Data Validation Strategies</h2>
+    <p>With 250 clients, you need automated validation:</p>
+
+    <ul>
+      <li><strong>Format Detection:</strong> Check file headers, don't trust extensions</li>
+      <li><strong>Bounds Checking:</strong> Are coordinates reasonable for Earth?</li>
+      <li><strong>Unit Detection:</strong> Heuristics for feet vs meters (building heights, etc.)</li>
+      <li><strong>Topology Validation:</strong> Are meshes watertight? Any degenerate triangles?</li>
+      <li><strong>Orientation Check:</strong> Is Y up or Z up?</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>Build a validation pipeline that runs before import. Generate reports listing issues found. Let the ingestion system either auto-fix common problems or queue for manual review.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>FBX and OBJ</strong> are Unity's native formats — CAD formats need conversion</li>
+      <li><strong>DXF</strong> contains polylines, points, curves — contour lines are closed polylines at elevations</li>
+      <li><strong>CAD geometry</strong> uses NURBS; must tessellate to triangles (control polygon count!)</li>
+      <li><strong>Point clouds</strong> need LOD systems and spatial structures for large datasets</li>
+      <li><strong>Coordinate systems</strong> differ between geographic and Unity — shift origin to avoid precision loss</li>
+      <li><strong>Float precision</strong> breaks down far from origin — keep geometry within ~10km of (0,0,0)</li>
+      <li><strong>Automate validation</strong> — with 250 clients, manual checking isn't feasible</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="08-ui-rendering.html">
+        <span class="label">← Previous</span>
+        <span class="title">UI Rendering</span>
+      </a>
+      <a href="10-mesh-optimization.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Mesh Optimization Algorithms</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

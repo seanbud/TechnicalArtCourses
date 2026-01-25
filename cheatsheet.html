@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Cheat Sheet | Unity TA Prep</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Cheat sheet specific compact styles */
+    .cheat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    
+    .cheat-section {
+      margin: 0;
+    }
+    
+    .cheat-section h3 {
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .cheat-section ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+    
+    .cheat-section li {
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+      line-height: 1.5;
+    }
+    
+    .mini-table {
+      font-size: 0.85rem;
+    }
+    
+    .mini-table th, .mini-table td {
+      padding: 0.4rem 0.6rem;
+    }
+    
+    .quick-ref {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    
+    .quick-ref code {
+      font-size: 0.85rem;
+    }
+    
+    @media print {
+      body { background: white; color: black; }
+      .nav { display: none; }
+      .cheat-section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <h1>Master Cheat Sheet</h1>
+      <p class="lesson-subtitle">All key concepts at a glance for your VRify interview</p>
+    </div>
+
+    <!-- SECTION 1: Engine & Loop -->
+    <h2>1. Unity Engine Loop</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Execution Order</h3>
+        <ul>
+          <li><strong>Awake/OnEnable/Start</strong> — Initialization (once)</li>
+          <li><strong>FixedUpdate</strong> — Physics (0, 1, or many per frame)</li>
+          <li><strong>Update</strong> — Game logic (once per frame)</li>
+          <li><strong>LateUpdate</strong> — Post-update (cameras)</li>
+          <li><strong>Rendering</strong> — Culling, draw calls, shaders</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Update vs FixedUpdate</h3>
+        <ul>
+          <li><strong>FixedUpdate:</strong> Fixed timestep (0.02s), for physics/Rigidbody</li>
+          <li><strong>Update:</strong> Variable deltaTime, for input/non-physics</li>
+          <li>Use <code>Time.deltaTime</code> in Update for frame-independence</li>
+          <li>FixedUpdate runs multiple times if frame is slow</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2: Render Pipeline -->
+    <h2>2. Render Pipeline</h2>
+    <div class="quick-ref">
+      <strong>Flow:</strong> Frustum Culling → Occlusion Culling → Sort by Render Queue → Batch → GPU (Vertex → Rasterize → Fragment) → Composite
+    </div>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Culling</h3>
+        <ul>
+          <li><strong>Frustum:</strong> Skip objects outside camera view (uses AABB)</li>
+          <li><strong>Occlusion:</strong> Skip objects hidden behind others (needs baking)</li>
+          <li><code>Renderer.bounds</code> defines culling volume</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Batching ("Changing Brushes")</h3>
+        <ul>
+          <li>Each <strong>material change = draw call</strong></li>
+          <li><strong>Static Batching:</strong> Combine static meshes at build</li>
+          <li><strong>GPU Instancing:</strong> Many copies, one call</li>
+          <li><strong>SRP Batcher:</strong> Reduces per-call CPU cost (not count)</li>
+        </ul>
+      </div>
+    </div>
+    <table class="mini-table">
+      <tr><th>Render Queue</th><th>Value</th><th>Sorting</th></tr>
+      <tr><td>Background</td><td>1000</td><td>-</td></tr>
+      <tr><td>Geometry (default)</td><td>2000</td><td>Front-to-back</td></tr>
+      <tr><td>Transparent</td><td>3000</td><td>Back-to-front</td></tr>
+      <tr><td>Overlay</td><td>4000</td><td>-</td></tr>
+    </table>
+
+    <!-- SECTION 3: Shaders -->
+    <h2>3. Shaders</h2>
+    <div class="quick-ref">
+      <strong>Pipeline:</strong> Vertex Shader (per-vertex) → [Geometry*] → Rasterization (HW) → Fragment Shader (per-pixel) → Depth Test → Blend
+    </div>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Key Concepts</h3>
+        <ul>
+          <li><strong>Shader = multiple programs</strong> (vertex, fragment, etc.)</li>
+          <li><strong>Vertex shader:</strong> Transform positions, pass data to frag</li>
+          <li><strong>Fragment shader:</strong> Calculate pixel color — main bottleneck</li>
+          <li><strong>Pass:</strong> One complete render; multi-pass = multiple renders</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Compilation</h3>
+        <ul>
+          <li>ShaderLab wraps HLSL in Unity format</li>
+          <li>Compiled at build time for target platform</li>
+          <li><strong>Variants:</strong> Different combos of keywords — can explode build size</li>
+          <li>Use <code>shader_feature</code> over <code>multi_compile</code> to strip unused</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 4: Forward vs Deferred -->
+    <h2>4. Forward vs Deferred Rendering</h2>
+    <table class="mini-table">
+      <tr><th>Aspect</th><th>Forward</th><th>Deferred</th><th>Forward+</th></tr>
+      <tr><td>Many Lights</td><td>❌ Limited</td><td>✅ Excellent</td><td>✅ Excellent</td></tr>
+      <tr><td>MSAA</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes</td></tr>
+      <tr><td>Transparency</td><td>✅ Easy</td><td>⚠️ Hard</td><td>✅ Easy</td></tr>
+      <tr><td>Memory</td><td>✅ Low</td><td>❌ High (GBuffer)</td><td>⚠️ Medium</td></tr>
+      <tr><td>WebGL</td><td>✅ Best</td><td>❌ No</td><td>⚠️ Limited</td></tr>
+    </table>
+    <div class="quick-ref">
+      <strong>GBuffer:</strong> Stores per-pixel surface data (albedo, normals, depth, roughness) so lights process only visible pixels.<br>
+      <strong>Forward+:</strong> Clustered light culling — divides screen into tiles, each tile only processes relevant lights.
+    </div>
+
+    <!-- SECTION 5: URP -->
+    <h2>5. URP Settings Quick Ref</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Recommended for Browser</h3>
+        <ul>
+          <li><strong>Render Path:</strong> Forward</li>
+          <li><strong>HDR:</strong> Off</li>
+          <li><strong>MSAA:</strong> 2x or Off (use FXAA)</li>
+          <li><strong>Shadow Res:</strong> 512-1024</li>
+          <li><strong>Shadow Cascades:</strong> 1-2</li>
+          <li><strong>SRP Batcher:</strong> Enabled</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>MSAA Options</h3>
+        <ul>
+          <li><strong>Off:</strong> Use FXAA post-process instead</li>
+          <li><strong>2x:</strong> Good balance for browser</li>
+          <li><strong>4x/8x:</strong> Too expensive for WebGL</li>
+          <li>Note: MSAA doesn't work with some screen-space effects</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 6: GPU -->
+    <h2>6. GPU Architecture</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>SIMD & Warp Divergence</h3>
+        <ul>
+          <li>GPUs execute <strong>same instruction</strong> on many threads (warp/wavefront)</li>
+          <li><strong>Branching hurts:</strong> If threads diverge, both branches execute</li>
+          <li>Uniform branches (same value for all) are OK</li>
+          <li>Keep fragment shaders simple — runs millions of times</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Texture2D Arrays</h3>
+        <ul>
+          <li>Stack of same-size textures, sample with (u, v, layer)</li>
+          <li>Enables batching with texture variety</li>
+          <li>Use for: terrain blending, character skins, decals</li>
+        </ul>
+      </div>
+    </div>
+    <div class="quick-ref">
+      <strong>Memory Hierarchy (fast→slow):</strong> Registers → Shared Memory → L1/L2 Cache → Texture Cache → Global VRAM<br>
+      <strong>Compute Shaders:</strong> General GPU compute, not for rendering directly. WebGL 2.0 does NOT support them.
+    </div>
+
+    <!-- SECTION 7: Mesh -->
+    <h2>7. Mesh Fundamentals</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Components</h3>
+        <ul>
+          <li><strong>MeshFilter:</strong> Holds mesh data (geometry)</li>
+          <li><strong>MeshRenderer:</strong> Draws mesh with materials</li>
+          <li><code>.sharedMesh</code> = shared asset (read-only)</li>
+          <li><code>.mesh</code> = creates instance copy (for modification)</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Vertex Attributes</h3>
+        <ul>
+          <li><strong>Position:</strong> 3D location</li>
+          <li><strong>Normal:</strong> Surface direction (lighting)</li>
+          <li><strong>UV:</strong> Texture coordinates</li>
+          <li><strong>Tangent:</strong> For normal mapping</li>
+          <li><strong>SubMesh:</strong> Portion with different material</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 8: UI -->
+    <h2>8. UI Rendering</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Canvas Modes</h3>
+        <ul>
+          <li><strong>Screen Space Overlay:</strong> Always on top, ignores cameras</li>
+          <li><strong>Screen Space Camera:</strong> Rendered by camera, can have depth</li>
+          <li><strong>World Space:</strong> 3D positioned, affected by perspective</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Optimization</h3>
+        <ul>
+          <li><strong>Canvas rebuilds</strong> when any element changes — expensive!</li>
+          <li><strong>Separate canvases:</strong> Static vs dynamic elements</li>
+          <li><strong>Overdraw:</strong> Stacked UI draws pixels multiple times</li>
+          <li>Disable Raycast Target on decorative elements</li>
+          <li>Use TextMeshPro for text (SDF, crisp at any size)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="quick-ref">
+      <strong>Batching breaks:</strong> Different textures, different materials, interleaved hierarchy order. Group by material in hierarchy!
+    </div>
+
+    <!-- SECTION 9: File Formats -->
+    <h2>9. 3D File Formats</h2>
+    <table class="mini-table">
+      <tr><th>Format</th><th>Type</th><th>Unity Support</th></tr>
+      <tr><td>FBX, OBJ</td><td>Exchange</td><td>✅ Native</td></tr>
+      <tr><td>glTF/GLB</td><td>Modern exchange</td><td>⚠️ Package needed</td></tr>
+      <tr><td>STEP, IGES</td><td>CAD</td><td>❌ Need UAT/Pixyz</td></tr>
+      <tr><td>DXF/DWG</td><td>AutoCAD</td><td>⚠️ Parse or convert</td></tr>
+      <tr><td>LAS/LAZ, E57</td><td>Point Cloud</td><td>⚠️ Custom processing</td></tr>
+    </table>
+    <div class="quick-ref">
+      <strong>DXF contents:</strong> Points, Lines, Polylines (contours!), Arcs, 3DFaces, Blocks<br>
+      <strong>Float precision:</strong> Unity floats break at ~1M meters from origin. Use <strong>origin shifting</strong> for geospatial data.
+    </div>
+
+    <!-- SECTION 10: Mesh Optimization -->
+    <h2>10. Mesh Optimization</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Algorithms</h3>
+        <ul>
+          <li><strong>Decimation (QEM):</strong> Collapse edges with lowest error</li>
+          <li><strong>Hole Detection:</strong> Find boundary edges (only 1 adjacent tri)</li>
+          <li><strong>LOD:</strong> Multiple resolutions, switch by distance</li>
+          <li><strong>Vertex Welding:</strong> Merge vertices within tolerance</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Best Practices</h3>
+        <ul>
+          <li>Preserve sharp edges and UV seams during decimation</li>
+          <li>LOD levels: 100%, 50%, 25%, 10% of triangles</li>
+          <li>Triplanar mapping avoids need for UVs on CAD</li>
+          <li>Validate meshes: watertight, consistent normals</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 11: WebGL -->
+    <h2>11. WebGL Constraints</h2>
+    <div class="quick-ref">
+      <strong>Key Limits:</strong> Single-threaded | ~2GB memory | No compute shaders | Download before run | Shader stalls
+    </div>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Memory</h3>
+        <ul>
+          <li>Textures dominate — 4K texture = 64MB!</li>
+          <li>Use <strong>ETC2</strong> compression (WebGL 2.0 guaranteed)</li>
+          <li>Max 1K-2K textures for most assets</li>
+          <li>Unload unused assets aggressively</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Load Time</h3>
+        <ul>
+          <li>Enable Brotli/gzip compression</li>
+          <li>Use Addressables for streaming</li>
+          <li>Strip unused engine code</li>
+          <li>Shader warmup during loading screen</li>
+        </ul>
+      </div>
+    </div>
+    <table class="mini-table">
+      <tr><th>Resolution</th><th>RGBA Size</th><th>With Mipmaps</th></tr>
+      <tr><td>512×512</td><td>1 MB</td><td>1.33 MB</td></tr>
+      <tr><td>1024×1024</td><td>4 MB</td><td>5.33 MB</td></tr>
+      <tr><td>2048×2048</td><td>16 MB</td><td>21.3 MB</td></tr>
+      <tr><td>4096×4096</td><td>64 MB</td><td>85.3 MB</td></tr>
+    </table>
+
+    <!-- SECTION 12: UAT -->
+    <h2>12. Unity Asset Transform (UAT)</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>What It Does</h3>
+        <ul>
+          <li>Converts CAD formats (CATIA, NX, STEP, IGES) to Unity</li>
+          <li>Tessellates NURBS to triangles with quality control</li>
+          <li>Decimates, generates LODs, maps materials</li>
+          <li>Preserves hierarchy and metadata</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Industrial Scale</h3>
+        <ul>
+          <li>Scriptable API for automated pipelines</li>
+          <li>"Excited to learn VRify's specific implementation"</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 13: Editor Tooling -->
+    <h2>13. Editor Tooling & Automation</h2>
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Types of Tools</h3>
+        <ul>
+          <li><strong>Menu Items:</strong> Custom buttons in the top bar</li>
+          <li><strong>Inspectors:</strong> Customize how components look</li>
+          <li><strong>Editor Windows:</strong> Full custom floating panels</li>
+          <li><strong>Postprocessors:</strong> Hooks that run on asset import</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>AssetPostprocessor</h3>
+        <ul>
+          <li><strong>Hooks:</strong> <code>OnPostprocessModel</code>, <code>OnPostprocessTexture</code></li>
+          <li><strong>Purpose:</strong> Fix coordinate shifts, map materials, automate UAT</li>
+          <li>Standardize "garbage" client data upon import</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>The API Rules</h3>
+        <ul>
+          <li><strong>Editor Folder:</strong> Scripts using <code>UnityEditor</code> <em>must</em> be in <code>Editor/</code></li>
+          <li><strong>AssetDatabase:</strong> Programmatic access to all files</li>
+          <li><strong>ModelImporter:</strong> Control decimation/UVs via code</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- VRify Summary -->
+    <h2>VRify-Specific Quick Reference</h2>
+    <div class="cheat-section" style="max-width: 100%;">
+      <h3>Browser Build Checklist</h3>
+      <ul>
+        <li>✅ Forward rendering (not Deferred)</li>
+        <li>✅ MSAA 2x or FXAA post-process</li>
+        <li>✅ Shadow resolution 512-1024, 1-2 cascades</li>
+        <li>✅ ETC2 texture compression</li>
+        <li>✅ Max 1K-2K textures</li>
+        <li>✅ SRP Batcher enabled</li>
+        <li>✅ Brotli/gzip compression on server</li>
+        <li>✅ Shader warmup on load</li>
+        <li>✅ Origin-shift large geospatial coordinates</li>
+        <li>✅ Object pooling (avoid GC)</li>
+      </ul>
+    </div>
+
+    <div class="lesson-nav" style="margin-top: 3rem;">
+      <a href="lessons/12-unity-asset-transform.html">
+        <span class="label">← Previous</span>
+        <span class="title">Lesson 12</span>
+      </a>
+      <a href="index.html">
+        <span class="label">Back to →</span>
+        <span class="title">All Lessons</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

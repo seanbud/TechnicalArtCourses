@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 4: Forward vs Deferred & Forward+ | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 04</div>
+      <h1>Forward vs Deferred & Forward+</h1>
+      <p class="lesson-subtitle">Understanding rendering paths and when to use each</p>
+    </div>
+
+    <h2>The Core Problem: Lights Are Expensive</h2>
+    <p>The fundamental difference between forward and deferred rendering is <strong>how they handle many lights</strong>. Understanding this will tell you when to use each approach.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Light-Geometry Relationship</div>
+      <p>Every light that affects an object requires work. In a naive approach: <strong>Cost = Objects × Lights</strong>. With 100 objects and 50 lights, that's 5,000 lighting calculations. Rendering approaches differ in how they tackle this multiplication.</p>
+    </div>
+
+    <h2>Forward Rendering</h2>
+    <p>The traditional approach used by URP's default mode. Objects are rendered one by one, calculating lighting during the fragment shader.</p>
+
+    <div class="diagram">
+FORWARD RENDERING:
+
+For each object:
+  For each light affecting this object:
+    └── Calculate lighting in fragment shader
+  └── Output color to framebuffer
+
+Object 1 → [Vertex] → [Fragment + All Lights] → Framebuffer
+Object 2 → [Vertex] → [Fragment + All Lights] → Framebuffer
+Object 3 → [Vertex] → [Fragment + All Lights] → Framebuffer
+    </div>
+
+    <h3>Pros</h3>
+    <ul>
+      <li><strong>Transparency works naturally</strong> — alpha blending is straightforward</li>
+      <li><strong>MSAA support</strong> — hardware anti-aliasing works efficiently</li>
+      <li><strong>Lower memory usage</strong> — no GBuffer required</li>
+      <li><strong>Simple shader workflow</strong> — everything happens in one pass</li>
+      <li><strong>Better for mobile/browser</strong> — fewer GPU features required</li>
+    </ul>
+
+    <h3>Cons</h3>
+    <ul>
+      <li><strong>Light count limited</strong> — URP limits per-object lights (typically 4-8 additional)</li>
+      <li><strong>Overdraw re-calculates lighting</strong> — if pixels are overwritten, lighting work is wasted</li>
+      <li><strong>Per-object light loops</strong> — more lights = more passes or shader complexity</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>For browser targets, <strong>Forward rendering is typically your best choice</strong>. WebGL has memory constraints, MSAA support varies, and deferred's GBuffer can be problematic. Forward is simpler and more compatible.</p>
+    </div>
+
+    <h2>Deferred Rendering</h2>
+    <p>Available in HDRP and as a URP option. Separates geometry rendering from lighting by using a <strong>GBuffer (Geometry Buffer)</strong>.</p>
+
+    <div class="diagram">
+DEFERRED RENDERING:
+
+PASS 1: Geometry Pass (write to GBuffer)
+┌─────────────────────────────────────────────────────────────────┐
+│  For each object:                                                 │
+│    └── Render geometry data into multiple textures:              │
+│        ├── Albedo (base color)                                   │
+│        ├── Normal                                                │
+│        ├── Depth                                                 │
+│        ├── Metallic/Smoothness                                   │
+│        └── Emission                                              │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+PASS 2: Lighting Pass (read from GBuffer)
+┌─────────────────────────────────────────────────────────────────┐
+│  For each light:                                                  │
+│    └── Sample GBuffer, calculate lighting for affected pixels    │
+│    └── Accumulate into final image                               │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h3>The GBuffer</h3>
+    <p>The GBuffer is a set of render textures that store surface properties for every visible pixel. Typical contents:</p>
+
+    <table>
+      <tr>
+        <th>Texture</th>
+        <th>Contents</th>
+        <th>Why Stored</th>
+      </tr>
+      <tr>
+        <td>Albedo</td>
+        <td>RGB color + Alpha</td>
+        <td>Base material color for lighting</td>
+      </tr>
+      <tr>
+        <td>Normals</td>
+        <td>World-space normal</td>
+        <td>Light direction calculations</td>
+      </tr>
+      <tr>
+        <td>Depth</td>
+        <td>Distance from camera</td>
+        <td>Position reconstruction</td>
+      </tr>
+      <tr>
+        <td>Specular/Roughness</td>
+        <td>Material properties</td>
+        <td>Reflection calculations</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Why Deferred Is Efficient with Many Lights</div>
+      <p>In deferred, <strong>geometry is rendered once</strong> regardless of light count. Each light then only processes the pixels it affects (using its volume/range). Cost becomes <strong>Objects + (Lights × affected pixels)</strong> instead of <strong>Objects × Lights</strong>.</p>
+    </div>
+
+    <h3>Pros</h3>
+    <ul>
+      <li><strong>Many lights efficiently</strong> — hundreds of lights with minimal cost increase</li>
+      <li><strong>Pixel-perfect lighting</strong> — no per-object light limits</li>
+      <li><strong>Screen-space effects are easy</strong> — all data is in textures (SSAO, SSR)</li>
+    </ul>
+
+    <h3>Cons</h3>
+    <ul>
+      <li><strong>High memory usage</strong> — GBuffer can be 160+ bytes per pixel at 4K</li>
+      <li><strong>Transparency is hard</strong> — GBuffer only stores one surface per pixel; transparent objects need forward pass</li>
+      <li><strong>No MSAA</strong> — must use post-process AA (FXAA, TAA, SMAA)</li>
+      <li><strong>Limited material variety</strong> — all materials must fit in GBuffer format</li>
+    </ul>
+
+    <h2>Forward+ (Clustered Forward / Tiled Forward)</h2>
+    <p>The best of both worlds. This is what URP calls <strong>"Forward+"</strong> when you enable it in renderer settings.</p>
+
+    <div class="diagram">
+FORWARD+ RENDERING:
+
+PREPASS: Build Light Clusters
+┌─────────────────────────────────────────────────────────────────┐
+│  Divide screen into tiles (e.g., 16×16 pixel tiles)              │
+│  Divide depth range into slices (creating 3D clusters)          │
+│  For each light: determine which clusters it overlaps           │
+│  Create lookup table: cluster → list of affecting lights        │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+RENDER: Forward with Efficient Light Access
+┌─────────────────────────────────────────────────────────────────┐
+│  For each object:                                                 │
+│    In fragment shader:                                           │
+│      └── Look up which cluster this pixel is in                  │
+│      └── Only iterate lights in that cluster (not ALL lights)   │
+│      └── Calculate lighting, output color                        │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h3>Why Forward+ Works</h3>
+    <p>The key insight is <strong>lights have limited range</strong>. A point light in the corner of your scene doesn't affect pixels on the opposite side. By pre-computing which lights affect which screen regions, each pixel only loops through relevant lights.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Clusters vs Tiles</div>
+      <p><strong>Tiled Forward:</strong> 2D tiles based on screen position only. Works but doesn't handle depth well.<br><br>
+      <strong>Clustered Forward (Forward+):</strong> 3D clusters that also consider depth. Much better at culling lights that are near but behind geometry.</p>
+    </div>
+
+    <h3>Pros</h3>
+    <ul>
+      <li><strong>Many lights like deferred</strong> — hundreds of local lights efficiently</li>
+      <li><strong>MSAA support</strong> — it's still forward rendering</li>
+      <li><strong>Transparency works</strong> — same as regular forward</li>
+      <li><strong>Less memory than deferred</strong> — no full GBuffer</li>
+      <li><strong>Material flexibility</strong> — not limited by GBuffer format</li>
+    </ul>
+
+    <h3>Cons</h3>
+    <ul>
+      <li><strong>Depth prepass overhead</strong> — needs to know depth before lighting</li>
+      <li><strong>Cluster computation</strong> — some CPU/GPU work to build light lists</li>
+      <li><strong>Not all platforms</strong> — needs compute shader support</li>
+    </ul>
+
+    <h2>Comparison Summary</h2>
+
+    <table>
+      <tr>
+        <th>Feature</th>
+        <th>Forward</th>
+        <th>Deferred</th>
+        <th>Forward+</th>
+      </tr>
+      <tr>
+        <td>Many Lights</td>
+        <td>❌ Limited</td>
+        <td>✅ Excellent</td>
+        <td>✅ Excellent</td>
+      </tr>
+      <tr>
+        <td>MSAA</td>
+        <td>✅ Yes</td>
+        <td>❌ No</td>
+        <td>✅ Yes</td>
+      </tr>
+      <tr>
+        <td>Transparency</td>
+        <td>✅ Easy</td>
+        <td>⚠️ Hard</td>
+        <td>✅ Easy</td>
+      </tr>
+      <tr>
+        <td>Memory</td>
+        <td>✅ Low</td>
+        <td>❌ High</td>
+        <td>⚠️ Medium</td>
+      </tr>
+      <tr>
+        <td>WebGL</td>
+        <td>✅ Best choice</td>
+        <td>❌ Not recommended</td>
+        <td>⚠️ Limited support</td>
+      </tr>
+    </table>
+
+    <h2>What to Use at VRify</h2>
+    <p>Given browser targets and geospatial visualization:</p>
+
+    <ul>
+      <li><strong>Primary: Forward rendering</strong> — most compatible with WebGL, sufficient for visualization scenarios</li>
+      <li><strong>Consider Forward+ if:</strong> You have many local lights and can target WebGL 2.0 with compute support (check browser compatibility)</li>
+      <li><strong>Avoid Deferred for browser:</strong> Memory constraints and transparency complexity make it problematic</li>
+    </ul>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Forward:</strong> Simple, MSAA-friendly, limited lights — best for mobile/browser</li>
+      <li><strong>Deferred:</strong> Many lights via GBuffer, high memory, no MSAA — best for AAA desktop</li>
+      <li><strong>Forward+:</strong> Hybrid approach with clustered light culling — best of both worlds with compute support</li>
+      <li><strong>GBuffer:</strong> Stores surface properties per-pixel (albedo, normals, depth, roughness)</li>
+      <li><strong>For VRify:</strong> Forward rendering is your safest bet for browser compatibility</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="03-shaders.html">
+        <span class="label">← Previous</span>
+        <span class="title">Shader Fundamentals</span>
+      </a>
+      <a href="05-urp-settings.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">URP Deep Dive</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 6: GPU Architecture | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 06</div>
+      <h1>GPU Architecture</h1>
+      <p class="lesson-subtitle">Parallel processing, branching costs, and Texture2D arrays</p>
+    </div>
+
+    <h2>Why GPUs Are Different</h2>
+    <p>CPUs are designed for <strong>complex, sequential tasks</strong>. GPUs are designed for <strong>simple, massively parallel tasks</strong>. Understanding this difference explains many graphics optimization principles.</p>
+
+    <div class="diagram">
+CPU vs GPU ARCHITECTURE:
+
+CPU (few powerful cores):
+┌─────────────────┐
+│  Core 0         │  Each core: complex, independent
+│  (very smart)   │  Good at: branching, varied workloads
+├─────────────────┤  
+│  Core 1         │  
+│  (very smart)   │  
+├─────────────────┤
+│  ... (4-16)     │
+└─────────────────┘
+
+GPU (many simple cores):
+┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐
+│  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  Each core: simple
+├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  Thousands of them
+│  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  All do SAME instruction
+├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  on different data
+│  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  
+└──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘
+    (thousands of simple cores)
+    </div>
+
+    <h2>SIMD: Same Instruction, Multiple Data</h2>
+    <p>GPUs use <strong>SIMD (Single Instruction, Multiple Data)</strong> execution. Groups of threads execute the <strong>same instruction simultaneously</strong> on different data.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Key Insight</div>
+      <p>A GPU "core" runs the same shader instruction across 32-64 pixels at once (called a <strong>warp</strong> on NVIDIA, <strong>wavefront</strong> on AMD). Every pixel in the warp executes the same line of shader code at the same time, just with different input values.</p>
+    </div>
+
+    <div class="diagram">
+SIMD EXECUTION (simplified warp of 8 pixels):
+
+Shader line: color = texture.Sample(uv);
+
+Pixel 0: uv=(0.0, 0.0)  ─┐
+Pixel 1: uv=(0.1, 0.0)   │
+Pixel 2: uv=(0.2, 0.0)   │  All 8 execute the
+Pixel 3: uv=(0.3, 0.0)   ├─ SAME instruction
+Pixel 4: uv=(0.0, 0.1)   │  at the SAME time
+Pixel 5: uv=(0.1, 0.1)   │  with DIFFERENT data
+Pixel 6: uv=(0.2, 0.1)   │
+Pixel 7: uv=(0.3, 0.1)  ─┘
+    </div>
+
+    <h2>Why Branching Hurts: Warp Divergence</h2>
+    <p>This is critical to understand for interview questions. What happens when you write <code>if/else</code> in a shader?</p>
+
+    <div class="diagram">
+BRANCHING PROBLEM:
+
+Shader code:
+  if (someCondition) {
+    doExpensiveA();    // 10 instructions
+  } else {
+    doExpensiveB();    // 10 instructions
+  }
+
+Warp execution when HALF take each branch:
+
+           Pixel 0-3: condition = true
+           Pixel 4-7: condition = false
+
+Step 1:    Pixels 0-3 run doExpensiveA()    (10 instructions)
+           Pixels 4-7 sit IDLE and wait
+
+Step 2:    Pixels 4-7 run doExpensiveB()    (10 instructions)
+           Pixels 0-3 sit IDLE and wait
+
+Total time: 20 instructions (worst case: BOTH branches run!)
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Warp Divergence</div>
+      <p>When threads in a warp take different branches, the warp must execute <strong>both branches</strong> and mask out threads that shouldn't run each branch. This can effectively halve your shader performance or worse.</p>
+    </div>
+
+    <h3>When Branching Is Okay</h3>
+    <ul>
+      <li><strong>Uniform branches:</strong> If <em>all</em> pixels in a warp take the same branch, no divergence occurs</li>
+      <li><strong>Early-out branches:</strong> Skipping work entirely can still be a win if most pixels bail early</li>
+      <li><strong>Simple branches:</strong> Very short branches may be worth it anyway</li>
+    </ul>
+
+    <pre><code>// OKAY: Same value for entire warp (uniform)
+if (_GlobalFeatureEnabled) { ... }
+
+// PROBLEMATIC: Different per-pixel
+if (worldPosition.y > 5.0) { ... }
+
+// SOMETIMES OKAY: Early-out
+if (alpha < 0.001) discard;  // Skips remaining work</code></pre>
+
+    <h2>GPU Memory Hierarchy</h2>
+    <p>Memory access patterns matter a lot for GPU performance:</p>
+
+    <div class="diagram">
+GPU MEMORY (fastest to slowest):
+
+┌─────────────────────────────────────────┐
+│  Registers (per-thread)                 │  ← Fastest, very limited
+│  ~256 registers per thread              │
+├─────────────────────────────────────────┤
+│  Shared Memory (per block/warp)         │  ← Fast, limited (~32-48KB)
+│  Shared between threads in a group      │
+├─────────────────────────────────────────┤
+│  L1/L2 Cache                            │  ← Fast, automatic
+├─────────────────────────────────────────┤
+│  Texture Memory (cached differently)    │  ← Optimized for 2D access
+├─────────────────────────────────────────┤
+│  Global/VRAM (main GPU memory)          │  ← Slowest, abundant
+│  This is your textures, meshes, buffers │
+└─────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Texture Cache Optimization</div>
+      <p>GPUs have specialized <strong>texture caches</strong> that exploit spatial locality — neighboring pixels often sample nearby UV coordinates. This is why texture filtering is fast and why <strong>texture atlases</strong> work well.</p>
+    </div>
+
+    <h2>Texture2D Arrays: Why They Exist</h2>
+    <p>You mentioned wanting to understand <code>Texture2DArray</code>. Here's the problem they solve:</p>
+
+    <div class="diagram">
+PROBLEM: Material Variety
+
+Scenario: 100 rocks with 10 different textures
+
+Traditional approach:
+├── 10 different materials (one per texture)
+├── 10 different draw calls (can't batch)
+└── Each rock uses its assigned material
+
+With Texture2D Array:
+├── 1 Texture2DArray containing all 10 textures as layers
+├── 1 material that samples from array using an index
+├── Rocks pass texture index as vertex attribute
+└── All rocks can be batched together!
+    </div>
+
+    <h3>How Texture2DArray Works</h3>
+    <p>A <code>Texture2DArray</code> is a stack of 2D textures with identical dimensions and format. You sample using <code>(u, v, layer_index)</code>.</p>
+
+    <pre><code>// Conceptually in shader:
+TEXTURE2D_ARRAY(_TextureArray);
+
+// Sampling:
+float4 color = SAMPLE_TEXTURE2D_ARRAY(
+    _TextureArray, sampler,
+    uv,           // u, v coordinates
+    textureIndex  // which layer (0, 1, 2, ...)
+);</code></pre>
+
+    <h3>Use Cases</h3>
+    <ul>
+      <li><strong>Terrain textures:</strong> Blend between grass/dirt/rock stored in array</li>
+      <li><strong>Character variations:</strong> Same model, different skins</li>
+      <li><strong>Decal systems:</strong> Many decal textures in one array</li>
+      <li><strong>Batching enabler:</strong> Reduce material count to reduce draw calls</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>For geospatial visualization, texture arrays could unify materials for similar features (mine layers, elevation bands, different scan types) without breaking batching. Great for point cloud colorization or terrain blending.</p>
+    </div>
+
+    <h2>Compute Shaders Revisited</h2>
+    <p>Since you mentioned wanting to understand compute shaders:</p>
+
+    <p>Compute shaders run outside the graphics pipeline. They're <strong>general-purpose GPU programs</strong> that read/write to buffers and textures.</p>
+
+    <div class="diagram">
+COMPUTE SHADER EXECUTION:
+
+Input:              Compute Shader:           Output:
+─────────────────   ─────────────────────     ─────────────────
+Buffers             Dispatch(X, Y, Z)         Modified buffers
+Textures            └── Thread groups         New textures
+                        └── Threads           
+                            (64-256 per group)
+
+Example: 1024 particles
+Dispatch(16, 1, 1) with 64 threads/group
+= 16 groups × 64 threads = 1024 parallel threads
+= Each thread updates one particle
+    </div>
+
+    <h3>Thread Groups</h3>
+    <p>Compute work is dispatched in <strong>thread groups</strong>. Each group has a fixed number of threads (commonly 64-256). You decide how many groups to launch.</p>
+
+    <ul>
+      <li><code>[numthreads(64, 1, 1)]</code> — defines group size (64 threads)</li>
+      <li><code>Dispatch(16, 1, 1)</code> — launches 16 groups</li>
+      <li>Total threads: 64 × 16 = 1024</li>
+    </ul>
+
+    <h3>Compute vs Graphics</h3>
+    <table>
+      <tr>
+        <th>Graphics Shaders</th>
+        <th>Compute Shaders</th>
+      </tr>
+      <tr>
+        <td>Fixed input (vertices/pixels)</td>
+        <td>Arbitrary input (any buffer)</td>
+      </tr>
+      <tr>
+        <td>Fixed output (framebuffer)</td>
+        <td>Arbitrary output (any buffer)</td>
+      </tr>
+      <tr>
+        <td>Part of render pipeline</td>
+        <td>Separate from rendering</td>
+      </tr>
+      <tr>
+        <td>Great for drawing</td>
+        <td>Great for simulation, processing</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ WebGL Compute Support</div>
+      <p>WebGL 2.0 does NOT support compute shaders. WebGPU will, but it's not yet widely deployed. For browser targets at VRify, compute-heavy workflows may need to run on the server or fall back to CPU.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>GPUs use <strong>SIMD</strong> — thousands of threads execute the same instruction on different data</li>
+      <li><strong>Warp divergence</strong> from branching forces both branches to run, devastating performance</li>
+      <li>Uniform branches (same value for all pixels) don't cause divergence</li>
+      <li>GPU memory has hierarchy: registers → shared → cache → global VRAM</li>
+      <li><strong>Texture2DArray</strong> bundles multiple textures, enabling batching with variety</li>
+      <li><strong>Compute shaders</strong> are general-purpose GPU programs outside the graphics pipeline</li>
+      <li>WebGL 2.0 lacks compute support — consider this for VRify browser targets</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="05-urp-settings.html">
+        <span class="label">← Previous</span>
+        <span class="title">URP Deep Dive</span>
+      </a>
+      <a href="07-mesh-fundamentals.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Mesh Fundamentals</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

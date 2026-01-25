@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 12: Unity Asset Transform | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 12</div>
+      <h1>Unity Asset Transform</h1>
+      <p class="lesson-subtitle">Pipeline automation, industrial licensing, and CAD ingestion at scale</p>
+    </div>
+
+    <h2>What Is Unity Asset Transform?</h2>
+    <p><strong>Unity Asset Transform (UAT)</strong> is Unity's industrial-grade solution for converting CAD and other complex 3D data into Unity-optimized assets. It's part of Unity's industrial/enterprise offerings.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Core Value</div>
+      <p>UAT solves the CAD-to-game problem at scale. Instead of manually exporting, fixing, and optimizing each file, you define a pipeline that processes data automatically. Essential when you have hundreds of clients submitting data.</p>
+    </div>
+
+    <h2>Key Capabilities</h2>
+
+    <h3>Format Support</h3>
+    <table>
+      <tr>
+        <th>Category</th>
+        <th>Formats</th>
+      </tr>
+      <tr>
+        <td>CAD Native</td>
+        <td>CATIA, NX, Creo, SolidWorks, Inventor</td>
+      </tr>
+      <tr>
+        <td>CAD Exchange</td>
+        <td>STEP, IGES, JT, 3DXML</td>
+      </tr>
+      <tr>
+        <td>Mesh/Scan</td>
+        <td>OBJ, FBX, STL, PLY</td>
+      </tr>
+      <tr>
+        <td>Point Cloud</td>
+        <td>LAS, E57, PTS</td>
+      </tr>
+      <tr>
+        <td>BIM</td>
+        <td>IFC, Revit</td>
+      </tr>
+    </table>
+
+    <h3>Processing Pipeline</h3>
+    <div class="diagram">
+UAT PIPELINE:
+
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  CAD INPUT   │ →  │  TESSELLATE  │ →  │  OPTIMIZE    │ →  │ UNITY ASSET  │
+│              │    │              │    │              │    │              │
+│ STEP, IGES   │    │ NURBS →      │    │ Decimation   │    │ FBX/Prefab   │
+│ SolidWorks   │    │ Triangles    │    │ LOD Gen      │    │ Materials    │
+│ CATIA        │    │              │    │ Merge parts  │    │ Hierarchy    │
+└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+                           ↑                   ↑
+                    Quality settings    Optimization rules
+                    (chord deviation)   (target triangles)
+    </div>
+
+    <h3>Core Features</h3>
+    <ul>
+      <li><strong>Tessellation Control:</strong> Convert NURBS with configurable quality (chord deviation, angle tolerance)</li>
+      <li><strong>Mesh Decimation:</strong> Reduce polygon count with quality thresholds</li>
+      <li><strong>LOD Generation:</strong> Automatically create multiple detail levels</li>
+      <li><strong>Hierarchy Preservation:</strong> Keep assembly structure or flatten</li>
+      <li><strong>Material Mapping:</strong> Extract or remap CAD materials to Unity materials</li>
+      <li><strong>Metadata Extraction:</strong> Preserve CAD properties as Unity metadata</li>
+    </ul>
+
+    <h2>Industrial License Implications</h2>
+    <p>You mentioned VRify likely having industrial licenses. Here's what that enables:</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Industrial Licensing</div>
+      <p>Industrial licenses unlock:<br>
+      • Access to Unity Asset Transform<br>
+      • Pixyz (underlying CAD processing engine)<br>
+      • Extended support for CAD formats<br>
+      • Server-side processing capabilities<br>
+      • Batch processing for automation</p>
+    </div>
+
+    <h3>Can You Modify the Engine?</h3>
+    <p>Regarding your question about modifying the Unity engine:</p>
+    <ul>
+      <li><strong>Source code access:</strong> Enterprise agreements may include source access, but it's tightly controlled</li>
+      <li><strong>More likely:</strong> You extend Unity via native plugins, custom packages, and UAT's API</li>
+      <li><strong>UAT API:</strong> Provides C# scripting access to the processing pipeline</li>
+    </ul>
+
+    <h2>Automation Pipeline Architecture</h2>
+    <p>For VRify's scale (250 clients), you'd likely build:</p>
+
+    <div class="diagram">
+AUTOMATED INGESTION PIPELINE:
+
+Client Upload    →    Validation    →    Processing    →    Delivery
+────────────────      ──────────────      ──────────────      ─────────
+S3/Azure/GCS          Format check        UAT Pipeline        Asset Bundle
+or Web portal         Coord system        Decimation          or
+                      Size limits         LOD Gen             Direct import
+                      Metadata            Material map        
+                                                              
+                      ↓ Failures          ↓                   ↓
+                      Queue for           Log/Report          Available in
+                      manual review                           Unity scene
+    </div>
+
+    <h3>UAT API Usage (Conceptual)</h3>
+    <pre><code>using Unity.AssetTransform;
+
+public class CADProcessor : MonoBehaviour
+{
+    public void ProcessCADFile(string inputPath)
+    {
+        // Create processor with settings
+        var processor = new CADProcessor();
+        
+        processor.TessellationSettings.ChordDeviation = 0.1f;
+        processor.OptimizationSettings.TargetTriangles = 50000;
+        processor.LODSettings.Levels = 3;
+        
+        // Process and get result
+        var result = processor.Import(inputPath);
+        
+        // result contains meshes, hierarchy, materials, metadata
+        InstantiatePrefab(result.RootObject);
+    }
+}</code></pre>
+
+    <p><em>Note: This is conceptual — actual UAT API may differ. Consult documentation.</em></p>
+
+    <h2>Common VRify Use Cases</h2>
+
+    <h3>Mine Site Visualization</h3>
+    <ul>
+      <li><strong>Terrain:</strong> DXF contours → Unity terrain or mesh</li>
+      <li><strong>Equipment:</strong> CAD models → Decimated, LOD-enabled prefabs</li>
+      <li><strong>Point Clouds:</strong> LIDAR scans → Potree-style streaming or converted mesh</li>
+      <li><strong>Infrastructure:</strong> Buildings, roads from BIM/CAD</li>
+    </ul>
+
+    <h3>Digital Twin Workflow</h3>
+    <div class="diagram">
+DIGITAL TWIN DATA FLOW:
+
+Real World              Processing              Unity Scene
+──────────────          ──────────────          ──────────────
+Survey scans     →      Point Cloud   →         Visualized
+Drone imagery            processing              terrain
+
+Equipment CAD   →       UAT Pipeline  →         Interactive
+drawings                                         3D models
+
+Sensor data     →       IoT pipeline  →         Real-time
+(live)                                           updates
+
+Coordinates     →       Origin shift  →         Scene-local
+(GPS/UTM)               + validation            positions
+    </div>
+
+    <h2>Integration with Unity Ecosystem</h2>
+
+    <h3>Works With:</h3>
+    <ul>
+      <li><strong>Addressables:</strong> Generate asset bundles for streaming</li>
+      <li><strong>DOTS/ECS:</strong> Convert to entity-optimized structures</li>
+      <li><strong>URP/HDRP:</strong> Material conversion for render pipelines</li>
+      <li><strong>AR/VR:</strong> Optimize for XR experiences</li>
+    </ul>
+
+    <h3>Pipeline Script Integration</h3>
+    <p>UAT can be called from:</p>
+    <ul>
+      <li>Editor scripts (batch processing in Unity)</li>
+      <li>Command line (CI/CD automation)</li>
+      <li>Server applications (headless processing)</li>
+    </ul>
+
+    <h2>Alternatives and Complements</h2>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>Relationship</th>
+        <th>Notes</th>
+      </tr>
+      <tr>
+        <td>Pixyz</td>
+        <td>UAT is built on Pixyz</td>
+        <td>May use directly for more control</td>
+      </tr>
+      <tr>
+        <td>Blender</td>
+        <td>Alternative/supplement</td>
+        <td>Free, scripting via Python</td>
+      </tr>
+      <tr>
+        <td>Simplygon</td>
+        <td>Complement for optimization</td>
+        <td>Best-in-class decimation</td>
+      </tr>
+      <tr>
+        <td>CloudCompare</td>
+        <td>Point cloud processing</td>
+        <td>Free, powerful for LIDAR</td>
+      </tr>
+    </table>
+
+    <h2>Interview Positioning</h2>
+    <p>For your interview, position your UAT knowledge as:</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 What to Communicate</div>
+      <p>"I understand UAT is Unity's industrial solution for CAD ingestion. While I haven't used it directly, I understand the problem it solves: converting precise CAD geometry (NURBS, assemblies, metadata) into game-ready assets with controlled tessellation, decimation, and LOD generation. I'm excited to learn the specifics of VRify's pipeline and how UAT fits into processing data from your clients."</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Unity Asset Transform (UAT)</strong> is the industrial solution for CAD → Unity conversion</li>
+      <li>Built on <strong>Pixyz</strong> technology; handles native CAD formats</li>
+      <li>Key features: <strong>tessellation, decimation, LOD, hierarchy, material mapping, metadata</strong></li>
+      <li><strong>Industrial licenses</strong> enable UAT access and extended capabilities</li>
+      <li>API allows <strong>automated pipeline integration</strong> for batch processing</li>
+      <li>For VRify: enables processing uploads from 250+ clients automatically</li>
+      <li>Position yourself as <strong>understanding the problem space</strong>, eager to learn specifics</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="11-webgl-browser.html">
+        <span class="label">← Previous</span>
+        <span class="title">WebGL & Browser Optimization</span>
+      </a>
+      <a href="13-editor-automation.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Editor Tooling & Automation</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

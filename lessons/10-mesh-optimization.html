@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 10: Mesh Optimization Algorithms | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 10</div>
+      <h1>Mesh Optimization Algorithms</h1>
+      <p class="lesson-subtitle">Decimation, hole detection, LOD, and mesh repair</p>
+    </div>
+
+    <h2>Why Mesh Optimization Matters</h2>
+    <p>CAD data and scanned meshes are rarely optimized for real-time rendering. A mechanical part might have millions of triangles when thousands would visually suffice. For browser targets, aggressive optimization is essential.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Triangle Budget</div>
+      <p>Desktop games: ~1-5 million triangles per frame<br>
+      Mobile games: ~100K-500K triangles per frame<br>
+      Browser (WebGL): ~100K-300K triangles per frame (conservative)<br><br>
+      A single CAD assembly can exceed these budgets before any scene composition!</p>
+    </div>
+
+    <h2>Mesh Decimation</h2>
+    <p>Decimation reduces polygon count while preserving shape. The most common algorithm is <strong>Quadric Error Metrics (QEM)</strong>.</p>
+
+    <h3>How QEM Works (Conceptual)</h3>
+    <div class="diagram">
+QEM DECIMATION PROCESS:
+
+Original:              After Decimation:
+   /\                      /\
+  /  \                    /  \
+ /____\                  /    \
+ |\  /|                  |    |
+ | \/ |   ───────────▶   |    |
+ | /\ |                  |    |
+ |/__\|                  |____|
+
+Algorithm:
+1. For each edge, calculate "error" of collapsing it
+   (Error = how much shape changes)
+2. Sort edges by error (lowest first)
+3. Collapse lowest-error edge
+4. Update neighboring edge errors
+5. Repeat until target polygon count reached
+    </div>
+
+    <h3>Quadric Error Explained</h3>
+    <p>Each vertex has associated <strong>planes</strong> (from its neighboring triangles). A "quadric" matrix represents how far a point deviates from these planes. When collapsing two vertices:</p>
+
+    <ul>
+      <li>Sum their quadric matrices</li>
+      <li>Find optimal position for merged vertex (minimizes error)</li>
+      <li>The error value determines priority</li>
+    </ul>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Preservation Weights</div>
+      <p>Good decimation algorithms support <strong>feature preservation</strong>:<br>
+      • Sharp edges (detect angle threshold)<br>
+      • UV seams (prevent texture distortion)<br>
+      • Material boundaries (keep submesh integrity)<br>
+      Without these, simplified meshes look wrong.</p>
+    </div>
+
+    <h3>Decimation in Unity</h3>
+    <ul>
+      <li><strong>Unity Asset Transform:</strong> Industrial solution with quality decimation</li>
+      <li><strong>Simplygon:</strong> Industry standard (paid license)</li>
+      <li><strong>MeshSimplifier:</strong> Open-source C# package (quality varies)</li>
+      <li><strong>Blender API:</strong> Server-side processing via Blender's Decimate modifier</li>
+    </ul>
+
+    <h2>Hole Detection and Filling</h2>
+    <p>CAD exports and scans often have holes — missing triangles in the mesh surface. These cause rendering artifacts and break operations like boolean CSG.</p>
+
+    <h3>What Is a Hole?</h3>
+    <div class="diagram">
+MESH HOLES:
+
+"Watertight" mesh:         Mesh with hole:
+  ┌───────────┐              ┌───────────┐
+  │           │              │           │
+  │  (solid)  │              │  (gap)    │
+  │           │              │     ○     │
+  └───────────┘              └───────────┘
+  
+  All edges shared          Some edges have
+  by exactly 2 triangles    only 1 triangle
+  = "manifold"              = "boundary edges"
+    </div>
+
+    <h3>Hole Detection Algorithm</h3>
+    <ol>
+      <li>Build edge adjacency map (which triangles share each edge)</li>
+      <li>Find <strong>boundary edges</strong> — edges with only one adjacent triangle</li>
+      <li>Link boundary edges into loops (each loop is a hole)</li>
+      <li>Small loops might be holes; large loops might be intentional openings</li>
+    </ol>
+
+    <h3>Hole Filling Approaches</h3>
+    <ul>
+      <li><strong>Simple</strong>: Triangulate the boundary loop (fan or ear-clipping)</li>
+      <li><strong>Smooth</strong>: Fill then apply smoothing to blend with surroundings</li>
+      <li><strong>Curvature-aware</strong>: Match surrounding surface curvature</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>Mining equipment CAD often has holes where components interface. Decide whether to fill holes (makes mesh "solid") or leave them (preserves original data). Document the choice in your pipeline.</p>
+    </div>
+
+    <h2>Level of Detail (LOD)</h2>
+    <p>LOD uses multiple mesh resolutions, switching based on distance. Essential for large scenes.</p>
+
+    <div class="diagram">
+LOD CONCEPT:
+
+Distance:    Near           Mid             Far
+             ◀──────────────────────────────────▶
+
+LOD Level:   LOD0           LOD1            LOD2
+Triangles:   10,000         2,500           500
+Detail:      Full           75% reduced     95% reduced
+
+Unity's LOD Group component handles switching
+    </div>
+
+    <h3>LOD Generation</h3>
+    <ul>
+      <li>Apply decimation at increasing ratios (25%, 50%, 75%, 90%)</li>
+      <li>Set distance thresholds based on object size and screen percentage</li>
+      <li>Test transitions for visual popping — adjust thresholds if jarring</li>
+      <li>Consider cross-fade transitions (URP supports this)</li>
+    </ul>
+
+    <h3>LOD Bias and Screen Size</h3>
+    <p>Unity uses <strong>screen percentage</strong> to determine LOD:</p>
+    <ul>
+      <li><code>LOD 0</code> when object covers &gt; 60% of screen height</li>
+      <li><code>LOD 1</code> when covering 30-60%</li>
+      <li><code>LOD 2</code> when covering 15-30%</li>
+      <li><code>Culled</code> when below threshold</li>
+    </ul>
+
+    <h2>Mesh Repair Operations</h2>
+
+    <h3>Common Problems and Fixes</h3>
+    <table>
+      <tr>
+        <th>Problem</th>
+        <th>Detection</th>
+        <th>Solution</th>
+      </tr>
+      <tr>
+        <td>Degenerate triangles</td>
+        <td>Zero area, collinear vertices</td>
+        <td>Remove or merge vertices</td>
+      </tr>
+      <tr>
+        <td>Duplicate vertices</td>
+        <td>Multiple vertices at same position</td>
+        <td>Weld with tolerance</td>
+      </tr>
+      <tr>
+        <td>Flipped normals</td>
+        <td>Inconsistent winding</td>
+        <td>Recalculate or flip per-face</td>
+      </tr>
+      <tr>
+        <td>Non-manifold geometry</td>
+        <td>Edges shared by &gt;2 triangles</td>
+        <td>Duplicate/separate geometry</td>
+      </tr>
+      <tr>
+        <td>Self-intersections</td>
+        <td>Triangles passing through each other</td>
+        <td>Boolean union or manual fix</td>
+      </tr>
+    </table>
+
+    <h3>Vertex Welding</h3>
+    <p>CAD exports often have "open" vertices that should be shared. Welding merges vertices within a distance threshold:</p>
+
+    <pre><code>// Conceptual welding
+foreach (vertex in mesh) {
+    neighbors = FindVerticesWithinDistance(vertex, tolerance);
+    if (neighbors.Count > 0) {
+        MergeToSingleVertex(vertex, neighbors);
+    }
+}</code></pre>
+
+    <h2>UV Optimization</h2>
+    <p>For CAD data often lacking UVs:</p>
+
+    <ul>
+      <li><strong>Automatic UV Generation:</strong> Box projection, cylindrical, spherical mapping</li>
+      <li><strong>UV Unwrapping:</strong> More complex, creates proper charts</li>
+      <li><strong>Triplanar Mapping:</strong> Skip UVs entirely, sample textures based on world position</li>
+    </ul>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Triplanar Advantage</div>
+      <p>Triplanar shaders project textures from 3 axes and blend based on surface normal. No UV required. Perfect for terrain, rocks, and geometry without proper UVs. Small performance cost but huge workflow benefit.</p>
+    </div>
+
+    <h2>Algorithm Complexity Overview</h2>
+    <table>
+      <tr>
+        <th>Algorithm</th>
+        <th>Complexity</th>
+        <th>Notes</th>
+      </tr>
+      <tr>
+        <td>QEM Decimation</td>
+        <td>O(n log n)</td>
+        <td>Priority queue for edge collapses</td>
+      </tr>
+      <tr>
+        <td>Hole Detection</td>
+        <td>O(e) edges</td>
+        <td>Linear scan of edges</td>
+      </tr>
+      <tr>
+        <td>Hole Filling (simple)</td>
+        <td>O(b) boundary</td>
+        <td>Triangulate boundary loop</td>
+      </tr>
+      <tr>
+        <td>Vertex Welding</td>
+        <td>O(n log n)</td>
+        <td>Spatial data structure (octree)</td>
+      </tr>
+      <tr>
+        <td>Normal Recalculation</td>
+        <td>O(n)</td>
+        <td>Iterate triangles once</td>
+      </tr>
+    </table>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Decimation</strong> reduces triangles; QEM preserves shape by minimizing geometric error</li>
+      <li><strong>Feature preservation</strong> (edges, UVs, materials) prevents visual artifacts</li>
+      <li><strong>Hole detection</strong> finds boundary edges; hole filling triangulates the gap</li>
+      <li><strong>LOD</strong> uses distance-based mesh switching for performance</li>
+      <li><strong>Mesh repair</strong>: welding, normal fixing, degenerate removal</li>
+      <li><strong>Triplanar mapping</strong> is a practical solution for UV-less CAD data</li>
+      <li><strong>Unity Asset Transform</strong> handles many of these operations at industrial scale</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="09-file-formats.html">
+        <span class="label">← Previous</span>
+        <span class="title">3D File Formats & Data Ingestion</span>
+      </a>
+      <a href="11-webgl-browser.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">WebGL & Browser Optimization</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

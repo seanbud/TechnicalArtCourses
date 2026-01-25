@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 3: Shader Fundamentals | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 03</div>
+      <h1>Shader Fundamentals</h1>
+      <p class="lesson-subtitle">What shaders are, how they're structured, and when each part runs</p>
+    </div>
+
+    <h2>What Is a Shader, Really?</h2>
+    <p>A shader is a <strong>program that runs on the GPU</strong> to determine how something looks. But here's the key insight that often confuses people:</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Not Just "Per Pixel"</div>
+      <p>A "shader" isn't just one program — it's a <strong>collection of programs</strong> (called stages or passes) that run at different points in the graphics pipeline. The vertex shader runs per-vertex. The fragment shader runs per-fragment. They're separate programs bundled together.</p>
+    </div>
+
+    <h2>The Graphics Pipeline Stages</h2>
+    <p>Here's where your shader code actually executes:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     GPU GRAPHICS PIPELINE                                  │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   INPUT DATA         PROGRAMMABLE           FIXED              OUTPUT     │
+│   ──────────         ────────────           ─────              ──────     │
+│                                                                            │
+│   Vertices      ┌─────────────────┐                                       │
+│   (position,    │  VERTEX SHADER  │  ← You write this                     │
+│   normals,      │  Runs per vertex│                                       │
+│   UVs...)       └────────┬────────┘                                       │
+│                          ↓                                                 │
+│                 ┌─────────────────┐                                       │
+│                 │ GEOMETRY SHADER │  ← Optional (rarely used)             │
+│                 │ Can add/remove  │                                       │
+│                 │ vertices        │                                       │
+│                 └────────┬────────┘                                       │
+│                          ↓                                                 │
+│                 ┌─────────────────┐                                       │
+│                 │  RASTERIZATION  │  ← Fixed function (GPU hardware)     │
+│                 │  Triangles →    │                                       │
+│                 │  Fragments      │                                       │
+│                 └────────┬────────┘                                       │
+│                          ↓                                                 │
+│                 ┌─────────────────┐                                       │
+│                 │ FRAGMENT SHADER │  ← You write this                     │
+│                 │ Runs per pixel  │    (also called "pixel shader")      │
+│                 └────────┬────────┘                                       │
+│                          ↓                                                 │
+│                 ┌─────────────────┐     ┌─────────────────┐               │
+│                 │ DEPTH/STENCIL   │  →  │   BLENDING      │  →  Screen   │
+│                 │ TESTS           │     │                 │               │
+│                 └─────────────────┘     └─────────────────┘               │
+│                                                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h3>Vertex Shader</h3>
+    <p><strong>Runs once per vertex.</strong> Its main job is to transform vertex positions from object space to clip space (the coordinate system used for rendering).</p>
+
+    <ul>
+      <li>Input: Vertex attributes (position, normal, UV, tangent, color)</li>
+      <li>Output: Transformed position + data to pass to fragment shader</li>
+      <li>Common uses: Skinning, vertex animation, world-space calculations</li>
+    </ul>
+
+    <h3>Rasterization (Fixed Function)</h3>
+    <p>This is <strong>not programmable</strong> — the GPU hardware does this. It takes your transformed triangles and figures out which pixels they cover, generating <strong>fragments</strong>.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Fragment ≠ Pixel</div>
+      <p>A <strong>fragment</strong> is a potential pixel. Multiple fragments can compete for the same pixel position (overlapping geometry). After depth testing and blending, the winning fragment becomes the final pixel.</p>
+    </div>
+
+    <h3>Fragment Shader (Pixel Shader)</h3>
+    <p><strong>Runs once per fragment.</strong> This is where you calculate the final color, including lighting, texturing, and effects.</p>
+
+    <ul>
+      <li>Input: Interpolated values from vertex shader (UVs, normals, world position)</li>
+      <li>Output: Color (RGBA) and optionally modified depth</li>
+      <li>This is usually the performance bottleneck — it runs millions of times per frame</li>
+    </ul>
+
+    <h3>Geometry Shader (Optional)</h3>
+    <p>Runs after vertex shader, can <strong>add, remove, or modify</strong> primitives (points, lines, triangles). Rarely used because:</p>
+    <ul>
+      <li>Performance is often poor (not well parallelized)</li>
+      <li>Compute shaders are usually a better choice for geometry generation</li>
+      <li>Some mobile GPUs don't support them</li>
+    </ul>
+
+    <h3>Tessellation (Optional)</h3>
+    <p>Subdivides geometry into more triangles. Consists of Hull Shader → Tessellator → Domain Shader. Used for:</p>
+    <ul>
+      <li>Displacement mapping (adding detail based on heightmaps)</li>
+      <li>LOD-independent smooth surfaces</li>
+      <li>Not commonly used in real-time games due to performance cost</li>
+    </ul>
+
+    <h2>Shader Structure in Unity</h2>
+    <p>Unity shaders are written in <strong>ShaderLab</strong> format, which wraps HLSL code. Here's the conceptual structure:</p>
+
+    <pre><code>Shader "Custom/MyShader"
+{
+    Properties
+    {
+        // Material inspector properties
+        _MainTex ("Texture", 2D) = "white" {}
+        _Color ("Color", Color) = (1,1,1,1)
+    }
+    
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        
+        Pass
+        {
+            // Render state (blending, depth, etc.)
+            ZWrite On
+            
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            
+            // Your HLSL code here
+            // vert() = vertex shader
+            // frag() = fragment shader
+            ENDHLSL
+        }
+        
+        // Additional passes for shadows, outlines, etc.
+        Pass { /* shadow pass */ }
+    }
+    
+    Fallback "Diffuse"
+}</code></pre>
+
+    <h3>Key Structural Concepts</h3>
+
+    <table>
+      <tr>
+        <th>Element</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><code>Properties</code></td>
+        <td>Variables exposed in the Material Inspector</td>
+      </tr>
+      <tr>
+        <td><code>SubShader</code></td>
+        <td>A rendering recipe; Unity picks the first one that works on the target hardware</td>
+      </tr>
+      <tr>
+        <td><code>Tags</code></td>
+        <td>Metadata for render queue, pipeline compatibility</td>
+      </tr>
+      <tr>
+        <td><code>Pass</code></td>
+        <td>One complete render of the geometry (multiple passes = multiple renders)</td>
+      </tr>
+      <tr>
+        <td><code>Fallback</code></td>
+        <td>Shader to use if none of the SubShaders work</td>
+      </tr>
+    </table>
+
+    <h2>Multi-Pass Rendering</h2>
+    <p>A shader can have <strong>multiple passes</strong>. Each pass renders the geometry again with different settings. Common uses:</p>
+
+    <ul>
+      <li><strong>Outline Pass:</strong> Render the object slightly larger in a solid color, then render normally on top</li>
+      <li><strong>Shadow Pass:</strong> Special pass for shadow map generation</li>
+      <li><strong>Depth Pre-Pass:</strong> Write only depth first, then render color (optimization)</li>
+    </ul>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Performance Consideration</div>
+      <p>Each pass means the geometry is processed again. A 2-pass shader on 1000 objects = 2000 draw calls worth of vertex processing. Keep pass count minimal for performance-critical scenarios (like browser targets).</p>
+    </div>
+
+    <h2>Shader Compilation</h2>
+    <p>Shaders go through multiple compilation stages:</p>
+
+    <div class="diagram">
+SHADER COMPILATION PIPELINE:
+
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│   ShaderLab +    │ →  │   Intermediate   │ →  │  Platform GPU    │
+│   HLSL Source    │    │   Bytecode       │    │  Instructions    │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+    Your code             At build time          At build time OR
+                                                 first use (runtime)
+    </div>
+
+    <h3>Build-Time Compilation</h3>
+    <p>When you build your game, Unity compiles shaders for the target platform(s). This produces <strong>shader variants</strong> — different versions for different keyword combinations.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Variant Explosion</div>
+      <p>If your shader has 5 <code>#pragma multi_compile</code> keywords with 2 options each, you get 2^5 = 32 variants. This multiplies build time and size. Use <code>shader_feature</code> (strips unused) over <code>multi_compile</code> (includes all) when possible.</p>
+    </div>
+
+    <h3>Editor Compilation</h3>
+    <p>In the Unity Editor, shaders are compiled on-demand for your current graphics API. This is why the first time you view a new shader, there may be a brief pause.</p>
+
+    <h3>Runtime Compilation (Warmup)</h3>
+    <p>Some variants compile when first used in-game, causing <strong>shader stuttering</strong>. Solutions:</p>
+    <ul>
+      <li><code>ShaderVariantCollection</code> — preload expected variants at startup</li>
+      <li>Loading screens that force-use all shaders</li>
+      <li>Minimize variant counts in build settings</li>
+    </ul>
+
+    <h2>Shader Graph vs HLSL</h2>
+    <table>
+      <tr>
+        <th></th>
+        <th>Shader Graph</th>
+        <th>Hand-Coded HLSL</th>
+      </tr>
+      <tr>
+        <td><strong>Pros</strong></td>
+        <td>Visual, fast iteration, no syntax errors</td>
+        <td>Full control, can optimize, custom features</td>
+      </tr>
+      <tr>
+        <td><strong>Cons</strong></td>
+        <td>Can generate bloated code, limited to what nodes exist</td>
+        <td>Steeper learning curve, easy to make mistakes</td>
+      </tr>
+      <tr>
+        <td><strong>Output</strong></td>
+        <td>Generates HLSL behind the scenes</td>
+        <td>Your HLSL is used directly</td>
+      </tr>
+    </table>
+
+    <p>For your role, understanding both is valuable — Shader Graph for rapid prototyping, HLSL knowledge for understanding and debugging the generated code.</p>
+
+    <h2>Compute Shaders: A Different Beast</h2>
+    <p>Compute shaders are <strong>not part of the graphics pipeline</strong>. They're general-purpose GPU programs for parallel computation.</p>
+
+    <ul>
+      <li>Don't render anything directly — output to buffers/textures</li>
+      <li>Used for: particle systems, procedural geometry, physics, image effects</li>
+      <li>Work in thread groups (e.g., 64 threads at a time)</li>
+      <li>Can generate geometry that's then used by regular shaders</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>Compute shaders could be valuable for point cloud processing — millions of points can be transformed, filtered, or rendered using compute-to-vertex pipelines. However, WebGL 2.0 has limited compute support; check platform constraints.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>A "shader" is actually <strong>multiple programs</strong> (vertex, fragment, optionally geometry/tessellation) bundled together</li>
+      <li><strong>Vertex shader:</strong> runs per-vertex, transforms positions</li>
+      <li><strong>Fragment shader:</strong> runs per-pixel, calculates color — usually the bottleneck</li>
+      <li>Unity shaders use <strong>ShaderLab format</strong> wrapping HLSL code</li>
+      <li><strong>Passes:</strong> each pass renders geometry again; multiple passes have performance cost</li>
+      <li><strong>Variants:</strong> different compiled versions for keyword combinations — watch for explosion</li>
+      <li><strong>Compute shaders:</strong> general GPU compute, separate from rendering pipeline</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="02-render-pipeline.html">
+        <span class="label">← Previous</span>
+        <span class="title">Render Pipeline Overview</span>
+      </a>
+      <a href="04-forward-deferred.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Forward vs Deferred & Forward+</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

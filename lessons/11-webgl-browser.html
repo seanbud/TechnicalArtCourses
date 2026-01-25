@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 11: WebGL & Browser Optimization | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 11</div>
+      <h1>WebGL & Browser Optimization</h1>
+      <p class="lesson-subtitle">Memory limits, texture compression, and load time strategies</p>
+    </div>
+
+    <h2>WebGL: A Different World</h2>
+    <p>Building for browser is fundamentally different from desktop. Many assumptions don't hold, and constraints are much tighter.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Key Constraints</div>
+      <p>• <strong>Single-threaded:</strong> Main thread handles everything (no Job System benefits)<br>
+      • <strong>Memory limits:</strong> ~2GB max, often less in practice<br>
+      • <strong>No compute shaders:</strong> WebGL 2.0 doesn't support them<br>
+      • <strong>Initial download:</strong> Users wait for entire build to load<br>
+      • <strong>Shader compilation:</strong> Happens in the browser, can cause stalls</p>
+    </div>
+
+    <h2>Memory Budget</h2>
+    <p>Browser memory management is tricky. Unlike desktop, there's no dedicated GPU memory — it's all shared with the browser process.</p>
+
+    <div class="diagram">
+MEMORY BREAKDOWN (example 500MB budget):
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Unity WASM heap         │ ~150-200MB  │ Code, managed objects  │
+├───────────────────────────────────────────────────────────────────┤
+│  Browser overhead        │ ~50-100MB   │ DOM, JS, browser        │
+├───────────────────────────────────────────────────────────────────┤
+│  GPU resources (shared)  │ ~150-250MB  │ Textures, buffers      │
+├───────────────────────────────────────────────────────────────────┤
+│  Audio, networking       │ ~20-50MB    │ Decoded audio, buffers │
+└─────────────────────────────────────────────────────────────────┘
+
+Exceeding memory triggers browser tab crash or reload!
+    </div>
+
+    <h3>Texture Memory Dominates</h3>
+    <p>Textures are the biggest memory consumer. Calculate carefully:</p>
+
+    <table>
+      <tr>
+        <th>Resolution</th>
+        <th>RGBA Uncompressed</th>
+        <th>With Mipmaps (×1.33)</th>
+      </tr>
+      <tr>
+        <td>256×256</td>
+        <td>256 KB</td>
+        <td>341 KB</td>
+      </tr>
+      <tr>
+        <td>512×512</td>
+        <td>1 MB</td>
+        <td>1.33 MB</td>
+      </tr>
+      <tr>
+        <td>1024×1024</td>
+        <td>4 MB</td>
+        <td>5.33 MB</td>
+      </tr>
+      <tr>
+        <td>2048×2048</td>
+        <td>16 MB</td>
+        <td>21.3 MB</td>
+      </tr>
+      <tr>
+        <td>4096×4096</td>
+        <td>64 MB</td>
+        <td>85.3 MB</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The 4K Texture Trap</div>
+      <p>A single 4K texture uses 64MB. Ten of them = 640MB — more than your entire budget! Use 1K or 2K max for most things. Reserve higher resolutions only for critical hero assets.</p>
+    </div>
+
+    <h2>Texture Compression</h2>
+    <p>GPU texture compression is essential. It reduces both download size and GPU memory.</p>
+
+    <table>
+      <tr>
+        <th>Format</th>
+        <th>WebGL Support</th>
+        <th>Quality</th>
+        <th>Compression Ratio</th>
+      </tr>
+      <tr>
+        <td><strong>ETC2</strong></td>
+        <td>✅ WebGL 2.0</td>
+        <td>Good</td>
+        <td>6:1</td>
+      </tr>
+      <tr>
+        <td><strong>ASTC</strong></td>
+        <td>⚠️ Extension needed</td>
+        <td>Excellent</td>
+        <td>Variable (up to 36:1)</td>
+      </tr>
+      <tr>
+        <td><strong>DXT/BC</strong></td>
+        <td>⚠️ Extension (S3TC)</td>
+        <td>Good</td>
+        <td>4:1 to 6:1</td>
+      </tr>
+      <tr>
+        <td><strong>Basis Universal</strong></td>
+        <td>✅ Transcodes to native</td>
+        <td>Good</td>
+        <td>Varies by target</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Recommendation</div>
+      <p>Use <strong>ETC2</strong> as your baseline — it's guaranteed in WebGL 2.0. For assets that must look perfect, provide ASTC with ETC2 fallback. Unity handles this with platform-specific overrides.</p>
+    </div>
+
+    <h2>Initial Load Time</h2>
+    <p>Users must download your entire build before anything runs. This is critical UX.</p>
+
+    <h3>Build Size Breakdown</h3>
+    <div class="diagram">
+TYPICAL WEBGL BUILD:
+
+├── Build/
+│   ├── WebGL.data        ← Assets (biggest, 50-90% of total)
+│   ├── WebGL.wasm        ← Code (~10-30MB typical)
+│   ├── WebGL.framework.js ← Unity runtime
+│   └── WebGL.loader.js   ← Bootstrap
+│
+Total: 30-300MB+ depending on content
+    </div>
+
+    <h3>Size Reduction Strategies</h3>
+    <ul>
+      <li><strong>Compression:</strong> Enable Brotli or gzip (server must support)</li>
+      <li><strong>Strip Engine Code:</strong> Managed code stripping in Player Settings</li>
+      <li><strong>Texture Compression:</strong> Crunch compression for RGB textures</li>
+      <li><strong>Audio Compression:</strong> Use MP3/Vorbis, not WAV</li>
+      <li><strong>Mesh Compression:</strong> Enable in import settings</li>
+      <li><strong>Remove Unused:</strong> Resources folder includes everything!</li>
+    </ul>
+
+    <h3>Asset Bundles / Addressables</h3>
+    <p>For large applications, don't include everything in the main build:</p>
+
+    <div class="diagram">
+STREAMING ASSETS APPROACH:
+
+Initial Load (small):
+├── Core UI and loading screen
+├── Essential shaders
+└── Minimal startup assets
+
+Stream Later:
+├── Site-specific data (on demand)
+├── High-res textures (when needed)
+└── Optional features
+    </div>
+
+    <ul>
+      <li>Use <strong>Addressables</strong> for async loading</li>
+      <li>Show meaningful loading progress</li>
+      <li>Load assets near where they're needed</li>
+      <li>Unload when no longer needed</li>
+    </ul>
+
+    <h2>Shader Compilation Stalls</h2>
+    <p>WebGL compiles shaders at runtime. First time a shader variant is used, there's a pause.</p>
+
+    <h3>Mitigation Strategies</h3>
+    <ul>
+      <li><strong>Shader Warmup:</strong> Force-use all shaders during loading screen</li>
+      <li><strong>Reduce Variants:</strong> Minimize shader keywords/multi_compile</li>
+      <li><strong>Prebuilt Shaders:</strong> Use ShaderVariantCollection</li>
+      <li><strong>Simple Shaders:</strong> Complex shaders = longer compile time</li>
+    </ul>
+
+    <h2>Performance Best Practices</h2>
+
+    <h3>Rendering</h3>
+    <ul>
+      <li><strong>Forward rendering:</strong> Safest for WebGL</li>
+      <li><strong>Low shadow resolution:</strong> 512-1024 max</li>
+      <li><strong>Minimal post-processing:</strong> Each effect has cost</li>
+      <li><strong>Limit real-time lights:</strong> Use baked lighting where possible</li>
+      <li><strong>MSAA 2x or FXAA:</strong> Not 4x/8x MSAA</li>
+    </ul>
+
+    <h3>Code Performance</h3>
+    <ul>
+      <li><strong>Avoid GC allocations:</strong> More impactful than desktop</li>
+      <li><strong>Pool objects:</strong> Instantiate/Destroy causes GC spikes</li>
+      <li><strong>Incremental GC:</strong> Enable in Player Settings</li>
+      <li><strong>Minimize Update() calls:</strong> Consolidate where possible</li>
+    </ul>
+
+    <h3>Physics</h3>
+    <ul>
+      <li><strong>Simplify colliders:</strong> Use primitives (box, sphere) over mesh colliders</li>
+      <li><strong>Reduce physics iterations:</strong> Lower solver iteration count</li>
+      <li><strong>Disable unused features:</strong> Turn off continuous collision if not needed</li>
+    </ul>
+
+    <h2>Testing and Debugging</h2>
+
+    <h3>Development Workflow</h3>
+    <ul>
+      <li><strong>Development Build:</strong> Enable for better debugging (larger size)</li>
+      <li><strong>Browser DevTools:</strong> Use F12, Memory tab to track usage</li>
+      <li><strong>Unity Profiler:</strong> Works with WebGL builds (connect via port)</li>
+      <li><strong>Test on real browsers:</strong> Chrome, Firefox, Safari have different behaviors</li>
+    </ul>
+
+    <h3>Common Issues</h3>
+    <table>
+      <tr>
+        <th>Issue</th>
+        <th>Cause</th>
+        <th>Solution</th>
+      </tr>
+      <tr>
+        <td>Page goes blank/crashes</td>
+        <td>Out of memory</td>
+        <td>Reduce textures, unload assets</td>
+      </tr>
+      <tr>
+        <td>Long freeze on start</td>
+        <td>Shader compilation</td>
+        <td>Warmup shaders, reduce variants</td>
+      </tr>
+      <tr>
+        <td>Slow/stuttery</td>
+        <td>GC spikes</td>
+        <td>Object pooling, reduce allocations</td>
+      </tr>
+      <tr>
+        <td>Not loading</td>
+        <td>CORS, server config</td>
+        <td>Check server headers</td>
+      </tr>
+    </table>
+
+    <h2>Server Configuration</h2>
+    <p>WebGL builds need proper server configuration:</p>
+
+    <pre><code># Required MIME types:
+.wasm    →  application/wasm
+.data    →  application/octet-stream
+.br      →  Content-Encoding: br (Brotli)
+.gz      →  Content-Encoding: gzip
+
+# CORS headers (if hosting separately):
+Access-Control-Allow-Origin: *</code></pre>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>WebGL is <strong>single-threaded</strong> with ~2GB memory limit</li>
+      <li><strong>Textures</strong> dominate memory — use compression, keep resolutions low</li>
+      <li><strong>ETC2</strong> is guaranteed in WebGL 2.0; use it as baseline</li>
+      <li><strong>Build size</strong> affects load time — use compression, strip unused code</li>
+      <li><strong>Addressables</strong> enable streaming content after initial load</li>
+      <li><strong>Shader compilation</strong> causes stalls — warmup during loading</li>
+      <li>Use <strong>Forward rendering, low shadows, minimal post-processing</strong></li>
+      <li><strong>GC allocations</strong> are more painful — pool objects, avoid per-frame allocs</li>
+      <li>Configure server with correct <strong>MIME types and compression</strong></li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="10-mesh-optimization.html">
+        <span class="label">← Previous</span>
+        <span class="title">Mesh Optimization Algorithms</span>
+      </a>
+      <a href="12-unity-asset-transform.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Unity Asset Transform</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
