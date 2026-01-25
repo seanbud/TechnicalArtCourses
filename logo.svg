@@ -1,0 +1,33 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Minimalist, Cuter Otter App Icon -->
+  <defs>
+    <!-- Darker, deeper background -->
+    <rect id="bg" x="0" y="0" width="512" height="512" rx="120" fill="#0D1B2A" />
+  </defs>
+  
+  <use href="#bg" />
+  
+  <!-- Otter Face (filling the frame) -->
+  <ellipse cx="256" cy="280" rx="220" ry="200" fill="#CD853F" />
+  
+  <!-- Ears (Simple and integrated) -->
+  <circle cx="110" cy="160" r="50" fill="#A0522D" />
+  <circle cx="402" cy="160" r="50" fill="#A0522D" />
+  
+  <!-- Eyes (Maximum Cuteness: Large, simple, sparkling) -->
+  <circle cx="175" cy="250" r="45" fill="#1A1A1A" />
+  <circle cx="337" cy="250" r="45" fill="#1A1A1A" />
+  
+  <!-- Sparkles in eyes -->
+  <circle cx="195" cy="230" r="15" fill="white" />
+  <circle cx="357" cy="230" r="15" fill="white" />
+  
+  <!-- Muzzle (Simplified) -->
+  <circle cx="256" cy="340" r="80" fill="#FDEBD0" />
+  
+  <!-- Nose (Simplified Heart/Triangle) -->
+  <path d="M240 320 Q 256 300 272 320 L 256 345 Z" fill="#1A1A1A" />
+  
+  <!-- Smile -->
+  <path d="M220 360 Q 256 390 292 360" fill="none" stroke="#1A1A1A" stroke-width="12" stroke-linecap="round" />
+</svg>

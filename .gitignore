@@ -1,1 +1,5 @@
 .DS_Store
+node_modules/
+electron-app/node_modules/
+dist/
+*.log
