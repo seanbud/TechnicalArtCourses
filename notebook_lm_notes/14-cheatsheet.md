@@ -246,7 +246,95 @@ float spec = pow(max(0, dot(N, H)), shininess);
 
 ---
 
+## Lesson 16: GPU Instancing & Procedural Drawing
+
+**The Problem**: GameObjects have high overhead (Transform, Collider, Serialization). Scaling to >10k objects kills CPU.
+
+**Solution**: Use `Graphics.DrawMeshInstanced` (batches of 1023) or `DrawMeshInstancedIndirect` (infinite GPU buffer).
+
+**Phantom Geometry**: Objects typically don't exist in Scene Hierarchy.
+- **Interaction**: Math raycasting (grid logic) or Compute Shader selection.
+- **Animation**: Vertex shader displacement using `_Time` and Instance ID.
+- **Properties**: `MaterialPropertyBlock` for per-instance colors.
+
+**Comparison**:
+- **GameObject**: Heavy memory, slow update, easy to click.
+- **Graphics API**: Tiny memory, zero-cost update, hard to click.
+
+---
+
+## Lesson 16e: Advanced API Internals
+
+**The Trinity**:
+- `DrawMesh`: 1 object per call. Slow.
+- `DrawMeshInstanced`: 1023 objects per call. Array copy overhead per frame.
+- `DrawMeshInstancedIndirect`: Infinite objects. Zero CPU overhead. Use this for scale.
+
+**Initializaton Order (CRITICAL)**:
+1. Create `ComputeBuffer(count, stride)`.
+2. `SetData` (Initial upload).
+3. `material.SetBuffer`.
+4. Create `ArgsBuffer` (5 uints: indexCount, instanceCount, start, base, startInst).
+5. Loop: `DrawMeshInstancedIndirect(..., argsBuffer)`.
+
+**Optimization**:
+- **Data Packing**: Use `uint` (4 bytes) instead of `float4` (16 bytes) for discrete types.
+- **Divergence**: Avoid `if/else` in shaders. Use `color = _Palette[id]`.
+
+---
+
+## Lesson 17: Compute Shaders & WebGPU
+
+**The Revolution**: WebGPU brings Compute Shaders to the browser. Before this, heavy logic was CPU-bound (slow).
+
+**Zero-Copy Pipeline**:
+1. **Storage**: `StructuredBuffer` in VRAM.
+2. **Compute**: Kernel reads buffer, updates positions (physics/animation), writes buffer.
+3. **Render**: Vertex Shader reads the *same* buffer to draw.
+4. **Result**: Data never touches CPU (fast).
+
+**Interaction**: Use Compute Shaders for parallel raycasting (Ray vs Sphere check on 125,000 threads).
+
+---
+
+## Lesson 18: Scriptable Render Features
+
+**Purpose**: Inject custom C# logic into the URP rendering loop (e.g., "Draw a selection outline after opaque objects").
+
+**The Core Classes**:
+- **Feature (Asset)**: Configuration. `Create()` and `AddRenderPasses()`.
+- **Pass (Logic)**: Execution. `Configure()` and `Execute()`.
+
+**Command Buffer**: The list of instructions (`cmd.DrawMesh`, `cmd.Blit`) you send to the GPU.
+
+**RenderPassEvent**: The injection point (e.g., `AfterRenderingOpaques`, `BeforeRenderingPostProcessing`).
+
+---
+
+## Lesson 19: Advanced Rendering Techniques
+
+**Shadows at Scale**:
+- Problem: standard cascades cover <100m. 10km distance = blocky shadows.
+- Solution: Runtime distance adjustment, or **Top-Down Terrain Depth Maps** (bake terrain depth into a texture for "fake" static shadows).
+
+**Stencil Buffer**:
+- Use: 8-bit mask (0-255) for masking regions.
+- Region Highlighting: Mark pixels in stencil, then run post-processing pass that only affects marked pixels.
+
+**Depth Buffer**:
+- X-Ray: Set `ZTest Greater` on outlines to see through objects.
+- Soft Particles: Blend alpha based on `PixelDepth - SceneDepth`.
+
+**Camera Stacking**:
+- Base + Overlay cameras.
+- Separates concern for UI, Highlights, and World. Ensures UI always draws on top without depth fighting.
+
+---
+
 ## VRify Interview Quick Points
+
+
+
 
 
 1. **Pipeline Engineering**: Position yourself as building systems, not just fixing assets.

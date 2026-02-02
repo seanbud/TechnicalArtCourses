@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 18: Scriptable Render Features</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="lesson-nav">
+        <a href="../index.html">← Back to Index</a>
+        <span>Lesson 18 of 19</span>
+        <div class="nav-links">
+            <a href="17-compute-shaders.html">← Previous</a>
+            <a href="19-advanced-rendering.html">Next →</a>
+        </div>
+    </nav>
+
+    <main class="lesson-content">
+        <h1>Lesson 18: Scriptable Render Features Deep Dive</h1>
+        
+        <section class="overview">
+            <h2>Hacking the Pipeline</h2>
+            <p>URP isn't a black box. The "Scriptable" part means you can inject your own C# logic into the rendering process. You do this using **Scriptable Render Features**.</p>
+            <p>This is how you build tech art effects like Selection Outlines, X-Ray vision, Custom Blits, or rendering objects that "ignore" post-processing.</p>
+        </section>
+
+        <section>
+            <h2>The Anatomy</h2>
+            <p>There are two main classes you need to write:</p>
+            
+            <div class="comparison-grid">
+                <div class="card">
+                    <h3>The Feature (Config)</h3>
+                    <p><code>ScriptableRendererFeature</code></p>
+                    <ul>
+                        <li>Exists as an Asset in the Project.</li>
+                        <li>Stores settings (colors, materials).</li>
+                        <li>Create() builds the Pass.</li>
+                        <li>AddRenderPasses() injects the Pass.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>The Pass (Logic)</h3>
+                    <p><code>ScriptableRenderPass</code></p>
+                    <ul>
+                        <li>Does the actual work.</li>
+                        <li>Configure(): Sets up targets.</li>
+                        <li>Execute(): Sends commands to GPU.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>The Render Loop & Injection Points</h2>
+            <p>You can't just "render whenever." You must choose an insertion point via <code>RenderPassEvent</code>.</p>
+            
+            <ul>
+                <li><strong>BeforeRenderingOpaques:</strong> Draw things behind the world (skybox replacements).</li>
+                <li><strong>AfterRenderingOpaques:</strong> Draw transparents or overlays that need depth.</li>
+                <li><strong>AfterRenderingSkybox:</strong> Good for standard transparency.</li>
+                <li><strong>BeforeRenderingPostProcessing:</strong> Draw things that *should* get bloomed/color graded.</li>
+                <li><strong>AfterRenderingPostProcessing:</strong> Draw UI or overlays that should look "raw" (like gizmos).</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Case Study: The "Selection Outline"</h2>
+            <p>Let's build the VRify implementation of "Select the yellow cubes."</p>
+
+            <h3>Step 1: The Render Object Feature</h3>
+            <p>Unity comes with a built-in feature called <strong>Render Objects</strong>. It's powerful. You can:</p>
+            <ul>
+                <li>Filter objects by **Layer** (e.g., "Selected").</li>
+                <li>Override their material (e.g., "OutlineShader").</li>
+                <li>Override depth test (e.g., "Always" to see through walls).</li>
+            </ul>
+
+            <h3>Step 2: Custom Implementation (CommandBuffer)</h3>
+            <p>If the built-in one isn't enough, we write code. We use a **CommandBuffer** to list instructions.</p>
+
+            <div class="code-block">
+<pre>
+public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+{
+    CommandBuffer cmd = CommandBufferPool.Get("MyOutlinePass");
+    
+    // 1. Set a temporary render texture
+    cmd.GetTemporaryRT(tempTexture.id, descriptor, FilterMode.Bilinear);
+    cmd.SetRenderTarget(tempTexture.Identifier());
+    cmd.ClearRenderTarget(false, true, Color.clear);
+    
+    // 2. Draw only the "Selected" objects into this texture as solid color
+    DrawingSettings drawSettings = CreateDrawingSettings(shaderTags, ref renderingData, sortingCriteria);
+    context.DrawRenderers(renderingData.cullResults, ref drawSettings, ref filterSettings);
+    
+    // 3. Blit that texture back to screen with a blur/edge-detect shader
+    cmd.Blit(tempTexture.Identifier(), source, outlineMaterial);
+    
+    context.ExecuteCommandBuffer(cmd);
+    CommandBufferPool.Release(cmd);
+}
+</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>Command Buffers: The GPU To-Do List</h2>
+            <p>When you call function in <code>Execute</code>, you aren't drawing immediately. You are populating a list. <code>cmd.DrawMesh</code>, <code>cmd.Blit</code>, <code>cmd.SetGlobalFloat</code>.</p>
+            <p>Only when you call <code>context.ExecuteCommandBuffer(cmd)</code> does that list get flushed to the GPU.</p>
+        </section>
+
+        <section>
+            <h2>Common Use Cases for You</h2>
+            <ol>
+                <li><strong>Desaturation Mask:</strong> Render a mask of the "Mining Site Boundary" into the Stencil buffer. Then run a fullscreen pass that desaturates everything *outside* that stencil value.</li>
+                <li><strong>X-Ray:</strong> Render critical pipes/machinery with <code>Test Always</code> depth so they show on top of terrain, but with a ghost shader.</li>
+                <li><strong>Custom Shadows:</strong> Render a top-down view of the terrain into a texture, then project that texture onto the ground as a "fake" shadow map for performance.</li>
+            </ol>
+        </section>
+
+        <section class="key-takeaways">
+            <h2>Key Takeaways</h2>
+            <ol>
+                <li><strong>Scriptable Render Features</strong> let you inject custom passes into the URP loop.</li>
+                <li><strong>Feature = Config</strong> (Asset). <strong>Pass = Logic</strong> (Code).</li>
+                <li><strong>CommandBuffer</strong> is how you queue commands for the GPU.</li>
+                <li><strong>RenderPassEvent</strong> determines *when* your pass runs (e.g., before/after PostProcessing).</li>
+                <li>Use them for localized effects (outlines, x-ray) that global post-processing can't handle.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer class="lesson-footer">
+        <a href="17-compute-shaders.html">← Previous: Compute Shaders</a>
+        <a href="19-advanced-rendering.html">Next: Advanced Rendering →</a>
+    </footer>
+</body>
+</html>

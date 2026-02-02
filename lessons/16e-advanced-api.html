@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 16e: Advanced API & Memory Mechanics</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="lesson-nav">
+        <a href="../index.html">← Back to Index</a>
+        <span>Extension Lesson 16e</span>
+        <div class="nav-links">
+            <a href="16-gpu-instancing.html">← Previous</a>
+            <a href="17-compute-shaders.html">Next →</a>
+        </div>
+    </nav>
+
+    <main class="lesson-content">
+        <h1>Lesson 16e: Advanced API & Memory Mechanics</h1>
+        
+        <section class="overview">
+            <h2>Going Deeper: The Metal</h2>
+            <p>In Lesson 16, we learned <em>why</em> valid GameObjects fail at scale. Now we will learn <em>how</em> to speak directly to the GPU driver. This lesson covers the specific C# API calls, memory initialization sequence, and the exact buffer structures required to render millions of objects without melting your CPU.</p>
+        </section>
+
+        <section>
+            <h2>The API Trinity</h2>
+            <p>You have three primary tools in `UnityEngine.Graphics`. Knowing which one to use is 90% of the optimization battle.</p>
+
+            <div class="comparison-grid">
+                <div class="card">
+                    <h3>1. Graphics.DrawMesh</h3>
+                    <p><strong>The "One-Off"</strong></p>
+                    <ul>
+                        <li><strong>Use for:</strong> Single special effects, gizmos.</li>
+                        <li><strong>Data:</strong> CPU sends 1 matrix per call.</li>
+                        <li><strong>Perf:</strong> Slowest. 1 Draw Call per object (unless dynamic batched).</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>2. DrawMeshInstanced</h3>
+                    <p><strong>The "Batcher"</strong></p>
+                    <ul>
+                        <li><strong>Use for:</strong> 1k - 50k objects.</li>
+                        <li><strong>Data:</strong> CPU sends array of 1023 matrices (`Matrix4x4[]`).</li>
+                        <li><strong>Perf:</strong> Fast, but CPU must loop through arrays every frame.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>3. DrawMeshInstancedIndirect</h3>
+                    <p><strong>The "Fire & Forget"</strong></p>
+                    <ul>
+                        <li><strong>Use for:</strong> 50k - Millions.</li>
+                        <li><strong>Data:</strong> CPU sends **pointers** to GPU Buffers.</li>
+                        <li><strong>Perf:</strong> Zero CPU overhead per object. 1 Draw Call total.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="note">
+                <p><strong>Bonus: Graphics.DrawProcedural</strong><br>
+                Similar to Indirect, but doesn't require a Mesh asset. It generates geometry (like a full-screen quad or points) entirely in the Vertex Shader using `SV_VertexID`. Great for avoiding backface culling overhead if you are drawing points/billboards.</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>Memory Architecture: CPU vs. GPU</h2>
+            <p>Understanding <strong>where</strong> your data lives is critical.</p>
+            <div class="diagram">
+<pre>
+[ CPU RAM (System Memory) ]        [ PCIe BUS ]        [ GPU VRAM (Video Memory) ]
+       Array<float>       ---------- SLOW ---------->   ComputeBuffer
+       Matrix4x4[]        ---------- SLOW ---------->   StructuredBuffer
+</pre>
+            </div>
+            <p><strong>Golden Rule:</strong> Crossing the PCIe Bus is the bottleneck. <code>DrawMeshInstanced</code> crosses the bus every frame (uploading arrays). <code>Indirect</code> crosses the bus only once (initialization), then the data stays on the GPU.</p>
+        </section>
+
+        <section>
+            <h2>Implementation: DrawMeshInstancedIndirect</h2>
+            <p>This is the VRify standard for block models. Here is the exact initialization order.</p>
+
+            <h3>1. Define Your Data Layout</h3>
+            <p>The C# struct and HLSL struct must match <strong>byte-perfectly</strong>.</p>
+            <div class="code-block">
+<pre>
+// C#
+struct BlockData {
+    public Vector3 position; // 12 bytes
+    public uint colorPacked; // 4 bytes 
+    // Total Stride: 16 bytes
+}
+
+// HLSL
+struct BlockData {
+    float3 position;
+    uint colorPacked;
+};
+</pre>
+            </div>
+
+            <h3>2. Create the ComputeBuffer (Initialization)</h3>
+            <p><strong>Order matters.</strong> Do this in <code>Start()</code> or <code>OnEnable()</code>, never Update.</p>
+            <div class="code-block">
+<pre>
+// Parameters: Count (125k) and Stride (16 bytes)
+dataBuffer = new ComputeBuffer(125000, 16, ComputeBufferType.Structured);
+
+// Fill with initial data (Crossing the Bus!)
+dataBuffer.SetData(myCpuArray);
+</pre>
+            </div>
+
+            <h3>3. The "Args Buffer" (The Holiest of Buffers)</h3>
+            <p>For Indirect rendering, the CPU doesn't know how many things to draw. It reads a special buffer containing 5 integers.</p>
+            <div class="code-block">
+<pre>
+// 5 uints: IndexCount, InstanceCount, StartIndex, BaseVertex, StartInstance
+uint[] args = new uint[5] { 0, 0, 0, 0, 0 };
+
+// Get the index count from the mesh we want to draw
+args[0] = (uint)mesh.GetIndexCount(0);
+args[1] = (uint)instanceCount; // 125,000
+
+argsBuffer = new ComputeBuffer(1, args.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
+argsBuffer.SetData(args);
+</pre>
+            </div>
+
+            <h3>4. Material Setup</h3>
+            <p>You must bind the buffer to the material so the shader can find it.</p>
+            <div class="code-block">
+<pre>
+// "blockDataBuffer" must match the name in your Shader
+myMaterial.SetBuffer("blockDataBuffer", dataBuffer);
+</pre>
+            </div>
+
+            <h3>5. The Draw Loop (Update)</h3>
+            <p>Now, inside <code>Update()</code>, we issue the command.</p>
+            <div class="code-block">
+<pre>
+// Bounds are required for Frustum Culling. 
+// If the camera doesn't see 'bounds', the GPU command is skipped.
+Bounds bounds = new Bounds(Vector3.zero, new Vector3(1000, 1000, 1000));
+
+Graphics.DrawMeshInstancedIndirect(
+    mesh, 
+    0, 
+    myMaterial, 
+    bounds, 
+    argsBuffer
+);
+</pre>
+            </div>
+            <p>Note: We pass <code>argsBuffer</code>, not <code>dataBuffer</code>. The material already holds the reference to the data.</p>
+        </section>
+
+        <section>
+            <h2>Optimization: The Sparse Grid Problem</h2>
+            <p>Let's say you have a 3D grid, but 90% is empty air. Drawing 1 million invisible "Air" blocks is a waste of vertex processing.</p>
+
+            <h3>Packing Data</h3>
+            <p>If you have 3 block types (Dirt, Gold, Rock), do not send a <code>float4</code> color (16 bytes). That's massive waste.</p>
+            <p>Instead, pack it into a single <code>uint</code> (4 bytes) or even compress it into the position struct if you use <code>float4 positionAndType</code>.</p>
+            
+            <p><strong>Optimization Example:</strong></p>
+            <ul>
+                <li><strong>Bad:</strong> <code>float4 color</code> (16 bytes) * 1 million = 16 MB bandwidth.</li>
+                <li><strong>Good:</strong> <code>uint typeID</code> (4 bytes). Construct the color in the Shader logic.</li>
+            </ul>
+
+            <h3>Avoiding Branch Divergence</h3>
+            <p>In the shader, avoid this:</p>
+            <div class="code-block">
+<pre>
+// BAD: Divergence
+if (type == 0) color = red;
+else if (type == 1) color = gold;
+else color = grey;
+</pre>
+            </div>
+            
+            <p>Instead, use a <strong>Global Color Array</strong> or <strong>Texture Map</strong>.</p>
+            <div class="code-block">
+<pre>
+// GOOD: Uniform lookup
+color = _ColorPalette[type]; 
+</pre>
+            </div>
+            <p>This ensures all threads run the exact same instruction, fetching from an array, rather than branching into different code paths.</p>
+        </section>
+
+        <section class="key-takeaways">
+            <h2>Key Implementation Details</h2>
+            <ol>
+                <li><strong>Stride Calculation:</strong> Must match exactly. Float=4, Vector3=12, Matrix=64 bytes. Mismatch = crash or glitches.</li>
+                <li><strong>Initialization Order:</strong> Create Buffers -> Set Data -> Bind to Material. Do not re-create buffers in Update.</li>
+                <li><strong>Release Memory:</strong> <code>ComputeBuffer</code> is unmanaged C++ memory. You MUST pair every <code>new</code> with a <code>Release()</code> in <code>OnDisable()</code> or your GPU VRAM will leak.</li>
+                <li><strong>Args Buffer:</strong> 5 integers. The second one (Instance Count) is the most important one to update if your count changes dynamically.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer class="lesson-footer">
+        <a href="16-gpu-instancing.html">← Previous: GPU Instancing</a>
+        <a href="17-compute-shaders.html">Next: Compute Shaders →</a>
+    </footer>
+</body>
+</html>

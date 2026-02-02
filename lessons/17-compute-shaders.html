@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 17: Compute Shaders & WebGPU</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="lesson-nav">
+        <a href="../index.html">← Back to Index</a>
+        <span>Lesson 17 of 19</span>
+        <div class="nav-links">
+            <a href="16e-advanced-api.html">← Previous</a>
+            <a href="18-render-features.html">Next →</a>
+        </div>
+    </nav>
+
+    <main class="lesson-content">
+        <h1>Lesson 17: Compute Shaders & WebGPU</h1>
+        
+        <section class="overview">
+            <h2>The Browser GPU Revolution</h2>
+            <p>For years, WebGL 2.0 held us back. We couldn't use Compute Shaders in the browser. Physics and heavy logic had to stay on the CPU (JavaScript/WASM), which is single-threaded and slow.</p>
+            <p><strong>WebGPU changes everything.</strong> It brings modern GPU features—including Compute Shaders—to the web. VRify uses this to run massive simulations and animations directly on the GPU, bypassing the browser's main thread entirely.</p>
+        </section>
+
+        <section>
+            <h2>What is a Compute Shader?</h2>
+            <p>Standard shaders (Vertex/Fragment) are bound to the render pipeline. They draw triangles. Compute Shaders are <strong>"General Purpose GPU" (GPGPU)</strong> programs. They don't draw anything. They just crunch numbers.</p>
+            
+            <div class="comparison-grid">
+                <div class="card">
+                    <h3>Vertex/Fragment Shader</h3>
+                    <ul>
+                        <li>Input: Mesh vertices</li>
+                        <li>Output: Pixels on screen</li>
+                        <li>Structure: Fixed pipeline</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Compute Shader</h3>
+                    <ul>
+                        <li>Input: Arbitrary data buffer</li>
+                        <li>Output: Arbitrary data buffer</li>
+                        <li>Structure: Free threads (Kernels)</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>The Animation Pipeline: Zero CPU Cost</h2>
+            <p>Remember our 125,000 hex grid? Moving them with a Vertex Shader is fine for visual effects. But what if the hexes need to interact? What if they need to follow complex flocking rules or physics?</p>
+
+            <div class="diagram">
+<pre>
+THE OLD WAY (CPU):
+C# Loop (125k) -> Update Transform -> Upload to GPU -> Draw
+Result: 5 FPS
+
+THE COMPUTE WAY (GPU):
+Compute Kernel (125k threads) -> Reads/Writes Buffer -> Vertex Shader Reads Buffer -> Draw
+Result: 60+ FPS
+</pre>
+            </div>
+            
+            <p>The C# script does nothing but <code>Dispatch()</code> the compute shader. The data stays in VRAM.</p>
+        </section>
+
+        <section>
+            <h2>Code: The Hexagon Wave Kernel</h2>
+            <p>Here's a simplified Kernel that moves hexes based on a sine wave field.</p>
+            
+            <div class="code-block">
+<pre>
+// Hook up the buffer from C#
+RWStructuredBuffer<float3> positions;
+float time;
+
+// Define thread count (e.g., 64 threads per group)
+[numthreads(64, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // 1. Get my current position
+    float3 pos = positions[id.x];
+    
+    // 2. Calculate new height
+    float height = sin(pos.x * 0.1 + time) * sin(pos.z * 0.1 + time);
+    pos.y = height * 5.0;
+    
+    // 3. Write back to buffer
+    positions[id.x] = pos;
+}
+</pre>
+            </div>
+            
+            <p>In C#, you just dispatch it:</p>
+            <div class="code-block">
+<pre>
+computeShader.SetBuffer(kernel, "positions", positionBuffer);
+computeShader.SetFloat("time", Time.time);
+// Dispatch 125,000 threads (divided by 64 threads per group)
+computeShader.Dispatch(kernel, Mathf.CeilToInt(125000 / 64.0f), 1, 1);
+</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>Interaction without GameObjects</h2>
+            <p>You asked: "How do I click them?" or "How do I do Voronoi connections?"</p>
+            <p>Since we have no Colliders, we use the Compute Shader for <strong>Parallel Search</strong>.</p>
+            
+            <h3>Raycasting via Compute</h3>
+            <p>To find which hex is under the mouse:</p>
+            <ol>
+                <li>Send Mouse Ray (Origin, Direction) to Compute Shader.</li>
+                <li>Each thread checks intersection with its own hex (math).</li>
+                <li>If hit, write <code>id.x</code> to a "Results" buffer.</li>
+                <li>CPU reads the single int from the Results buffer.</li>
+            </ol>
+            
+            <h3>Voronoi / Proximity</h3>
+            <p>To draw lines between nearby points:</p>
+            <p>Checking every point against every other point is O(N²). For 125k points, that's 15 billion checks. Too slow even for GPU.</p>
+            <p><strong>Solution: Spatial Hashing.</strong></p>
+            <ol>
+                <li>Divide the world into a grid of buckets.</li>
+                <li>Compute Shader Pass 1: Each point writes its ID into its local bucket.</li>
+                <li>Compute Shader Pass 2: Each point only checks users in its own (and neighbor) buckets.</li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>WebGPU Specifics</h2>
+            <p>When targeting WebGPU in Unity:</p>
+            <ul>
+                <li><strong>HLSL to WGSL:</strong> Unity cross-compiles your compute shaders code to WGSL (WebGPU Shading Language).</li>
+                <li><strong>Async Readback:</strong> Reading data back to CPU is <em>asynchronous</em>. You cannot get the result in the same frame without stalling. You request it, and get a callback a frame later.</li>
+                <li><strong>Browser Support:</strong> Currently requires Chrome/Edge updates or specific flags enabled by end users (though rolling out rapidly).</li>
+            </ul>
+        </section>
+
+        <section class="key-takeaways">
+            <h2>Key Takeaways</h2>
+            <ol>
+                <li><strong>WebGPU</strong> enables Compute Shaders in the browser, unlocking massive simulation potential.</li>
+                <li><strong>Compute Shaders</strong> are generic programs. Input Buffer -> Math -> Output Buffer.</li>
+                <li><strong>Zero-Copy Pipeline</strong>: Compute updates positions, Rendering reads positions. Data never touches the CPU.</li>
+                <li><strong>Parallel Interaction</strong>: Use Compute to check 125,000 raycasts instantly instead of using Physics.</li>
+                <li><strong>StructuredBuffer</strong> is the main data structure used to pass arrays between C# and Compute.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer class="lesson-footer">
+        <a href="16e-advanced-api.html">← Previous: Advanced API internals</a>
+        <a href="18-render-features.html">Next: Render Features →</a>
+    </footer>
+</body>
+</html>

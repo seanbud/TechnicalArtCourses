@@ -30,6 +30,13 @@ The curriculum is organized into four groups:
 **Shading Deep Dive** (Lesson 15)
 15. **Lighting Algorithms** — Lambert, Blinn-Phong, Fresnel; how vertex data reaches pixels
 
+**Advanced Rendering** (Lesson 16-19)
+16. **GPU Instancing** — Procedural drawing, phantom geometry, and rendering 100k+ objects
+16e. **Advanced API Internals** — Memory architecture, buffer initialization, and low-level C# implementation
+17. **Compute Shaders** — WebGPU, kernels, and simulation handling without CPU
+18. **Render Features** — Custom passes, command buffers, and pipeline injection
+19. **Rendering Techniques** — Shadows at scale, stencils, and depth buffer hacks
+
 ## Context
 
 

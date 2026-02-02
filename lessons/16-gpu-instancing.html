@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 16: Procedural Drawing & GPU Instancing</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="lesson-nav">
+        <a href="../index.html">← Back to Index</a>
+        <span>Lesson 16 of 19</span>
+        <div class="nav-links">
+            <a href="15-lighting-algorithms.html">← Previous</a>
+            <a href="16e-advanced-api.html">Extension →</a>
+        </div>
+    </nav>
+
+    <main class="lesson-content">
+        <h1>Lesson 16: Procedural Drawing & GPU Instancing</h1>
+        
+        <section class="overview">
+            <h2>The "Phantom" Geometry</h2>
+            <p>At VRify, you might be asked to render a dataset with 125,000 distinct hexagon tiles—a 50x50x50 grid. If you try to spawn 125,000 GameObjects with MeshRenderers, Unity will likely crawl to 2 FPS or crash entirely.</p>
+            <p><strong>GameObjects are heavy.</strong> They have Transforms, Colliders, Editor overhead, and serialization costs. For massive scale, we bypass GameObjects entirely and talk directly to the GPU using the <code>Graphics</code> API.</p>
+            <p>We call this "Phantom Geometry" because these objects don't exist in the Scene Hierarchy. You can't click them in the Scene view. They exist only as mathematical commands sent to the render pipeline.</p>
+        </section>
+
+        <section>
+            <h2>DrawMesh vs. GameObjects</h2>
+            <div class="comparison-grid">
+                <div class="card bad">
+                    <h3>❌ The GameObject Way</h3>
+                    <p><code>Instantiate(prefab)</code> 125,000 times.</p>
+                    <ul>
+                        <li><strong>Memory:</strong> Massive overhead per object</li>
+                        <li><strong>CPU:</strong> Updating 125k Transforms is slow</li>
+                        <li><strong>Hierarchy:</strong> Editor becomes unusable</li>
+                        <li><strong>Garbage Collection:</strong> High pressure</li>
+                    </ul>
+                </div>
+                <div class="card good">
+                    <h3>✅ The Graphics API Way</h3>
+                    <p><code>Graphics.DrawMeshInstanced(...)</code></p>
+                    <ul>
+                        <li><strong>Memory:</strong> Just arrays of matrices (floats)</li>
+                        <li><strong>CPU:</strong> Minimal overhead (batching)</li>
+                        <li><strong>Hierarchy:</strong> Empty (clean)</li>
+                        <li><strong>Garbage Collection:</strong> Zero (if using buffers)</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Technique 1: Graphics.DrawMeshInstanced</h2>
+            <p>This is the standard way to draw up to 1023 instances per draw call. Unity automatically batches these calls for you.</p>
+            
+            <h3>The limitations</h3>
+            <ul>
+                <li><strong>Max 1023 instances</strong> per batch (you must split your list)</li>
+                <li>Requires <code>MaterialPropertyBlock</code> for per-instance data</li>
+                <li>Shader must support instancing (<code>#pragma multi_compile_instancing</code>)</li>
+            </ul>
+
+            <h3>Code Example: The 1023 Batcher</h3>
+            <div class="code-block">
+<pre>
+void Update() {
+    // We have 125,000 matrices to draw
+    // We must submit them in batches of 1023
+    
+    RenderParams rp = new RenderParams(myMaterial);
+    
+    for (int i = 0; i < allMatrices.Count; i += 1023) {
+        int count = Mathf.Min(1023, allMatrices.Count - i);
+        // Create a slice or pass the sub-list (simplified here)
+        var batch = allMatrices.GetRange(i, count); 
+        
+        Graphics.DrawMeshInstanced(
+            mesh, 
+            0, 
+            myMaterial, 
+            batch, 
+            null, // MaterialPropertyBlock
+            ShadowCastingMode.On
+        );
+    }
+}
+</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>Technique 2: DrawMeshInstancedIndirect (The Holy Grail)</h2>
+            <p>What if 1023 isn't enough? <code>DrawMeshInstancedIndirect</code> (or <code>DrawProcedural</code>) moves the data management effectively <strong>entirely to the GPU</strong>.</p>
+            
+            <p>Instead of passing C# arrays, you pass a <strong>ComputeBuffer</strong> containing all your object data. The limits become "how much VRAM do you have?"</p>
+
+            <h3>How it works</h3>
+            <div class="diagram">
+<pre>
+CPU SIDE:
+1. Create ComputeBuffer with 125,000 transform matrices
+2. Create "Args Buffer" (Index count, Instance count, Start Index...)
+3. Send Graphics.DrawMeshInstancedIndirect(mesh, submesh, material, bounds, argsBuffer)
+
+GPU SIDE (Shader):
+1. Use SV_InstanceID to fetch matrix from the StructuredBuffer
+2. Apply transform
+3. Draw
+</pre>
+            </div>
+            
+            <p>This is how you render millions of grass blades or particles. The CPU issues <strong>one single command</strong>.</p>
+        </section>
+
+        <section>
+            <h2>Per-Instance Properties (Color, ID, etc.)</h2>
+            <p>You can't instantiate a new Material for every hex (that breaks batching). Instead, we use <strong>MaterialPropertyBlocks</strong> (MPB).</p>
+            
+            <div class="code-block">
+<pre>
+// C# Side
+MaterialPropertyBlock props = new MaterialPropertyBlock();
+List<Vector4> colors = new List<Vector4>(); // 125k colors
+
+// Fill colors...
+
+// Pass to DrawMeshInstanced
+Graphics.DrawMeshInstanced(mesh, 0, mat, matrices, props);
+</pre>
+            </div>
+
+            <div class="code-block">
+<pre>
+// Shader Side
+UNITY_INSTANCING_BUFFER_START(Props)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
+UNITY_INSTANCING_BUFFER_END(Props)
+
+// Vertex Shader
+float4 color = UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+</pre>
+            </div>
+            
+            <p>For <code>Indirect</code> drawing, you don't use MPB. You use another <code>StructuredBuffer<float4></code> in the shader containing your colors, indexed by Instance ID.</p>
+        </section>
+
+        <section>
+            <h2>The "Phantom" Problem: Interaction & Physics</h2>
+            <p>Since these aren't GameObjects, <strong>Collider components don't work</strong>. You can't just add a `BoxCollider`. You can't use `OnMouseDown`. So how do you click a hex?</p>
+
+            <h3>Solution A: Math Raycasting (Fastest)</h3>
+            <p>If your grid is regular (like a hex grid), you don't need physics. You can calculate mathematically which cell the mouse ray hits.</p>
+            <ul>
+                <li>Raycast against the ground plane (y=0)</li>
+                <li>Convert world hit point -> Grid Coordinate (q, r)</li>
+                <li>Look up data in your 2D/3D array</li>
+            </ul>
+
+            <h3>Solution B: Proxy Colliders (Hackier)</h3>
+            <p>If you only need to click <em>one</em> thing at a time, spawn a single invisible Collider and move it to track the mouse. Or, if you have few objects (1000s), you can spawn "Entity" generic gameobjects with just colliders but no renderers.</p>
+
+            <h3>Solution C: GPU Raycasting (Advanced)</h3>
+            <p>Send the mouse ray to a Compute Shader. Have each of the 125,000 threads check "did the ray hit me?" Write the ID of the hit object to a buffer. Read it back on CPU.</p>
+        </section>
+
+        <section>
+            <h2>Animation Strategy</h2>
+            <div class="note bad">
+                <p><strong>⚠️ BAD:</strong> Calculating 125,000 generic <code>Mathf.Sin()</code> animations on CPU and updating 125,000 matrices in the list every frame.</p>
+            </div>
+            
+            <div class="note good">
+                <p><strong>✅ GOOD:</strong> Pass <code>Time.time</code> to the shader. Use vertex displacement in the shader to animate position/scale/rotation based on Instance ID.</p>
+            </div>
+
+            <p>Example: To make hexes "cascade" in:</p>
+            <div class="code-block">
+<pre>
+// Vertex Shader
+float id = UNITY_GET_INSTANCE_ID(input);
+float noise = snoise(worldPos * 0.1);
+float triggerTime = _StartTime + noise * 2.0;
+float scale = smoothstep(triggerTime, triggerTime + 0.5, _Time.y);
+
+// Scale the vertex position (effectively scaling the object)
+v.vertex.xyz *= scale;
+</pre>
+            </div>
+            <p>Zero CPU cost. 125,000 animating objects at 60 FPS.</p>
+        </section>
+
+        <section class="key-takeaways">
+            <h2>Key Takeaways</h2>
+            <ol>
+                <li><strong>Scale kills GameObjects.</strong> Use <code>Graphics.DrawMeshInstanced</code> for >5k similar objects.</li>
+                <li><strong>DrawMeshInstanced</strong> uses batches of 1023 matrices.</li>
+                <li><strong>DrawMeshInstancedIndirect</strong> uses GPU buffers (`ComputeBuffer`) for effectively infinite scale.</li>
+                <li><strong>Interaction</strong> requires math-based raycasting (Grid coords) or proxy colliders, since there are no GameObjects.</li>
+                <li><strong>Animation</strong> should happen in the **Vertex Shader** using Instance ID/Position, not by updating matrices on the CPU.</li>
+                <li><strong>MaterialPropertyBlock</strong> breaks instances into batches if you aren't careful, but allows per-instance colors for standard instancing.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer class="lesson-footer">
+        <a href="15-lighting-algorithms.html">← Previous: Lighting Algorithms</a>
+        <a href="16e-advanced-api.html">Extension: Advanced API Internals →</a>
+    </footer>
+</body>
+</html>

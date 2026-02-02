@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 19: Advanced Rendering Techniques</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="lesson-nav">
+        <a href="../index.html">← Back to Index</a>
+        <span>Lesson 19 of 19</span>
+        <div class="nav-links">
+            <a href="18-render-features.html">← Previous</a>
+        </div>
+    </nav>
+
+    <main class="lesson-content">
+        <h1>Lesson 19: Advanced Rendering Techniques</h1>
+        
+        <section class="overview">
+            <h2>Polishing the Visual Experience</h2>
+            <p>Our final lesson covers the "special sauce" of technical art: manipulating buffers and lighting systems to solve problems that standard pipelines can't handle. In a browser-based geospatial app, these techniques aren't just for beauty—they're for clarity and performance.</p>
+        </section>
+
+        <section>
+            <h2>Shadows at Massive Scale</h2>
+            <p>Standard Unity shadow cascades typically cover 50 to 100 meters. But at VRify, you might be looking at a mining pit that covers 10 square kilometers. If you set your shadow distance to 10km, your shadow map resolution will spread so thin that the shadows disappear or turn into a flickering mess.</p>
+
+            <h3>The Scale Dilemma</h3>
+            <ul>
+                <li><strong>Perspective Aliasing:</strong> Shadow maps are projections. The larger the area they cover, the lower the "pixels per meter" of shadow.</li>
+                <li><strong>Floating Point Precision:</strong> At huge distances from the camera, Z-fighting occurs in the shadow map, causing "shadow acne."</li>
+            </ul>
+
+            <h3>Better Solutions:</h3>
+            <div class="card">
+                <h3>1. Runtime Shadow Distance Modification</h3>
+                <p>Don't stick to one setting. Detect the camera's zoom level. If zoomed in on a tractor, set distance to 50m. If looking at the whole site, set it to 10km (or disable it and use a different technique).</p>
+            </div>
+            <div class="card">
+                <h3>2. Top-Down Terrain Shadow Mapping</h3>
+                <p>Instead of real-time directional shadows (which calculate every frame), render a single top-down depth map of the terrain once. Use this as a "fake" shadow map in your shader. It's essentially persistent ambient occlusion for the ground.</p>
+            </div>
+            <div class="card">
+                <h3>3. Contact Shadows (Screen Space)</h3>
+                <p>For fine details near the camera, use Screen Space Shadows. They look better than cascades for small gaps and don't care about the global shadow distance setting.</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>Stencil Buffer Mastery</h2>
+            <p>The **Stencil Buffer** is like an invisible 8-bit mask shared with the Depth Buffer. You can "mark" pixels as they render, and then other objects can choose to render only where the mask matches.</p>
+            
+            <h3>Example: The Boundary Desaturator</h3>
+            <p>You want everything inside the mining lease to be in color, and everything outside to be black and white.</p>
+            <ol>
+                <li>Render an invisible "Boundary Mesh" first, writing <code>1</code> to the Stencil buffer.</li>
+                <li>Run a fullscreen Render Feature pass (Lesson 18).</li>
+                <li>In that pass shader: <code>if (stencilValue != 1) { color = grayscale(color); }</code></li>
+            </ol>
+
+            <h3>Example: Portals</h3>
+            <p>Looking "inside" a buried pipe from the surface. Use the stencil to punch a hole through the terrain's rendering logic.</p>
+        </section>
+
+        <section>
+            <h2>Depth Buffer Tricks</h2>
+            <p>The Depth (Z) Buffer tells us how far away each pixel is. We can "lie" to it to create effects.</p>
+            
+            <ul>
+                <li><strong>X-Ray Effects:</strong> Set <code>ZTest Greater</code> on an outline shader. This means the outline only draws *if it is hidden* by something else. This lets you see machinery through mountains.</li>
+                <li><strong>Soft Particles:</strong> Check the depth of the background in your shader. If <code>pixelDepth - backgroundDepth</code> is small, fade the alpha. This prevents hard "cutting" lines where clouds hit the ground.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Camera Stacking</h2>
+            <p>In URP, you can stack multiple cameras on a single target. This is essential for compositing.</p>
+            <div class="diagram">
+<pre>
+BASE CAMERA (3D World)
+  - Clear Flags: Color & Depth
+  - Render Layer: Everything minus UI
+
+OVERLAY CAMERA (Selection Highlights)
+  - Clear Flags: Nothing (Depth Only)
+  - Render Layer: "Selected"
+  - Effect: Glowing Bloom
+
+OVERLAY CAMERA (UI)
+  - Clear Flags: Nothing
+  - Render Layer: UI
+</pre>
+            </div>
+            <p>This ensures your UI always draws on top of the world, and your highlighting effects don't get messed up by the world's depth buffer if you don't want them to.</p>
+        </section>
+
+        <section class="key-takeaways">
+            <h2>Key Takeaways</h2>
+            <ol>
+                <li><strong>Shadows are relative.</strong> Scale requires switching between high-quality cascades for close-ups and persistent depth maps for distance.</li>
+                <li><strong>Stencil Buffers</strong> are your best tool for region-based masking (highlighting specific zones).</li>
+                <li><strong>Depth Testing (ZTest)</strong> can be subverted for visibility effects like X-Ray.</li>
+                <li><strong>Camera Stacking</strong> is the architectural way to keep UI, highlights, and world geography from interfering with each other's render states.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer class="lesson-footer">
+        <a href="18-render-features.html">← Previous: Render Features</a>
+        <a href="../cheatsheet.html">Final Review: Cheat Sheet →</a>
+    </footer>
+</body>
+</html>
