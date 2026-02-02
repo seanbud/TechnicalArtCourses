@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 7: Mesh Fundamentals | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 07</div>
+      <h1>Mesh Fundamentals</h1>
+      <p class="lesson-subtitle">Vertices, triangles, MeshFilter, MeshRenderer, and how data flows</p>
+    </div>
+
+    <h2>What Is a Mesh?</h2>
+    <p>A mesh is the <strong>geometric data</strong> that defines a 3D shape. It's composed of vertices, edges, and faces (triangles). In Unity, a mesh is a data container — the actual rendering is handled by other components.</p>
+
+    <div class="diagram">
+MESH ANATOMY:
+
+        Vertex 0
+           /\
+          /  \
+         /    \
+        /      \
+       /________\
+  Vertex 1      Vertex 2
+
+This triangle:
+- 3 vertices (positions in 3D space)
+- 3 edges (connections between vertices)
+- 1 face (the triangle itself)
+- 3 indices: [0, 1, 2] (vertex order)
+    </div>
+
+    <h2>Vertex Attributes</h2>
+    <p>Each vertex isn't just a position — it carries multiple attributes that the shader uses:</p>
+
+    <table>
+      <tr>
+        <th>Attribute</th>
+        <th>Type</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><strong>Position</strong></td>
+        <td>Vector3</td>
+        <td>Location in object space</td>
+      </tr>
+      <tr>
+        <td><strong>Normal</strong></td>
+        <td>Vector3</td>
+        <td>Direction the surface faces (for lighting)</td>
+      </tr>
+      <tr>
+        <td><strong>UV (UV0)</strong></td>
+        <td>Vector2</td>
+        <td>Texture coordinates (0-1 mapping to texture)</td>
+      </tr>
+      <tr>
+        <td><strong>UV2, UV3...</strong></td>
+        <td>Vector2</td>
+        <td>Lightmap UVs, additional texture channels</td>
+      </tr>
+      <tr>
+        <td><strong>Tangent</strong></td>
+        <td>Vector4</td>
+        <td>Used with normal maps for correct lighting</td>
+      </tr>
+      <tr>
+        <td><strong>Color</strong></td>
+        <td>Color32</td>
+        <td>Per-vertex color (blending, LOD, effects)</td>
+      </tr>
+      <tr>
+        <td><strong>BoneWeights</strong></td>
+        <td>BoneWeight</td>
+        <td>Skeletal animation influence</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Vertex Data Size</div>
+      <p>Each attribute adds memory. A basic vertex (position + normal + UV) is about 32 bytes. With tangent, color, and multiple UVs, it can reach 60+ bytes. For a 100K vertex mesh, that's 3-6 MB of vertex data.</p>
+    </div>
+
+    <h2>Triangles and Indices</h2>
+    <p>GPUs only render <strong>triangles</strong>. All mesh faces are triangulated. The <strong>index buffer</strong> defines which vertices form each triangle.</p>
+
+    <div class="diagram">
+VERTEX SHARING via Index Buffer:
+
+Vertices:                    Triangles (indices):
+0: (-1, 0, 0)               Triangle A: [0, 1, 2]
+1: ( 0, 1, 0)               Triangle B: [0, 2, 3]
+2: ( 1, 0, 0)
+3: ( 0,-1, 0)
+
+     1
+    /|\
+   / | \
+  0  |  2     Vertices 0 and 2 are SHARED
+   \ | /      between both triangles
+    \|/       (no duplication needed)
+     3
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Why Indices Matter</div>
+      <p>Without indexing, you'd need to duplicate vertices for every triangle corner. A cube with 6 faces (12 triangles) would need 36 vertices instead of 8. Index buffers save massive amounts of memory.</p>
+    </div>
+
+    <h2>MeshFilter vs MeshRenderer</h2>
+    <p>This is a common interview question. These two components work together but have distinct roles:</p>
+
+    <div class="diagram">
+COMPONENT RELATIONSHIP:
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        GameObject                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────────┐         ┌──────────────────────┐           │
+│  │   MeshFilter    │────────▶│    MeshRenderer      │           │
+│  │                 │         │                      │           │
+│  │  Holds the      │         │  Renders the mesh    │           │
+│  │  MESH DATA      │         │  using MATERIAL(s)   │           │
+│  │  (geometry)     │         │                      │           │
+│  │                 │         │  Bounds, shadows,    │           │
+│  │  .mesh          │         │  lighting probes,    │           │
+│  │  .sharedMesh    │         │  layer, static flags │           │
+│  └─────────────────┘         └──────────────────────┘           │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <table>
+      <tr>
+        <th>MeshFilter</th>
+        <th>MeshRenderer</th>
+      </tr>
+      <tr>
+        <td>Contains reference to Mesh asset</td>
+        <td>How to draw (materials, settings)</td>
+      </tr>
+      <tr>
+        <td>No visual effect if alone</td>
+        <td>Requires MeshFilter to have geometry</td>
+      </tr>
+      <tr>
+        <td><code>.mesh</code> (instance copy)</td>
+        <td><code>.materials[]</code> (one per submesh)</td>
+      </tr>
+      <tr>
+        <td><code>.sharedMesh</code> (shared asset)</td>
+        <td><code>.bounds</code> (for culling)</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ .mesh vs .sharedMesh</div>
+      <p>Accessing <code>meshFilter.mesh</code> creates an <strong>instance copy</strong> — useful for runtime modification but adds memory. Use <code>.sharedMesh</code> when you don't need to modify it (read-only).</p>
+    </div>
+
+    <h2>SubMeshes</h2>
+    <p>A single mesh can have multiple <strong>submeshes</strong>, each rendered with a different material. This is how multi-material objects work.</p>
+
+    <div class="diagram">
+SUBMESH EXAMPLE: Car Body
+
+Mesh:
+├── SubMesh 0: Body panels      → Material[0]: Car Paint
+├── SubMesh 1: Windows          → Material[1]: Glass
+├── SubMesh 2: Chrome accents   → Material[2]: Chrome
+└── SubMesh 3: Tires            → Material[3]: Rubber
+
+One GameObject, one MeshRenderer, 4 materials
+renderer.materials.Length == 4
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>CAD data often comes with many materials. Each submesh = separate material = separate draw call. For performance, consider combining materials or using texture atlases to reduce submesh count.</p>
+    </div>
+
+    <h2>How Mesh Data Gets to the GPU</h2>
+    <p>Understanding the data flow helps explain performance characteristics:</p>
+
+    <div class="diagram">
+MESH DATA FLOW:
+
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  CPU Memory  │ →  │  GPU Upload  │ →  │  GPU VRAM    │
+│              │    │  (one time)  │    │              │
+│  Mesh asset  │    │              │    │  Vertex      │
+│  vertices[]  │    │              │    │  Buffer      │
+│  indices[]   │    │              │    │              │
+│  normals[]   │    │              │    │  Index       │
+│  uvs[]       │    │              │    │  Buffer      │
+└──────────────┘    └──────────────┘    └──────────────┘
+
+Static mesh: Uploaded once, stays in VRAM
+Dynamic mesh: Re-uploaded when modified
+    </div>
+
+    <h3>Static vs Dynamic Meshes</h3>
+    <table>
+      <tr>
+        <th>Static Meshes</th>
+        <th>Dynamic Meshes</th>
+      </tr>
+      <tr>
+        <td>Uploaded once at load time</td>
+        <td>Re-uploaded when data changes</td>
+      </tr>
+      <tr>
+        <td>Marked as read-only on GPU</td>
+        <td>Kept in CPU-writeable memory</td>
+      </tr>
+      <tr>
+        <td>Eligible for static batching</td>
+        <td>Can use dynamic batching (if small)</td>
+      </tr>
+      <tr>
+        <td>Most scene geometry</td>
+        <td>Procedural meshes, deforming objects</td>
+      </tr>
+    </table>
+
+    <h2>Bounds and Culling</h2>
+    <p>Every renderer has <strong>bounds</strong> — an axis-aligned bounding box (AABB) used for culling and spatial queries.</p>
+
+    <div class="diagram">
+MESH BOUNDS:
+
+         ┌─────────────────┐
+         │                 │  Axis-Aligned Bounding Box (AABB)
+    ┌────┼───────┐         │  - Simple rectangle/box
+    │    │    ▲  │         │  - Fast intersection tests
+    │    └────┼──┼─────────┘  - May be larger than actual mesh
+    │         │  │
+    └─────────┴──┘
+      Actual mesh
+      (rotated)
+
+AABB expands when mesh rotates!
+    </div>
+
+    <p>Key points:</p>
+    <ul>
+      <li><code>Renderer.bounds</code> — world-space bounds (affected by transform)</li>
+      <li><code>Mesh.bounds</code> — local-space bounds (mesh-relative)</li>
+      <li>Bounds are used for frustum culling — object skipped if bounds outside camera</li>
+      <li>Wrong bounds = visible objects being culled (pop-in issues)</li>
+    </ul>
+
+    <h2>Mesh Topology</h2>
+    <p>Unity supports different primitive types, though triangles are most common:</p>
+
+    <table>
+      <tr>
+        <th>Topology</th>
+        <th>Use Case</th>
+      </tr>
+      <tr>
+        <td>Triangles</td>
+        <td>Standard 3D geometry (default)</td>
+      </tr>
+      <tr>
+        <td>Lines</td>
+        <td>Debug visualization, wireframes</td>
+      </tr>
+      <tr>
+        <td>Points</td>
+        <td>Point clouds, particle systems</td>
+      </tr>
+      <tr>
+        <td>Quads</td>
+        <td>Legacy, avoid (triangulated internally)</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>Point cloud data naturally uses <strong>Points topology</strong>. However, WebGL rendering of points can be inconsistent. Often point clouds are rendered as small quads (billboards) or converted to meshes for better cross-platform behavior.</p>
+    </div>
+
+    <h2>Creating Meshes at Runtime</h2>
+    <p>For procedural geometry, you can create meshes via code:</p>
+
+    <pre><code>Mesh mesh = new Mesh();
+
+// Define vertices
+mesh.vertices = new Vector3[] {
+    new Vector3(0, 0, 0),
+    new Vector3(1, 0, 0),
+    new Vector3(0, 1, 0)
+};
+
+// Define triangle (indices into vertex array)
+mesh.triangles = new int[] { 0, 1, 2 };
+
+// Calculate normals automatically
+mesh.RecalculateNormals();
+mesh.RecalculateBounds();
+
+// Assign to MeshFilter
+GetComponent<MeshFilter>().mesh = mesh;</code></pre>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>A <strong>mesh</strong> is geometry data: vertices (with attributes) + triangle indices</li>
+      <li><strong>Vertex attributes</strong>: position, normal, UV, tangent, color, bone weights</li>
+      <li><strong>Index buffer</strong> enables vertex sharing, saving memory</li>
+      <li><strong>MeshFilter</strong> holds the mesh data; <strong>MeshRenderer</strong> draws it with materials</li>
+      <li>Use <code>.sharedMesh</code> for read-only access, <code>.mesh</code> creates a copy</li>
+      <li><strong>SubMeshes</strong> allow multiple materials per mesh (one draw call each)</li>
+      <li><strong>Bounds</strong> determine culling — incorrect bounds cause visual issues</li>
+      <li>Static meshes upload once; dynamic meshes re-upload on change</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="06-gpu-architecture.html">
+        <span class="label">← Previous</span>
+        <span class="title">GPU Architecture</span>
+      </a>
+      <a href="08-ui-rendering.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">UI Rendering</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

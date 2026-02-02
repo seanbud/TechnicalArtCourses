@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unity Technical Artist Interview Prep</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>Unity Technical Artist</h1>
+      <p class="hero-subtitle">Interview Prep for VRify</p>
+    </div>
+
+    <h2>Foundations</h2>
+    <p>Core knowledge about how Unity works under the hood.</p>
+    
+    <div class="lesson-grid">
+    </div>
+
+    <h2>Rendering Deep Dive</h2>
+    <p>Advanced rendering concepts and GPU architecture.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/04-forward-deferred.html" class="lesson-card">
+        <div class="lesson-card-number">04</div>
+        <div class="lesson-card-content">
+          <h3>Forward vs Deferred & Forward+</h3>
+          <p>Rendering paths, GBuffer, and when to use each</p>
+        </div>
+      </a>
+      
+      <a href="lessons/05-urp-settings.html" class="lesson-card">
+        <div class="lesson-card-number">05</div>
+        <div class="lesson-card-content">
+          <h3>URP Deep Dive</h3>
+          <p>Render features, MSAA, quality settings, browser optimization</p>
+        </div>
+      </a>
+      
+      <a href="lessons/06-gpu-architecture.html" class="lesson-card">
+        <div class="lesson-card-number">06</div>
+        <div class="lesson-card-content">
+          <h3>GPU Architecture</h3>
+          <p>Parallel processing, branching costs, Texture2D arrays</p>
+        </div>
+      </a>
+    </div>
+
+    <h2>Geometry & UI</h2>
+    <p>How meshes and UI elements get rendered.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/07-mesh-fundamentals.html" class="lesson-card">
+        <div class="lesson-card-number">07</div>
+        <div class="lesson-card-content">
+          <h3>Mesh Fundamentals</h3>
+          <p>MeshFilter, MeshRenderer, vertex data, triangles</p>
+        </div>
+      </a>
+      
+      <a href="lessons/08-ui-rendering.html" class="lesson-card">
+        <div class="lesson-card-number">08</div>
+        <div class="lesson-card-content">
+          <h3>UI Rendering</h3>
+          <p>Canvas modes, batching, overdraw, optimization strategies</p>
+        </div>
+      </a>
+    </div>
+
+    <h2>VRify-Specific</h2>
+    <p>Topics directly relevant to geospatial data and browser deployment.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/09-file-formats.html" class="lesson-card">
+        <div class="lesson-card-number">09</div>
+        <div class="lesson-card-content">
+          <h3>3D File Formats & Data Ingestion</h3>
+          <p>CAD, DXF, point clouds, coordinate systems</p>
+        </div>
+      </a>
+      
+      <a href="lessons/10-mesh-optimization.html" class="lesson-card">
+        <div class="lesson-card-number">10</div>
+        <div class="lesson-card-content">
+          <h3>Mesh Optimization Algorithms</h3>
+          <p>Decimation, hole detection, LOD, simplification</p>
+        </div>
+      </a>
+      
+      <a href="lessons/11-webgl-browser.html" class="lesson-card">
+        <div class="lesson-card-number">11</div>
+        <div class="lesson-card-content">
+          <h3>WebGL & Browser Optimization</h3>
+          <p>Memory limits, texture compression, load time strategies</p>
+        </div>
+      </a>
+      
+      <a href="lessons/12-unity-asset-transform.html" class="lesson-card">
+        <div class="lesson-card-number">12</div>
+        <div class="lesson-card-category">VRIFY-SPECIFIC</div>
+        <h3 class="lesson-card-title">Unity Asset Transform</h3>
+        <p class="lesson-card-description">Industrial pipeline automation and CAD ingestion at scale.</p>
+      </a>
+
+      <!-- Lesson 13 -->
+      <a href="lessons/13-editor-automation.html" class="lesson-card">
+        <div class="lesson-card-number">13</div>
+        <div class="lesson-card-category">PIPELINE</div>
+        <h3 class="lesson-card-title">Editor Tooling & Automation</h3>
+        <p class="lesson-card-description">AssetPostprocessor, EditorWindow, and handling 250+ clients.</p>
+      </a>
+    </div>
+
+    <h2>Shading Deep Dive</h2>
+    <p>Understanding how lighting algorithms work under the hood.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/15-lighting-algorithms.html" class="lesson-card">
+        <div class="lesson-card-number">15</div>
+        <div class="lesson-card-content">
+          <h3>Lighting Algorithms</h3>
+          <p>Lambert, Blinn-Phong, Fresnel, interpolation, normal mapping</p>
+        </div>
+      </a>
+    </div>
+
+
+    <h2 style="margin-top: 4rem;">Quick Reference</h2>
+    <div class="lesson-grid">
+      <a href="cheatsheet.html" class="lesson-card" style="border-color: var(--accent-green);">
+        <div class="lesson-card-number" style="color: var(--accent-green);">📋</div>
+        <div class="lesson-card-content">
+          <h3 style="color: var(--accent-green);">Master Cheat Sheet</h3>
+          <p>All key concepts condensed for quick review before your interview</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 13: Unity Editor Scripting & Automation | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 13</div>
+      <h1>Unity Editor Scripting & Automation</h1>
+      <p class="lesson-subtitle">Building tools to manage scale and technical standards</p>
+    </div>
+
+    <h2>Overview: Extension over Modification</h2>
+    <p>As a Technical Artist, your job isn't just to make art look good—it's to make the <em>process</em> of making art efficient. Unity is designed to be "hacked." Instead of modifying the engine source, we use the <strong>UnityEditor</strong> namespace to extend the interface.</p>
+
+    <div class="diagram">
+TYPES OF EDITOR EXTENSIONS:
+
+1. Menu Items         - Trigger code from the top bar (e.g. "VRify/Cleanup Scene")
+2. Custom Inspectors  - Change how a Component looks in the Inspector
+3. Editor Windows     - Full custom floating panels (Dashboards)
+4. Postprocessors     - "Invisible" hooks that run when files are imported
+5. Property Drawers   - Change how specific data types (like [Range]) appear
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The "Editor" Folder Rule</div>
+      <p>Code that uses <code>UnityEditor</code> <strong>cannot</strong> be included in a final game build (it will fail to compile). You must place these scripts inside a folder named <strong>Editor</strong>. Unity's build system automatically strips these folders when you hit "Build for WebGL."</p>
+    </div>
+
+    <h2>1. The GUI Core: EditorWindow</h2>
+    <p>An <code>EditorWindow</code> is a window you can dock anywhere in the Unity UI. This is where you build "Control Centers."</p>
+
+    <pre><code>using UnityEditor;
+using UnityEngine;
+
+// This class creates a new window in the Unity menu
+public class VRifyManagerWindow : EditorWindow
+{
+    [MenuItem("VRify/Project Dashboard")]
+    public static void ShowWindow() => GetWindow<VRifyManagerWindow>("VRify Dashboard");
+
+    void OnGUI()
+    {
+        // All UI logic goes here (Buttons, Sliders, Labels)
+        GUILayout.Label("Geospatial Ingestion Tool", EditorStyles.boldLabel);
+        
+        if (GUILayout.Button("Normalize Selected Coordinates"))
+        {
+            // Call your logic here!
+        }
+    }
+}</code></pre>
+
+    <h2>2. Silent Automation: AssetPostprocessor</h2>
+    <p>This is arguably the most important tool for VRify. When handling 250+ clients, you cannot manually check every file. <code>AssetPostprocessor</code> lets you intercept assets <em>as they enter the project</em>.</p>
+
+    <div class="diagram">
+POSTPROCESSOR FLOW:
+
+Client .FBX Arrives → OnPreprocessModel → (Change Import Settings)
+                             ↓
+                      Unity Imports Data
+                             ↓
+                    OnPostprocessModel → (Modify GameObject/Hierarchy)
+                             ↓
+                      Asset Ready in Project
+    </div>
+
+    <h3>Example: The Automated Coordinate Fix</h3>
+    <pre><code>public class AutoIngest : AssetPostprocessor
+{
+    // Catch the model before it's even fully "in" the project
+    void OnPreprocessModel()
+    {
+        ModelImporter importer = (ModelImporter)assetImporter;
+        
+        // Auto-set settings for WebGL
+        importer.meshCompression = ModelImporterMeshCompression.Medium;
+        importer.optimizeMesh = true;
+    }
+
+    // Catch the model after Unity turns it into a GameObject
+    void OnPostprocessModel(GameObject g)
+    {
+        // Automatically apply the coordinate origin shift (Lesson 09)
+        // so the mesh is centered at (0,0,0) instead of 5,000km away.
+        ShiftToGeospatialOrigin(g);
+    }
+}</code></pre>
+
+    <h2>3. Useful API "Heavy Hitters"</h2>
+    <p>Key classes you'll use to build these tools:</p>
+
+    <table>
+      <tr>
+        <th>Class</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><strong>AssetDatabase</strong></td>
+        <td>The master index. Use it to find, load, move, or rename assets via code.</td>
+      </tr>
+      <tr>
+        <td><strong>ModelImporter</strong></td>
+        <td>The "knobs and dials" for 3D files. Controls decimation, UV generation, and scale.</td>
+      </tr>
+      <tr>
+        <td><strong>Selection</strong></td>
+        <td>Lets your tool know what the user has currently clicked on in the project.</td>
+      </tr>
+      <tr>
+        <td><strong>EditorUtility</strong></td>
+        <td>Helpers for displaying progress bars, save file dialogs, and dirty flags.</td>
+      </tr>
+      <tr>
+        <td><strong>Handles</strong></td>
+        <td>Drawing custom 3D visuals (lines, icons) directly in the Scene View.</td>
+      </tr>
+    </table>
+
+    <h2>4. Application at Scale (250 Clients)</h2>
+    <p>In your interview, don't just say you can "write code." Say you can <strong>Standardize the Pipeline</strong>:</p>
+    <ul>
+      <li><strong>Validation:</strong> Write a tool that scans a client's folder and flags any models that are over the "WebGL Triangle Budget."</li>
+      <li><strong>Remapping:</strong> Create a script that looks at CAD material names (e.g. "COLOR_251") and automatically swaps them for your high-quality WebGL shaders.</li>
+      <li><strong>Batch Processing:</strong> An <code>EditorWindow</code> that lets a producer select 50 folders and click "Optimize All" using the <strong>Unity Asset Transform</strong> API.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Interview Angle</div>
+      <p>"I prioritize building tools that fail early. By using <code>AssetPostprocessor</code> and custom validation windows, we can catch ingestion errors immediately rather than at runtime in the browser where they are harder to debug."</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>UnityEditor</strong> namespace code lives in <strong>Editor/</strong> folders.</li>
+      <li><strong>EditorWindow</strong> provides the UI for your custom dashboards.</li>
+      <li><strong>AssetPostprocessor</strong> automates the cleaning of "garbage" incoming data.</li>
+      <li><strong>AssetDatabase</strong> is how you manipulate files programmatically.</li>
+      <li>Automation is the only way to handle 250+ uncoordinated clients effectively.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="12-unity-asset-transform.html">
+        <span class="label">← Previous</span>
+        <span class="title">Unity Asset Transform</span>
+      </a>
+      <a href="../cheatsheet.html">
+        <span class="label">Complete! →</span>
+        <span class="title">Master Cheat Sheet</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Charming Beady-Eyed Otter App Icon -->
+  <defs>
+    <!-- Deep, professional dark navy background -->
+    <rect id="bg" x="0" y="0" width="512" height="512" rx="120" fill="#0D1B2A" />
+  </defs>
+  
+  <use href="#bg" />
+  
+  <!-- Otter Face (filling the frame for presence) -->
+  <ellipse cx="256" cy="280" rx="220" ry="200" fill="#CD853F" />
+  
+  <!-- Ears -->
+  <circle cx="100" cy="160" r="55" fill="#A0522D" />
+  <circle cx="412" cy="160" r="55" fill="#A0522D" />
+  
+  <!-- Muzzle/Cream Area (Soft and inviting) -->
+  <ellipse cx="256" cy="350" rx="130" ry="100" fill="#FDEBD0" />
+  
+  <!-- Beady Eyes (The soul of the icon) -->
+  <circle cx="180" cy="245" r="48" fill="#111" />
+  <circle cx="332" cy="245" r="48" fill="#111" />
+  
+  <!-- Bright Highlights (Extra charm/sparkle) -->
+  <circle cx="202" cy="225" r="14" fill="white" />
+  <circle cx="354" cy="225" r="14" fill="white" />
+  <circle cx="178" cy="265" r="7" fill="white" fill-opacity="0.6" />
+  <circle cx="330" cy="265" r="7" fill="white" fill-opacity="0.6" />
+  
+  <!-- Small, simple nose -->
+  <path d="M236 315 Q 256 295 276 315 L 256 340 Z" fill="#111" />
+  
+  <!-- Happy, simple smile -->
+  <path d="M220 370 Q 256 400 292 370" fill="none" stroke="#111" stroke-width="12" stroke-linecap="round" />
+</svg>

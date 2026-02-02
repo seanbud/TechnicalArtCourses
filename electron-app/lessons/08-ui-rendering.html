@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 8: UI Rendering | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 08</div>
+      <h1>UI Rendering</h1>
+      <p class="lesson-subtitle">Canvas modes, batching, overdraw, and optimization strategies</p>
+    </div>
+
+    <h2>UI is Different</h2>
+    <p>Unity UI (uGUI) uses a <strong>completely different rendering system</strong> than 3D geometry. Understanding this is crucial for performance, especially for browser targets where UI can easily become the bottleneck.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Difference from 3D</div>
+      <p>3D uses MeshRenderer. UI uses <strong>CanvasRenderer</strong>. The Canvas component collects all its children, generates meshes, and submits them to the GPU. This happens on the main thread.</p>
+    </div>
+
+    <h2>Canvas Render Modes</h2>
+    <p>Every UI element must be under a Canvas. The Canvas's render mode determines how it's drawn:</p>
+
+    <div class="diagram">
+CANVAS RENDER MODES:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ SCREEN SPACE - OVERLAY                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ • Renders AFTER all 3D (always on top)                           │
+│ • Ignores cameras entirely                                       │
+│ • Resolution: matches screen pixels exactly                      │
+│ • Use for: HUD, menus, always-visible UI                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ SCREEN SPACE - CAMERA                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ • Rendered by a specific camera                                  │
+│ • Can be placed at specific distance (allows 3D between UI)     │
+│ • Resolution: affected by camera settings                        │
+│ • Use for: UI that needs post-processing, depth interaction     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ WORLD SPACE                                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ • UI exists as a 3D object in the scene                          │
+│ • Has a RectTransform defining size in world units               │
+│ • Affected by perspective, occlusion, lighting                   │
+│ • Use for: Labels on objects, VR/AR UI, diegetic UI             │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>For geospatial visualization, you'll likely use <strong>World Space</strong> for labels/markers on mine sites, and <strong>Screen Space Overlay</strong> for tools/controls. Users who "hardly know how to use an iPad" need visible, clear UI — consider larger touch targets.</p>
+    </div>
+
+    <h2>How Canvas Rendering Works</h2>
+    <p>The Canvas doesn't render elements individually. It <strong>batches</strong> UI elements into combined meshes:</p>
+
+    <div class="diagram">
+CANVAS BATCH GENERATION:
+
+Canvas
+├── Button 1 (Image + Text)
+├── Button 2 (Image + Text)
+├── Panel (Image)
+└── Label (Text)
+
+Step 1: Collect all CanvasRenderer elements
+Step 2: Sort by depth, material, texture
+Step 3: Generate combined meshes (batches)
+Step 4: Submit to GPU
+
+If all use same atlas → 1-2 draw calls
+If all use different textures → 1 draw call each
+    </div>
+
+    <h3>What Breaks Batching</h3>
+    <table>
+      <tr>
+        <th>Breaks Batch</th>
+        <th>Why</th>
+        <th>Solution</th>
+      </tr>
+      <tr>
+        <td>Different textures</td>
+        <td>Can't combine in one draw</td>
+        <td>Use texture atlases/sprite sheets</td>
+      </tr>
+      <tr>
+        <td>Different materials</td>
+        <td>Different shader/settings</td>
+        <td>Share materials when possible</td>
+      </tr>
+      <tr>
+        <td>Different masking</td>
+        <td>RectMask2D boundaries</td>
+        <td>Group masked UI together</td>
+      </tr>
+      <tr>
+        <td>Depth interleaving</td>
+        <td>Z-order interrupts grouping</td>
+        <td>Organize hierarchy by material</td>
+      </tr>
+    </table>
+
+    <h3>The Hierarchy Matters</h3>
+    <p>Canvas processes children in <strong>hierarchy order</strong> (depth). If elements using different materials are interleaved, batching breaks:</p>
+
+    <div class="diagram">
+BAD (5 draw calls):                GOOD (2 draw calls):
+
+Canvas                             Canvas
+├── Image_A (Material 1)           ├── Image_A (Material 1)
+├── Image_B (Material 2)  ← break  ├── Image_C (Material 1)
+├── Image_C (Material 1)  ← break  ├── Image_E (Material 1)
+├── Image_D (Material 2)  ← break  ├── Image_B (Material 2)
+└── Image_E (Material 1)  ← break  └── Image_D (Material 2)
+
+Same elements, different order = different performance
+    </div>
+
+    <h2>Canvas Rebuild: The Hidden Cost</h2>
+    <p>When <strong>anything</strong> in a Canvas changes, the entire Canvas may need to rebuild its batched meshes. This is expensive.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Rebuild Triggers</div>
+      <p>These actions trigger a Canvas rebuild:<br>
+      • Enabling/disabling UI elements<br>
+      • Changing text content<br>
+      • Changing Image sprite<br>
+      • Modifying RectTransform (position, size, anchors)<br>
+      • Adding/removing elements from hierarchy</p>
+    </div>
+
+    <h3>Multiple Canvases Strategy</h3>
+    <p>The solution: <strong>separate dynamic and static elements into different Canvases</strong>.</p>
+
+    <div class="diagram">
+SINGLE CANVAS (bad):              MULTIPLE CANVASES (good):
+
+Canvas                            StaticCanvas (rarely changes)
+├── Background (static)           ├── Background
+├── Health Bar (updates often)    └── Ability Icons
+├── Ability Icons (static)        
+├── Damage Numbers (spawning)     DynamicCanvas (updates often)
+└── Minimap (updates often)       ├── Health Bar
+                                  └── Minimap
+Any change rebuilds                
+the entire canvas                 DamageNumberCanvas (pooled)
+                                  └── Damage Numbers
+
+                                  Each canvas has isolated rebuild
+    </div>
+
+    <h2>Overdraw: The Silent Killer</h2>
+    <p>Overdraw occurs when pixels are drawn multiple times. UI is particularly prone to this because elements often overlap.</p>
+
+    <div class="diagram">
+OVERDRAW EXAMPLE:
+
+┌────────────────────────────────┐
+│  Background Panel              │  ← Pixel drawn once
+│  ┌──────────────────────────┐  │
+│  │  Inner Panel             │  │  ← Same pixel drawn AGAIN
+│  │  ┌────────────────────┐  │  │
+│  │  │  Button            │  │  │  ← Same pixel drawn 3rd time
+│  │  │  ┌──────────────┐  │  │  │
+│  │  │  │ Icon         │  │  │  │  ← Same pixel drawn 4th time
+│  │  │  └──────────────┘  │  │  │
+│  │  └────────────────────┘  │  │
+│  └──────────────────────────┘  │
+└────────────────────────────────┘
+
+This center pixel is drawn 4 times!
+With transparency: all 4 layers must calculate
+    </div>
+
+    <h3>Reducing Overdraw</h3>
+    <ul>
+      <li><strong>Disable Raycast Target</strong> on decorative elements (reduces event processing too)</li>
+      <li><strong>Use 9-slice sprites</strong> instead of full images when possible</li>
+      <li><strong>Avoid full-screen overlays</strong> — use vignettes or partial coverage</li>
+      <li><strong>Eliminate unnecessary backgrounds</strong> — if a panel is always covered, remove it</li>
+      <li><strong>Use the Frame Debugger</strong> to visualize what's actually being drawn</li>
+    </ul>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Overdraw Visualization</div>
+      <p>In Scene view, use the Overdraw visualization mode (dropdown at top left). Brighter = more overdraw. Aim for mostly dark (1-2 draws per pixel).</p>
+    </div>
+
+    <h2>World Space UI Optimization</h2>
+    <p>World Space canvases require special consideration:</p>
+
+    <h3>The Anchoring Strategy</h3>
+    <p>Instead of having many small World Space canvases (one per label), consider:</p>
+
+    <div class="diagram">
+MANY CANVASES (expensive):         ANCHORED APPROACH (better):
+
+Each label = separate Canvas       One World Space Canvas
+├── Label1 Canvas                  ├── Container at anchor 1
+├── Label2 Canvas                  │   └── Label1 element
+├── Label3 Canvas                  ├── Container at anchor 2
+├── ...                            │   └── Label2 element
+                                   └── Container at anchor 3
+Each canvas = rebuild overhead         └── Label3 element
+
+                                   Containers are empty GameObjects
+                                   at world positions. Labels parent
+                                   to containers but batch together.
+    </div>
+
+    <p>This approach:</p>
+    <ul>
+      <li>Reduces canvas count (fewer updates)</li>
+      <li>Enables batching (same canvas = can batch)</li>
+      <li>Maintains world positioning (via parent container positions)</li>
+    </ul>
+
+    <h3>Disable Canvas When Obscured</h3>
+    <p>World Space UI doesn't auto-cull based on visibility. If labels are behind the camera or too far away, <strong>disable the Canvas component</strong> (not the GameObject) to stop rendering while preserving layout.</p>
+
+    <h2>CanvasRenderer vs MeshRenderer</h2>
+    <table>
+      <tr>
+        <th>CanvasRenderer (UI)</th>
+        <th>MeshRenderer (3D)</th>
+      </tr>
+      <tr>
+        <td>Managed by parent Canvas</td>
+        <td>Independent rendering</td>
+      </tr>
+      <tr>
+        <td>Canvas generates combined mesh</td>
+        <td>Each has own mesh</td>
+      </tr>
+      <tr>
+        <td>Main thread mesh building</td>
+        <td>Static at load time</td>
+      </tr>
+      <tr>
+        <td>2D rendering (mostly)</td>
+        <td>Full 3D with all features</td>
+      </tr>
+      <tr>
+        <td>No shadows, limited lighting</td>
+        <td>Full lighting support</td>
+      </tr>
+    </table>
+
+    <h2>Text Rendering</h2>
+    <p>Text is particularly expensive. Each character = geometry. Use TextMeshPro (TMPro) for better quality and performance:</p>
+
+    <ul>
+      <li><strong>Legacy Text:</strong> Bitmap fonts, blurry at large sizes, limited features</li>
+      <li><strong>TextMeshPro:</strong> SDF (Signed Distance Field) fonts, crisp at any size, outlines/effects</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>For users who "hardly know how to use an iPad," clear, readable text is essential. TextMeshPro with proper font sizes and contrasting colors will make UI more accessible. Consider larger buttons and clear iconography.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>UI uses <strong>CanvasRenderer</strong>, not MeshRenderer — entirely different system</li>
+      <li>Three render modes: <strong>Overlay</strong> (always on top), <strong>Camera</strong> (rendered by camera), <strong>World Space</strong> (in 3D scene)</li>
+      <li>Canvas <strong>batches elements</strong> — same texture/material can combine into one draw</li>
+      <li>Different textures or materials in interleaved order <strong>break batching</strong></li>
+      <li><strong>Canvas rebuild</strong> is expensive — happens when any element changes</li>
+      <li>Use <strong>multiple canvases</strong>: separate static from dynamic elements</li>
+      <li><strong>Overdraw</strong> is a major UI cost — avoid stacked transparent panels</li>
+      <li>For World Space UI, use the <strong>anchoring strategy</strong> to enable batching</li>
+      <li>Use <strong>TextMeshPro</strong> for text — better quality and performance</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="07-mesh-fundamentals.html">
+        <span class="label">← Previous</span>
+        <span class="title">Mesh Fundamentals</span>
+      </a>
+      <a href="09-file-formats.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">3D File Formats & Data Ingestion</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

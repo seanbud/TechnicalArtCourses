@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 2: Render Pipeline Overview | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 02</div>
+      <h1>Render Pipeline Overview</h1>
+      <p class="lesson-subtitle">From geometry collection to pixels on screen</p>
+    </div>
+
+    <h2>The Journey of a Triangle</h2>
+    <p>Every frame, Unity must figure out what to draw and how to draw it. This is a multi-stage process that transforms 3D scene data into a 2D image on your screen.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         UNITY RENDER PIPELINE                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  SCENE           CULLING         BATCHING        GPU              SCREEN     │
+│  ─────           ───────         ────────        ───              ──────     │
+│                                                                               │
+│  GameObjects  →  Frustum    →   Group by    →  Vertex    →                  │
+│  + Renderers     Culling        Material       Shader                        │
+│                                                    ↓                         │
+│                  Occlusion       Batch        Rasterize                      │
+│                  Culling         Together         ↓                         │
+│                                              Fragment   →    Final          │
+│                  Layer/Tag       Minimize      Shader        Image          │
+│                  Filtering       Draw Calls       ↓                         │
+│                                              Composite                      │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>Stage 1: Culling — What Can We Skip?</h2>
+    <p>Before any actual rendering, Unity determines what <strong>doesn't</strong> need to be drawn. This is critical for performance.</p>
+
+    <h3>Frustum Culling</h3>
+    <p>The camera's <strong>view frustum</strong> is a pyramid-shaped volume representing what the camera can see. Any object completely outside this volume is skipped.</p>
+
+    <div class="diagram">
+         Near Plane
+            ┌─┐
+           /   \
+          /     \         Objects outside
+         /       \        the frustum are
+        /    👁    \       NOT rendered
+       /   Camera   \
+      /               \
+     /                 \
+    └───────────────────┘
+         Far Plane
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Bounding Volumes</div>
+      <p>Unity uses <strong>bounding boxes</strong> (AABB) for fast frustum tests. It doesn't check every triangle — just whether the object's box intersects the frustum. This is why <code>Renderer.bounds</code> matters for culling accuracy.</p>
+    </div>
+
+    <h3>Occlusion Culling</h3>
+    <p>Even if an object is in the frustum, it might be hidden behind another object. <strong>Occlusion culling</strong> skips objects that are completely blocked from view.</p>
+
+    <ul>
+      <li>Requires baked occlusion data (Window → Rendering → Occlusion Culling)</li>
+      <li>Uses a cell-based system to determine visibility</li>
+      <li>Most beneficial for interior scenes with walls/rooms</li>
+      <li><strong>Not automatic</strong> — you must set up occluders and bake the data</li>
+    </ul>
+
+    <h2>Stage 2: Collecting Renderable Objects</h2>
+    <p>After culling, Unity loops through remaining objects with <strong>Renderer</strong> components (MeshRenderer, SkinnedMeshRenderer, SpriteRenderer, etc.) and collects them for rendering.</p>
+
+    <h3>Render Queue Sorting</h3>
+    <p>Objects are sorted by their material's <strong>render queue</strong> value:</p>
+
+    <table>
+      <tr>
+        <th>Queue</th>
+        <th>Value</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td>Background</td>
+        <td>1000</td>
+        <td>Skyboxes, backgrounds</td>
+      </tr>
+      <tr>
+        <td>Geometry</td>
+        <td>2000</td>
+        <td>Opaque objects (default)</td>
+      </tr>
+      <tr>
+        <td>AlphaTest</td>
+        <td>2450</td>
+        <td>Alpha-cutout (grass, leaves)</td>
+      </tr>
+      <tr>
+        <td>Transparent</td>
+        <td>3000</td>
+        <td>Transparent objects</td>
+      </tr>
+      <tr>
+        <td>Overlay</td>
+        <td>4000</td>
+        <td>UI, lens flares</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Sorting Strategy</div>
+      <p><strong>Opaque objects:</strong> Rendered front-to-back (closest first). Why? Early-Z rejection — fragments behind already-drawn pixels are skipped by the GPU.<br><br>
+      <strong>Transparent objects:</strong> Rendered back-to-front (farthest first). Why? Alpha blending requires knowing what's behind to blend correctly.</p>
+    </div>
+
+    <h2>Stage 3: Batching — The "Changing Brushes" Metaphor</h2>
+    <p>Here's where your interview knowledge really matters. Every time Unity tells the GPU to draw something, it issues a <strong>draw call</strong>. Think of it like this:</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🎨 The Painter Metaphor</div>
+      <p>Imagine a painter who must change brushes for different paint types. Each brush swap takes time. If you paint 100 red strokes, then 100 blue strokes — that's only 2 brush swaps. But alternating red-blue-red-blue for 200 strokes means 200 swaps. Same amount of paint, vastly different efficiency.</p>
+    </div>
+
+    <p><strong>Materials trigger "brush changes."</strong> Each unique material (or material instance with different properties) typically requires a new draw call.</p>
+
+    <h3>Types of Batching</h3>
+
+    <h4>Static Batching</h4>
+    <ul>
+      <li>Combines meshes marked as <strong>Static</strong> at build time</li>
+      <li>Creates one big mesh in memory (uses more RAM)</li>
+      <li>Objects cannot move at runtime</li>
+      <li>Same material required</li>
+    </ul>
+
+    <h4>Dynamic Batching</h4>
+    <ul>
+      <li>Combines small meshes at runtime (< 300 vertices)</li>
+      <li>CPU overhead to combine each frame</li>
+      <li>Only works with same material</li>
+      <li>Often disabled because overhead > benefit</li>
+    </ul>
+
+    <h4>GPU Instancing</h4>
+    <ul>
+      <li>Draws multiple copies of the same mesh in one call</li>
+      <li>Each instance can have different transform and properties</li>
+      <li>Material must support instancing (checkbox in inspector)</li>
+      <li>Great for forests, crowds, debris</li>
+    </ul>
+
+    <h4>SRP Batcher (URP/HDRP)</h4>
+    <ul>
+      <li>Doesn't reduce draw calls — reduces CPU work per draw call</li>
+      <li>Caches material data on GPU, skips re-uploading</li>
+      <li>Works with different materials (of compatible shaders)</li>
+      <li>This is the modern approach — enable in URP settings</li>
+    </ul>
+
+    <h3>Worst-Case Scenario: The Draw Call Explosion</h3>
+    <div class="diagram">
+BAD: 100 GameObjects, 100 different materials = 100+ draw calls
+
+Scene:
+├── Rock_01      → Material_A
+├── Rock_02      → Material_B  (different texture!)
+├── Rock_03      → Material_C  (different color!)
+├── Crate_01     → Material_D
+├── Crate_02     → Material_E
+...
+
+GOOD: 100 GameObjects, 1 texture atlas, 1 material = ~1-5 draw calls
+
+Scene:
+├── Rock_01      → SharedMaterial (atlas UV: 0,0)
+├── Rock_02      → SharedMaterial (atlas UV: 0.5,0)
+├── Rock_03      → SharedMaterial (atlas UV: 0,0.5)
+├── Crate_01     → SharedMaterial (atlas UV: 0.5,0.5)
+...
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>With 250 clients sending uncoordinated data, expect material chaos. Part of your pipeline should consolidate materials — combine textures into atlases, standardize shaders. Garbage in → optimized out.</p>
+    </div>
+
+    <h2>Stage 4: GPU Execution</h2>
+    <p>Once Unity has prepared the draw calls, it sends commands to the GPU. This is the graphics pipeline we'll cover in detail in Lesson 3 (Shaders), but here's the overview:</p>
+
+    <div class="diagram">
+SIMPLIFIED GPU PIPELINE:
+
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│   VERTEX    │ → │  RASTERIZE  │ → │  FRAGMENT   │ → │   OUTPUT    │
+│   SHADER    │   │  (to pixels)│   │   SHADER    │   │  BLENDING   │
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+
+Transform         Determine         Calculate         Combine with
+vertices to       which pixels      pixel color       framebuffer
+screen space      are covered       per fragment
+    </div>
+
+    <h3>Quick GPU Terminology</h3>
+    <ul>
+      <li><strong>Vertex:</strong> A point in 3D space with attributes (position, normal, UV)</li>
+      <li><strong>Fragment:</strong> A potential pixel (after rasterization, before final output)</li>
+      <li><strong>Depth Buffer (Z-Buffer):</strong> Stores depth per pixel; used to determine what's in front</li>
+      <li><strong>Depth Test:</strong> Compare fragment depth to buffer; skip if behind existing pixel</li>
+      <li><strong>Framebuffer:</strong> The final 2D image being constructed</li>
+    </ul>
+
+    <h2>Stage 5: Camera and Final Output</h2>
+    <p>Cameras define <em>what</em> renders and <em>where</em> it goes:</p>
+
+    <ul>
+      <li><strong>Target Texture:</strong> Can render to a RenderTexture instead of screen (reflections, portals, minimaps)</li>
+      <li><strong>Depth:</strong> Camera render order; higher depth renders later (on top)</li>
+      <li><strong>Clear Flags:</strong> What to clear before rendering (skybox, solid color, don't clear)</li>
+      <li><strong>Culling Mask:</strong> Which layers this camera renders</li>
+    </ul>
+
+    <h3>Stacked Cameras (URP)</h3>
+    <p>URP allows <strong>camera stacking</strong> — a Base Camera renders the scene, then Overlay Cameras add on top without clearing:</p>
+
+    <div class="diagram">
+Base Camera (Depth 0):     Renders 3D world
+        ↓
+Overlay Camera (Depth 1):  Renders UI layer
+        ↓
+Final composite image
+    </div>
+
+    <h2>The Statistics Window</h2>
+    <p>Use <strong>Window → Analysis → Frame Debugger</strong> and the Game view Stats panel to understand rendering:</p>
+
+    <ul>
+      <li><strong>Batches:</strong> Number of draw calls (lower is better)</li>
+      <li><strong>SetPass calls:</strong> Material/shader switches (lower is better)</li>
+      <li><strong>Triangles/Vertices:</strong> Geometry complexity</li>
+      <li><strong>Saved by batching:</strong> How many draws were combined</li>
+    </ul>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Culling</strong> (frustum + occlusion) determines what to skip before any rendering</li>
+      <li>Objects are sorted by <strong>render queue</strong> — opaque front-to-back, transparent back-to-front</li>
+      <li><strong>Draw calls</strong> are expensive; minimize them via batching and material consolidation</li>
+      <li>The "changing brushes" metaphor: group objects by material to avoid constant material switches</li>
+      <li><strong>SRP Batcher</strong> is the modern URP approach — reduces CPU overhead rather than draw call count</li>
+      <li>Use Frame Debugger to understand exactly what's being drawn and why</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="01-engine-loop.html">
+        <span class="label">← Previous</span>
+        <span class="title">Unity Engine Loop</span>
+      </a>
+      <a href="03-shaders.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Shader Fundamentals</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

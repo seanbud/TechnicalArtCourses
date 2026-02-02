@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 5: URP Deep Dive | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 05</div>
+      <h1>URP Deep Dive</h1>
+      <p class="lesson-subtitle">Render features, quality settings, and browser optimization</p>
+    </div>
+
+    <h2>What Is URP?</h2>
+    <p>The <strong>Universal Render Pipeline</strong> is Unity's default scriptable render pipeline, designed for cross-platform performance. It replaced the old Built-in render pipeline for most use cases.</p>
+
+    <div class="diagram">
+UNITY RENDER PIPELINES:
+
+Built-in (Legacy)     URP                        HDRP
+─────────────────     ───                        ────
+Fixed pipeline        Scriptable,                High fidelity,
+Not extensible        extensible,                compute-heavy,
+Still works           cross-platform             PC/Console only
+
+                         ↑
+                    What VRify 
+                    should use
+    </div>
+
+    <h3>Why URP for VRify</h3>
+    <ul>
+      <li><strong>WebGL support:</strong> HDRP doesn't support WebGL; URP does</li>
+      <li><strong>Scalability:</strong> Can target low-end devices while still looking good</li>
+      <li><strong>SRP Batcher:</strong> Efficient draw call handling</li>
+      <li><strong>Customizable:</strong> Render Features let you add custom passes</li>
+    </ul>
+
+    <h2>URP Asset Settings</h2>
+    <p>The <strong>Universal Render Pipeline Asset</strong> controls global rendering behavior. Key settings to understand:</p>
+
+    <h3>Rendering Section</h3>
+
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>Options</th>
+        <th>Recommendation for Browser</th>
+      </tr>
+      <tr>
+        <td>Render Path</td>
+        <td>Forward, Forward+, Deferred</td>
+        <td><strong>Forward</strong> — safest for WebGL</td>
+      </tr>
+      <tr>
+        <td>Depth Texture</td>
+        <td>Off/On</td>
+        <td>On only if needed (some effects require it)</td>
+      </tr>
+      <tr>
+        <td>Opaque Texture</td>
+        <td>Off/On</td>
+        <td>Off unless using refraction effects</td>
+      </tr>
+    </table>
+
+    <h3>Quality Section</h3>
+
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>What It Does</th>
+        <th>Browser Recommendation</th>
+      </tr>
+      <tr>
+        <td>HDR</td>
+        <td>High dynamic range rendering</td>
+        <td><strong>Off</strong> — saves memory, WebGL support varies</td>
+      </tr>
+      <tr>
+        <td>Anti Aliasing (MSAA)</td>
+        <td>Multi-sample anti-aliasing</td>
+        <td><strong>2x or Off</strong> — see MSAA section below</td>
+      </tr>
+      <tr>
+        <td>Render Scale</td>
+        <td>Internal resolution multiplier</td>
+        <td>0.75-1.0 based on performance needs</td>
+      </tr>
+    </table>
+
+    <h2>MSAA: Understanding Anti-Aliasing</h2>
+    <p>MSAA (Multi-Sample Anti-Aliasing) smooths jagged edges by rendering at multiple sample points per pixel.</p>
+
+    <div class="diagram">
+NO AA vs MSAA:
+
+Without MSAA:         With 4x MSAA:
+┌───┬───┬───┐         ┌───┬───┬───┐
+│███│   │   │         │▓▓▓│░░░│   │  ← Edge is sampled
+│███│███│   │         │███│▓▓▓│░░░│    at 4 points per pixel
+│   │███│███│         │░░░│███│▓▓▓│    creating gradual blend
+└───┴───┴───┘         └───┴───┴───┘
+
+█ = Fully covered     ▓ = Partially covered     ░ = Edge sample
+    </div>
+
+    <h3>MSAA Options in URP</h3>
+    <table>
+      <tr>
+        <th>Level</th>
+        <th>Samples</th>
+        <th>Memory Cost</th>
+        <th>Use Case</th>
+      </tr>
+      <tr>
+        <td>Disabled</td>
+        <td>1</td>
+        <td>Base</td>
+        <td>Mobile/low-end, or using post-process AA</td>
+      </tr>
+      <tr>
+        <td>2x</td>
+        <td>2</td>
+        <td>2x framebuffer</td>
+        <td>Good balance for browser</td>
+      </tr>
+      <tr>
+        <td>4x</td>
+        <td>4</td>
+        <td>4x framebuffer</td>
+        <td>High quality, desktop</td>
+      </tr>
+      <tr>
+        <td>8x</td>
+        <td>8</td>
+        <td>8x framebuffer</td>
+        <td>Maximum quality, heavy</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ MSAA and Post-Processing</div>
+      <p>MSAA doesn't work well with screen-space effects that read the depth buffer. If you're using SSAO, Depth of Field, or similar effects, consider <strong>FXAA or SMAA</strong> as post-process alternatives instead of MSAA.</p>
+    </div>
+
+    <h3>Alternative AA Methods</h3>
+    <ul>
+      <li><strong>FXAA:</strong> Fast, cheap, slightly blurry. Good for low-end.</li>
+      <li><strong>SMAA:</strong> Better edge detection than FXAA, more expensive.</li>
+      <li><strong>TAA:</strong> Temporal AA, uses motion vectors. Can cause ghosting but handles thin geometry well.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Recommendation</div>
+      <p>For browser: Try <strong>2x MSAA</strong> first. If memory is tight or you're using depth-based effects, switch to <strong>FXAA</strong> as a post-process effect. Test on target browsers to verify performance.</p>
+    </div>
+
+    <h2>Shadows in URP</h2>
+    <p>Shadow settings heavily impact performance:</p>
+
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>Impact</th>
+        <th>Browser Setting</th>
+      </tr>
+      <tr>
+        <td>Shadow Resolution</td>
+        <td>Shadow map texture size</td>
+        <td>512-1024 (lower is faster)</td>
+      </tr>
+      <tr>
+        <td>Shadow Distance</td>
+        <td>How far shadows render</td>
+        <td>Keep minimal for scene needs</td>
+      </tr>
+      <tr>
+        <td>Shadow Cascades</td>
+        <td>Quality vs distance balance</td>
+        <td>1-2 cascades max</td>
+      </tr>
+      <tr>
+        <td>Soft Shadows</td>
+        <td>Blurred shadow edges</td>
+        <td>Off or Low quality</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Shadow Cascades Explained</div>
+      <p>Cascades split the shadow map into near/far regions. Near shadows get more resolution. 4 cascades looks best but costs 4x the shadow map work. For browser, <strong>1-2 cascades</strong> is usually sufficient for visualization purposes.</p>
+    </div>
+
+    <h2>The SRP Batcher</h2>
+    <p>One of URP's biggest performance wins. Understanding it is important:</p>
+
+    <div class="diagram">
+WITHOUT SRP BATCHER:                  WITH SRP BATCHER:
+
+For each draw call:                   Once at setup:
+├── Upload material properties          └── Upload all material data
+├── Set shader                             to persistent GPU buffer
+├── Set textures                      
+├── Draw                              For each draw call:
+                                      ├── Just update transform
+Upload happens EVERY DRAW             ├── Draw
+= Lots of CPU → GPU transfer          
+                                      Minimal per-draw overhead
+    </div>
+
+    <p><strong>Key insight:</strong> SRP Batcher doesn't reduce draw call count — it reduces the <strong>cost per draw call</strong> by keeping material data on the GPU.</p>
+
+    <h3>Requirements for SRP Batcher</h3>
+    <ul>
+      <li>Shader must be SRP Batcher compatible (most URP shaders are)</li>
+      <li>Check in Shader Inspector: "SRP Batcher: compatible"</li>
+      <li>Enable in URP Asset settings</li>
+      <li>Different materials of the same shader can be batched</li>
+    </ul>
+
+    <h2>Render Features</h2>
+    <p>URP's extensibility mechanism. A Render Feature is custom code that injects into the render pipeline at specific points.</p>
+
+    <h3>Common Uses</h3>
+    <ul>
+      <li>Custom post-processing effects</li>
+      <li>Outline/silhouette rendering</li>
+      <li>Additional passes (depth prepass, etc.)</li>
+      <li>Render texture setup for custom effects</li>
+    </ul>
+
+    <h3>Built-in Render Features</h3>
+    <ul>
+      <li><strong>Screen Space Ambient Occlusion (SSAO)</strong> — adds depth/shadow in corners</li>
+      <li><strong>Decals</strong> — project textures onto surfaces</li>
+      <li><strong>Render Objects</strong> — render specific layers with different settings</li>
+    </ul>
+
+    <h2>Camera Stacking</h2>
+    <p>URP supports multiple cameras rendering in layers:</p>
+
+    <div class="diagram">
+CAMERA STACKING:
+
+┌─────────────────────────────────────┐
+│        Overlay Camera (UI)          │  ← Renders on top, no clear
+├─────────────────────────────────────┤
+│        Base Camera (3D Scene)       │  ← Clears and renders world
+└─────────────────────────────────────┘
+              ↓
+    Final composite output
+    </div>
+
+    <ul>
+      <li><strong>Base Camera:</strong> First camera, clears the screen</li>
+      <li><strong>Overlay Camera:</strong> Renders on top, doesn't clear</li>
+      <li>Set Overlay cameras in Base camera's "Stack" list</li>
+      <li>Useful for: UI, picture-in-picture, split effects</li>
+    </ul>
+
+    <h2>Browser-Specific URP Settings</h2>
+    <p>For WebGL deployment, optimize aggressively:</p>
+
+    <div class="cheat-section">
+      <h3>Recommended Browser Configuration</h3>
+      <ul>
+        <li><strong>Render Path:</strong> Forward</li>
+        <li><strong>HDR:</strong> Off</li>
+        <li><strong>MSAA:</strong> 2x or Off (use FXAA post-process)</li>
+        <li><strong>Render Scale:</strong> 0.75-1.0</li>
+        <li><strong>Shadow Resolution:</strong> 512-1024</li>
+        <li><strong>Shadow Distance:</strong> Minimal for needs</li>
+        <li><strong>Shadow Cascades:</strong> 1-2</li>
+        <li><strong>Soft Shadows:</strong> Off or Low</li>
+        <li><strong>Additional Lights:</strong> Per Vertex or disabled</li>
+        <li><strong>Depth/Opaque Textures:</strong> Only if needed</li>
+        <li><strong>SRP Batcher:</strong> Enabled</li>
+      </ul>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>URP</strong> is the right choice for cross-platform including WebGL</li>
+      <li><strong>MSAA</strong> provides hardware AA but costs memory; 2x is a good balance</li>
+      <li><strong>SRP Batcher</strong> reduces per-draw-call cost, not draw call count</li>
+      <li><strong>Shadows</strong> are expensive; minimize resolution, distance, and cascades for browser</li>
+      <li><strong>Render Features</strong> allow custom pipeline injection for effects</li>
+      <li><strong>Camera Stacking</strong> enables layered rendering (useful for UI)</li>
+      <li>For browser: keep settings conservative, test on real browsers</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="04-forward-deferred.html">
+        <span class="label">← Previous</span>
+        <span class="title">Forward vs Deferred</span>
+      </a>
+      <a href="06-gpu-architecture.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">GPU Architecture</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

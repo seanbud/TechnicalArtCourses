@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 1: Unity Engine Loop | Unity TA Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Unity TA Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 01</div>
+      <h1>Unity Engine Loop</h1>
+      <p class="lesson-subtitle">Game loop architecture, Update vs FixedUpdate, and frame timing</p>
+    </div>
+
+    <h2>The Big Picture</h2>
+    <p>Unity's engine is built around a <strong>deterministic execution loop</strong> that runs every frame. Understanding this loop is essential because it determines <em>when</em> your code executes and <em>why</em> certain patterns exist (like using FixedUpdate for physics).</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                     UNITY FRAME LIFECYCLE                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
+│  │ PHYSICS      │ → │ GAME LOGIC   │ → │ RENDERING            │ │
+│  │ (FixedUpdate)│   │ (Update)     │   │ (Cameras, Shaders)   │ │
+│  └──────────────┘   └──────────────┘   └──────────────────────┘ │
+│        ↑                  ↑                      ↓               │
+│   Fixed Timestep     Variable Δt          Frame Complete        │
+│   (e.g., 0.02s)     (Frame Delta)                               │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>The PlayerLoop System</h2>
+    <p>Under the hood, Unity uses a <strong>PlayerLoop</strong> system that defines the exact order of operations. Think of it as a recipe that Unity follows every frame:</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Insight</div>
+      <p>The PlayerLoop isn't just "call Update, then render." It's a deeply nested structure with dozens of subsystems (physics, animation, rendering) that execute in a precise order. You can even modify this loop programmatically if needed.</p>
+    </div>
+
+    <h3>Simplified Execution Order</h3>
+    <ol>
+      <li><strong>Initialization</strong> — Awake(), OnEnable(), Start() (first frame only)</li>
+      <li><strong>Physics</strong> — FixedUpdate() (may run 0, 1, or multiple times)</li>
+      <li><strong>Input Events</strong> — Mouse, keyboard, touch polling</li>
+      <li><strong>Game Logic</strong> — Update()</li>
+      <li><strong>Animation</strong> — Animator updates, IK</li>
+      <li><strong>Late Game Logic</strong> — LateUpdate()</li>
+      <li><strong>Rendering</strong> — Culling, draw calls, post-processing</li>
+      <li><strong>End of Frame</strong> — Coroutine yields, cleanup</li>
+    </ol>
+
+    <h2>Update vs FixedUpdate: The Core Distinction</h2>
+    
+    <p>This is one of the most misunderstood concepts. Let's derive <em>why</em> they exist from first principles:</p>
+
+    <h3>The Problem with Variable Frame Rates</h3>
+    <p><code>Update()</code> runs once per frame. If your game runs at 60 FPS, Update runs 60 times per second. At 30 FPS, it runs 30 times. <strong>The time between calls (deltaTime) varies.</strong></p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Why This Matters for Physics</div>
+      <p>Physics simulations need <strong>determinism</strong>. If you apply forces in Update(), a player on a slower computer will experience different physics behavior than someone on a fast computer. The same inputs could produce different results!</p>
+    </div>
+
+    <h3>FixedUpdate: The Solution</h3>
+    <p><code>FixedUpdate()</code> runs on a <strong>fixed timestep</strong> (default: 0.02 seconds = 50Hz). Unity's physics engine (PhysX) needs this regularity to produce consistent simulations.</p>
+
+    <div class="diagram">
+FRAME TIMING EXAMPLE (target 60 FPS, Fixed timestep 0.02s):
+
+Frame 1: Δt = 0.016s
+├── FixedUpdate (catches up from 0.000 to 0.016)
+│   └── Runs 0 times (accumulated time < 0.02)
+└── Update
+
+Frame 2: Δt = 0.018s  (total: 0.034s)
+├── FixedUpdate
+│   └── Runs 1 time (0.034 > 0.02, now at 0.014 remaining)
+└── Update
+
+Frame 3: Δt = 0.025s  (remaining 0.014 + 0.025 = 0.039)
+├── FixedUpdate
+│   └── Runs 1 time (0.039 > 0.02, now at 0.019 remaining)
+└── Update
+
+Frame 4: Δt = 0.040s  (big hitch! remaining 0.019 + 0.040 = 0.059)
+├── FixedUpdate
+│   └── Runs 2 times (0.059 → 0.039 → 0.019)
+└── Update
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The Catch-Up Mechanism</div>
+      <p>If a frame takes too long, FixedUpdate will run <strong>multiple times</strong> to catch up. This maintains physics consistency but can cause a "spiral of death" if updates can't keep up. Unity has a <code>Maximum Allowed Timestep</code> setting to prevent this.</p>
+    </div>
+
+    <h3>When to Use Each</h3>
+    <table>
+      <tr>
+        <th>Use FixedUpdate()</th>
+        <th>Use Update()</th>
+        <th>Use LateUpdate()</th>
+      </tr>
+      <tr>
+        <td>Rigidbody forces/velocity</td>
+        <td>Input handling</td>
+        <td>Camera follow</td>
+      </tr>
+      <tr>
+        <td>Physics raycasts</td>
+        <td>Non-physics movement</td>
+        <td>After animation adjustments</td>
+      </tr>
+      <tr>
+        <td>Anything needing consistency</td>
+        <td>UI updates</td>
+        <td>Anything depending on Update results</td>
+      </tr>
+    </table>
+
+    <h2>Frame-Rate Independence</h2>
+    <p>For movement in <code>Update()</code>, multiply by <code>Time.deltaTime</code> to achieve frame-rate independence:</p>
+
+    <pre><code>// Without deltaTime: moves 1 unit per FRAME (faster on fast machines)
+transform.position += Vector3.forward;
+
+// With deltaTime: moves 1 unit per SECOND (consistent everywhere)
+transform.position += Vector3.forward * Time.deltaTime;</code></pre>
+
+    <p>For <code>FixedUpdate()</code>, use <code>Time.fixedDeltaTime</code> (though it's usually constant).</p>
+
+    <h2>Main Thread vs Render Thread</h2>
+    <p>Unity runs game logic on the <strong>main thread</strong>, but rendering can partially happen on a separate <strong>render thread</strong>. The key points:</p>
+
+    <ul>
+      <li><strong>Main thread:</strong> All your MonoBehaviour code, physics, most engine systems</li>
+      <li><strong>Render thread:</strong> GPU command submission, some graphics work</li>
+      <li><strong>Job System:</strong> Worker threads for parallelizable tasks (Burst, DOTS)</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 VRify Relevance</div>
+      <p>For browser targets, understanding the main thread is critical. JavaScript in browsers is single-threaded, and Unity WebGL also has threading limitations. Heavy Update() logic can freeze the entire page.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>The PlayerLoop defines a precise execution order for all Unity systems</li>
+      <li><strong>FixedUpdate</strong> exists for physics determinism — it runs on a fixed timestep, possibly multiple times per frame</li>
+      <li><strong>Update</strong> runs once per frame with variable deltaTime</li>
+      <li><strong>LateUpdate</strong> runs after Update and animations — perfect for cameras</li>
+      <li>Always multiply movement by deltaTime in Update for frame-rate independence</li>
+      <li>Heavy main-thread work blocks everything, especially critical for WebGL</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">← Back to</span>
+        <span class="title">All Lessons</span>
+      </a>
+      <a href="02-render-pipeline.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Render Pipeline Overview</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
