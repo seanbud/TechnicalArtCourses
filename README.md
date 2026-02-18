@@ -1,29 +1,25 @@
-# Unity Technical Art Course
+# Technical Art Training Repository
 
-<img src="./hero.png" alt="Unity Technical Art Course Hero" height="400">
+Welcome to the central repository for Technical Art training materials. This repo contains two specialized courses designed for technical artists at different stages of their career.
 
-Welcome to the **Unity Technical Art Course** repository! This project contains a comprehensive set of notes, lessons, and cheatsheets focused on mastering the intersection of art and engineering in Unity.
+## 📚 Available Courses
 
-## 🚀 Overview
+### 1. Unity Technical Art Course
+A comprehensive set of lessons and notes focused on real-time rendering, shaders, and GPU architecture within Unity.
+*   **Location:** `/lessons`
+*   **Main Index:** `index.html`
 
-This repository is designed to be a learning companion for anyone diving into the world of technical art. It covers everything from render pipelines to shader development and GPU architecture.
+### 2. Technical Art & Capture Pipelines
+A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems.
+*   **Location:** `/EACaptureCourse`
+*   **Main Index:** `/EACaptureCourse/index.html`
 
-## 📚 Contents
+---
 
-- **Lessons**: Structured HTML lessons covering core concepts.
-- **Notebook LM Notes**: Markdown summaries and deep dives for quick reference.
-- **Cheatsheets**: Handy references for common technical art tasks.
+## 🚀 Getting Started
 
-### Key Topics
-- 🔄 **Render Pipelines**: Understanding the internal workings of engine loops.
-- 🎨 **Shaders**: Mastering the art of GPU programming.
-- ⚙️ **GPU Architecture**: How graphics hardware processes your visuals.
-- 📐 **Mesh Fundamentals**: Optimization and file format best practices.
-- 💡 **Lighting Algorithms**: The science behind digital illumination.
-
-## 🛠️ Getting Started
-
-Simply open `index.html` in your browser to start exploring the course material, or browse the `notebook_lm_notes` folder for a text-based experience.
+Simply open the appropriate `index.html` in your browser to start exploring the course material, or browse the `notebook_lm_notes` folders for text-based podcast scripts and summaries.
 
 ---
 *Happy Creating!* 🤖✨
+
