@@ -6,13 +6,17 @@ Welcome to the central repository for Technical Art training materials. This rep
 
 ### 1. Unity Technical Art Course
 A comprehensive set of lessons and notes focused on real-time rendering, shaders, and GPU architecture within Unity.
-*   **Location:** `/lessons`
-*   **Main Index:** `index.html`
+*   **Location:** `/UnityTechnicalArtCourse`
+*   **Main Index:** `/UnityTechnicalArtCourse/index.html`
 
 ### 2. Technical Art & Capture Pipelines
 A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems.
 *   **Location:** `/CapturePipelineCourse`
 *   **Main Index:** `/CapturePipelineCourse/index.html`
+
+### 3. Course Template
+A standardized template for creating new technical art courses.
+*   **Location:** `/CourseTemplate`
 
 ---
 
