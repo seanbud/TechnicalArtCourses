@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Architecture Map | EA Capture Prep</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Custom styles for the map */
+    .pipeline-map {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+    .pipeline-stage {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .pipeline-stage::after {
+      content: '▼';
+      position: absolute;
+      bottom: -1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #00ff9d;
+      font-size: 1.2rem;
+    }
+    .pipeline-stage:last-child::after {
+      display: none;
+    }
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #333;
+      padding-bottom: 0.5rem;
+    }
+    .stage-title {
+      color: #00ff9d;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    .stage-tech {
+      background: #333;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: #fff;
+    }
+    .key-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+    .metric-value {
+      color: #aaa;
+    }
+    .interview-tip {
+      margin-top: 1rem;
+      padding: 0.5rem;
+      background: rgba(0, 255, 157, 0.1);
+      border-left: 3px solid #00ff9d;
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Master Review</div>
+      <h1>System Architecture Map</h1>
+      <p class="lesson-subtitle">The "Big Picture" view of the entire pipeline. Visualize this during your interview.</p>
+    </div>
+
+    <div class="pipeline-map">
+      
+      <!-- Stage 1 -->
+      <a href="lessons/01-capture-pipeline.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">1. ACQUISITION (The Source)</span>
+          <span class="stage-tech">Vicon / Shogun</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Math:</strong> SVD (Singular Value Decomposition)<br>
+            <strong>Algorithm:</strong> Rigid Body Solving
+          </div>
+          <div>
+            <strong>Tech:</strong> <code>Vector3</code> Class<br>
+            <strong>Problem:</strong> Marker Swaps
+          </div>
+        </div>
+        <div class="interview-tip">
+          "Garbage In, Garbage Out. We use SVD to mathematically minimize the error between the cloud of points and the rigid bone."
+        </div>
+      </div>
+      </a>
+
+      <!-- Stage 2 -->
+      <a href="lessons/02-asset-management.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">2. INGESTION (Perforce)</span>
+          <span class="stage-tech">Helix Core / P4Python</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Admin:</strong> <code>p4 typemap</code> (Exclusive Locking)<br>
+            <strong>Security:</strong> <code>p4 protect</code> (IP Isolation)
+          </div>
+          <div>
+            <strong>Automation:</strong> Server-Side Triggers<br>
+            <strong>Code:</strong> <code>P4.connect()</code>
+          </div>
+        </div>
+        <div class="interview-tip">
+          "We use Perforce because binaries cannot be merged. Locking is our safety net against lost work."
+        </div>
+      </div>
+      </a>
+
+      <!-- Stage 3 -->
+      <a href="lessons/03-tool-design.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">3. TOOLING (PySide)</span>
+          <span class="stage-tech">Python / Qt / Maya</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Constraint:</strong> The GIL (Global Interpret Lock)<br>
+            <strong>Pattern:</strong> Model-View-Controller (MVC)
+          </div>
+          <div>
+            <strong>Solution:</strong> <code>QThread</code> & Signals<br>
+            <strong>UX:</strong> "The Cockpit Philosophy"
+          </div>
+        </div>
+        <div class="interview-tip">
+          "I separate Logic from UI so the tool can run Headless on a server later. Never touch Maya from a thread."
+        </div>
+      </div>
+      </a>
+
+      <!-- Stage 4 -->
+      <a href="lessons/04-automation-ci.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">4. AUTOMATION (CI/CD)</span>
+          <span class="stage-tech">GitLab CI / Docker</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Config:</strong> <code>.gitlab-ci.yml</code><br>
+            <strong>Env:</strong> Docker Container (Clean Room)
+          </div>
+          <div>
+            <strong>Mode:</strong> Headless (mayapy -batch)<br>
+            <strong>infra:</strong> GPU Runners
+          </div>
+        </div>
+        <div class="interview-tip">
+          "It works on my machine is a lie. Docker ensures every build runs in an identical environment."
+        </div>
+      </div>
+      </a>
+
+      <!-- Stage 5 -->
+      <a href="lessons/05-render-farm.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">5. DISTRIBUTION (The Farm)</span>
+          <span class="stage-tech">Deadline / AWS</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Scale:</strong> Horizontal (100+ Nodes)<br>
+            <strong>Concept:</strong> Idempotency (Safe Retries)
+          </div>
+          <div>
+            <strong>Code:</strong> JobInfo / PluginInfo files<br>
+            <strong>Structure:</strong> Directed Acyclic Graph (DAG)
+          </div>
+        </div>
+        <div class="interview-tip">
+          "We use Chunking to amortize the startup tax (opening Maya) across multiple frames."
+        </div>
+      </div>
+      </a>
+
+      <!-- Stage 6 -->
+      <a href="lessons/06-data-strategy.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">6. DATA STRATEGY (Lifecycle)</span>
+          <span class="stage-tech">SQL / Isilon / S3</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Storage:</strong> Tiered (Hot -> Warm -> Cold)<br>
+            <strong>Validation:</strong> MD5 Hashing
+          </div>
+          <div>
+            <strong>Tracking:</strong> SQLite / Asset Database<br>
+            <strong>Process:</strong> The "Sweeper" Bot
+          </div>
+        </div>
+        <div class="interview-tip">
+          "Moving data without hashing is gambling. A single bit flip can corrupt a 50GB file."
+        </div>
+      </div>
+      </a>
+
+       <!-- Stage 7 -->
+      <a href="lessons/07-leadership.html" style="text-decoration:none; color:inherit;">
+      <div class="pipeline-stage">
+        <div class="stage-header">
+          <span class="stage-title">7. SYSTEM DESIGN (Leadership)</span>
+          <span class="stage-tech">Architecture / Culture</span>
+        </div>
+        <div class="key-metrics">
+          <div>
+            <strong>Pattern:</strong> Decoupling (Queues)<br>
+            <strong>Design:</strong> "The Proxy Pattern" (Multi-site)
+          </div>
+          <div>
+            <strong>Behavior:</strong> Blameless Post-Mortems<br>
+            <strong>Method:</strong> The STAR Method
+          </div>
+        </div>
+        <div class="interview-tip">
+          "A Senior TA designs for failure. A Junior TA designs for the happy path."
+        </div>
+      </div>
+      </a>
+
+    </div>
+
+    <div class="lesson-nav">
+      <a href="lessons/07-leadership.html">
+        <span class="label">← Back to</span>
+        <span class="title">Leadership</span>
+      </a>
+      <a href="index.html">
+        <span class="label">Restart →</span>
+        <span class="title">Review Course</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

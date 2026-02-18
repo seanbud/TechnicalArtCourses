@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 1: The Capture Pipeline | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 01</div>
+      <h1>Data Acquisition & Math</h1>
+      <p class="lesson-subtitle">From Infrared Light to Rigid Body Solving: The Math Behind the Magic.</p>
+    </div>
+
+    <h2>1. The Big Picture: Signal vs Noise</h2>
+    <p>Motion Capture is <strong>data acquisition</strong> from the real world. Unlike hand-key animation (which is additive art), mocap is subtractive data processing. Your job is to filter the "Signal" (Actor) from the "Noise" (Reflections, Occlusion, Marker Swaps).</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                     THE DATA LIFECYCLE                          │
+3D SPACE (Stage)      DATA SPACE (Process)    GAME SPACE (Engine) │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ┌────────────┐     ┌──────────────┐     ┌───────────────────┐   │
+│ │ ACQUISITION│ ──→ │ SOLVING      │ ──→ │ RETARGETING       │   │
+│ │ (.c3d Raw) │     │ (.fbx Cloud) │     │ (.anim Clip)      │   │
+│ └────────────┘     └──────────────┘     └───────────────────┘   │
+│       │                   │                       │             │
+│   Triangulation       Rigid Body Math         Joint Mapping     │
+│   (2D → 3D)           (3D → Skeleton)         (Skeleton → Hulk) │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>2. Implementation: The Vector3 Class</h2>
+    <p>In a technical interview, you cannot rely on `maya.cmds` or `UnityEngine`. You must demonstrate that you understand the linear algebra under the hood. You should be comfortable writing a helper class like this from scratch.</p>
+
+    <div class="code-block">
+      <h3>Python: The Core Math Library</h3>
+      <pre><code class="language-python">import math
+
+class Vector3:
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __sub__(self, other):
+        return Vector3(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def magnitude(self):
+        return math.sqrt(self.x**2 + self.y**2 + self.z**2)
+
+    def normalize(self):
+        mag = self.magnitude()
+        if mag == 0: return Vector3(0,0,0)
+        return Vector3(self.x/mag, self.y/mag, self.z/mag)
+
+    def dot(self, other):
+        """Returns scalar: how much two vectors align."""
+        return (self.x * other.x) + (self.y * other.y) + (self.z * other.z)
+
+    def cross(self, other):
+        """Returns vector: perpendicular to both inputs."""
+        return Vector3(
+            self.y*other.z - self.z*other.y,
+            self.z*other.x - self.x*other.z,
+            self.x*other.y - self.y*other.x
+        )
+
+# Example Usage
+p1 = Vector3(0, 0, 0)
+p2 = Vector3(10, 0, 0)
+dist = (p2 - p1).magnitude() # Returns 10.0</code></pre>
+    </div>
+
+    <h2>3. Algorithm: Detecting Marker Swaps</h2>
+    <p>A "Marker Swap" occurs when two markers pass close to each other (e.g., crossing arms) and the system mislabels them. The Left Wrist becomes the Right Wrist. This creates a physical impossibility: a wrist cannot move 5 meters in 0.01 seconds.</p>
+    <p>We detect this by analyzing the <strong>Velocity Spike</strong>.</p>
+
+    <div class="code-block">
+      <h3>Python: The Swap Detector</h3>
+      <pre><code class="language-python">def detect_swaps(frames, threshold_speed=500.0):
+    """
+    frames: List of Vector3 positions for a SINGLE marker over time.
+    threshold_speed: Max allowed speed (mm per frame).
+    """
+    spikes = []
+    
+    for i in range(1, len(frames)):
+        current_pos = frames[i]
+        prev_pos = frames[i-1]
+        
+        # Calculate distance traveled in one frame
+        delta = current_pos - prev_pos
+        speed = delta.magnitude()
+        
+        # If speed exceeds human possibility, it's a swap/error
+        if speed > threshold_speed:
+            spikes.append(i)
+            print(f"CRITICAL: Frame {i} velocity {speed:.2f} exceeds limit!")
+            
+    return spikes</code></pre>
+    </div>
+
+    <h2>4. Deep Dive: Rigid Body Solving (SVD)</h2>
+    <p>How do we turn floating dots into a bone? We fit a "Rigid Body" to them. This is typically done using <strong>Singular Value Decomposition (SVD)</strong>.</p>
+    
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Concept: The Kabsch Algorithm</div>
+      <p>1. <strong>Centroid:</strong> Find the center of the cloud of points.<br>
+      2. <strong>Center:</strong> Move both the Source Cloud and Target Cloud so their centroids are at (0,0,0).<br>
+      3. <strong>Rotate:</strong> Find the optimal Rotation Matrix (R) that aligns the points. This is where SVD is used.</p>
+    </div>
+
+    <div class="code-block">
+      <h3>Conceptual Implementation (Numpy Style)</h3>
+      <pre><code class="language-python">import numpy as np
+
+def solve_rigid_body(source_points, target_points):
+    # 1. Calculate Centroids
+    centroid_A = np.mean(source_points, axis=0)
+    centroid_B = np.mean(target_points, axis=0)
+    
+    # 2. Center the points
+    AA = source_points - centroid_A
+    BB = target_points - centroid_B
+    
+    # 3. Covariance Matrix
+    H = np.dot(AA.T, BB)
+    
+    # 4. SVD (The Magic)
+    U, S, Vt = np.linalg.svd(H)
+    
+    # 5. Calculate Rotation
+    Rotation = np.dot(Vt.T, U.T)
+    
+    return Rotation, centroid_B</code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Sports & Realism</div>
+      <p>Why does this math matter? In <strong>FIFA/FC</strong>, players are judged by their signature moves. If the rigid body solve is off by even 2mm, the foot slides on the grass ("foot skating"). Millions of players notice this immediately. High-fidelity solving is the barrier between a game that feels "arcade" and one that feels "simulation".</p>
+    </div>
+
+    <h2>5. Technical Drill: Interview Prep</h2>
+    
+    <div class="callout callout-warning">
+      <div class="callout-title">🗣️ Interview Prompt</div>
+      <p><strong>"I have a character that needs to look at a target, but their head shouldn't rotate past 45 degrees. Write the logic."</strong></p>
+    </div>
+
+    <p><strong>The Solution:</strong></p>
+    <ol>
+        <li>Construct a <strong>LookAt Vector</strong> (Target Pos - Head Pos).</li>
+        <li>Calculate the <strong>Angle</strong> between the Character Forward Vector and the LookAt Vector using <code>acos(dot_product)</code>.</li>
+        <li>If Angle > 45, <strong>Clamp</strong> the rotation or use <strong>Spherical Linear Interpolation (Slerp)</strong> to limit it.</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Motion Capture is Subtractive:</strong> You are filtering signal (performance) from noise (marker swaps, occlusion).</li>
+      <li><strong>Dot Product (Facing Ratio):</strong> The mathematical tool for checking if a camera can see a marker.</li>
+      <li><strong>Rigid Body Solving (SVD):</strong> We use Singular Value Decomposition to minimize error between the point cloud and the bone.</li>
+      <li><strong>Vector3 Class:</strong> The fundamental data structure for all 3D math in python.</li>
+      <li><strong>The 1mm Rule:</strong> If the residual error is > 1mm, the solve is bad. Calibration is king.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">← Back to</span>
+        <span class="title">All Lessons</span>
+      </a>
+      <a href="02-asset-management.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Asset Management</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

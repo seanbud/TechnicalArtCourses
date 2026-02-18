@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 6: Data Strategy | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 06</div>
+      <h1>Data Strategy & SQL</h1>
+      <p class="lesson-subtitle">Managing Petabytes: Tiered Storage, Robust Validation, and Asset Databases.</p>
+    </div>
+
+    <h2>The Digital Landfill</h2>
+    <p>A mocap stage produces 4TB of raw video per day. If you calculate that out: 4TB * 200 Days = 800TB per year. You cannot store 800TB on fast NVMe drives. It would cost millions.</p>
+    <p>You need a <strong>Lifecycle Strategy</strong>. We move data based on "Temperature".</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    TIERED STORAGE LIFECYCLE                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   TIER 1: HOT (Active Production)      TIER 2: WARM (Nearline)  │
+│   [NVMe SSD - Isilon]                  [NAS - HDD Array]        │
+│   Speed: 5000 MB/s                     Speed: 500 MB/s          │
+│   Cost: $$$$$ / TB                     Cost: $$ / TB            │
+│   (Shogun Live Streaming)              (Daily Builds)           │
+│         │                                    │                  │
+│         ▼ (Rule: > 30 Days Old)              ▼ (Rule: > 6 Months)
+│                                                                 │
+│   TIER 3: COLD (Deep Archive)                                   │
+│   [LTO Tape / AWS Glacier]                                      │
+│   Speed: Hours to retrieve (Robot Arm)                          │
+│   Cost: $ / TB                                                  │
+│   (Finished Projects)                                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>1. Implementation: Robust Validation (The Validator Class)</h2>
+    <p>Moving data is dangerous. A simple copy script is not enough. You need <strong>Retries</strong> and <strong>Checksums</strong>.</p>
+    
+    <div class="code-block">
+      <h3>Python: The Validator</h3>
+      <pre><code class="language-python">import hashlib
+import shutil
+import os
+import time
+import logging
+
+class AssetValidator:
+    def __init__(self):
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger("DataMover")
+
+    def calculate_md5(self, filepath):
+        """Streams file to avoid loading 2GB into RAM"""
+        hash_md5 = hashlib.md5()
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    def safe_move(self, source, dest, retries=3):
+        for attempt in range(retries):
+            try:
+                # 1. Calc Source Hash
+                src_hash = self.calculate_md5(source)
+                
+                # 2. Copy
+                shutil.copy2(source, dest)
+                
+                # 3. Calc Dest Hash
+                dst_hash = self.calculate_md5(dest)
+                
+                # 4. Compare
+                if src_hash == dst_hash:
+                    self.logger.info(f"Success: {source} -> {dest}")
+                    return True
+                else:
+                    self.logger.error(f"Corruption Detected! Attempt {attempt+1}")
+                    os.remove(dest) # Clean up bad file
+                    
+            except Exception as e:
+                self.logger.error(f"IO Error: {e}")
+                time.sleep(1) # Backoff before retry
+                
+        raise Exception("Failed to move file after 3 attempts.")</code></pre>
+    </div>
+
+    <h2>2. Architecture: The Asset Database (SQL)</h2>
+    <p>Filesystems are slow to search. If you have 1 million files, `os.walk()` takes 10 minutes. You need a <strong>Database</strong> to query where things are instantly.</p>
+
+    <div class="code-block">
+      <h3>Python: Tracking Assets with SQLite</h3>
+      <pre><code class="language-python">import sqlite3
+
+def init_db():
+    conn = sqlite3.connect('assets.db')
+    c = conn.cursor()
+    # Create Table
+    c.execute('''CREATE TABLE IF NOT EXISTS shots (
+                    id INTEGER PRIMARY KEY,
+                    shot_name TEXT,
+                    path TEXT,
+                    tier TEXT,
+                    last_accessed DATE
+                )''')
+    conn.commit()
+    return conn
+
+def register_asset(shot_name, path):
+    conn = init_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO shots (shot_name, path, tier, last_accessed) VALUES (?, ?, ?, ?)",
+              (shot_name, path, 'HOT', '2023-10-27'))
+    conn.commit()
+    print(f"Registered {shot_name} in Database.")
+
+def find_cold_assets():
+    """Find assets that haven't been touched in 30 days"""
+    conn = init_db()
+    c = conn.cursor()
+    c.execute("SELECT path FROM shots WHERE last_accessed < date('now','-30 days') AND tier='HOT'")
+    return c.fetchall()</code></pre>
+    </div>
+
+    <h2>3. The Filename Schema (Database Keys)</h2>
+    <p>Without a schema, data is lost. A file named `shot_01_final_final_v2.fbx` is useless.</p>
+    <table>
+      <tr>
+        <th>Token</th>
+        <th>Example</th>
+        <th>Why?</th>
+      </tr>
+      <tr>
+        <td><strong>Project</strong></td>
+        <td>`FIFA25`</td>
+        <td>Separates billing/storage costs.</td>
+      </tr>
+      <tr>
+        <td><strong>Date</strong></td>
+        <td>`20241031`</td>
+        <td>Sortable (Year-Month-Day). Always use ISO 8601.</td>
+      </tr>
+      <tr>
+        <td><strong>ShotID</strong></td>
+        <td>`sc01_sh05`</td>
+        <td>Unique database key. Links to Shotgun/FTrack.</td>
+      </tr>
+    </table>
+
+    <h2>4. Technical Drill: Interview Prep</h2>
+    <div class="callout callout-warning">
+      <div class="callout-title">🗣️ Interview Prompt</div>
+      <p><strong>"Design a system to delete old files without deleting something important."</strong></p>
+    </div>
+    <p><strong>The Answer: The "Sweeper" Service.</strong></p>
+    <p>Never rely on file dates alone (opening a file updates the date). Use the <strong>Database</strong>.</p>
+    <ol>
+        <li><strong>Query:</strong> Select files marked "Approved" (Final) that are older than 6 months.</li>
+        <li><strong>Verify:</strong> Check if they exist on the "Cold Storage" (Tape/Cloud) first.</li>
+        <li><strong>Delete:</strong> Remove from "Hot Storage" only if the backup is confirmed.</li>
+        <li><strong>Update DB:</strong> Change status from 'HOT' to 'COLD'.</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Tiered Storage:</strong> Move data from Hot (SSD) to Warm (HDD) to Cold (Tape) based on age to save money.</li>
+      <li><strong>Hashing (MD5):</strong> The only way to mathematically prove a file transferred correctly. Bit rot is real.</li>
+      <li><strong>Asset Database:</strong> Use SQLite or similar to track files. `os.walk` is too slow for 100TB.</li>
+      <li><strong>Filename Schema:</strong> Enforce strict naming (Project_Date_ShotID) so files are sortable and queryable.</li>
+      <li><strong>The Sweeper:</strong> Automate data lifecycle. Don't rely on humans to clean up.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Dead Space</div>
+      <p>In <strong>Dead Space</strong>, audio files are massive uncompressed WAVs. We can't keep them all on the fast SSDs (Tier 1 Storage). We use a <strong>Tiered Storage Policy</strong>. After 30 days of inactivity, a script moves the raw audio to the slow NAS (Tier 2). After 90 days, it goes to Amazon Glacier (Cold Storage). This saves the studio $50,000/year in storage costs.</p>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="05-render-farm.html">
+        <span class="label">← Back to</span>
+        <span class="title">The Render Farm</span>
+      </a>
+      <a href="07-leadership.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">System Design</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

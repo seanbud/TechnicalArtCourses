@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 2: Pipeline & Perforce | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 02</div>
+      <h1>Pipeline & Perforce Administration</h1>
+      <p class="lesson-subtitle">Scripting the Server: P4Python, Triggers, and Typemaps.</p>
+    </div>
+
+    <h2>1. The Merge Conflict Problem</h2>
+    <p>Programmers use Git because code is text. Artists use Perforce because assets are binary. If two artists edit the same 2GB `.ZTL` file, Git cannot merge them. One person loses their work. This is unacceptable in production.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Concept: Pessimistic Locking</div>
+      <p>Git uses <strong>Optimistic Locking</strong> (anyone can edit anything). Perforce uses <strong>Pessimistic Locking</strong> (you must "Check Out" a file before editing). The server enforces a lock (`+l`) that prevents anyone else from modifying the file until you submit.</p>
+    </div>
+
+    <h2>2. Implementation: Automating P4 with Python</h2>
+    <p>As a Technical Artist, you don't use the GUI. You write tools that manage the pipeline. You must know <strong>P4Python</strong>.</p>
+    
+    <div class="code-block">
+      <h3>Python: The "Unlocker" Tool</h3>
+      <p><em>Scenario: "Artist A went on vacation but left a critical file Checked Out. Write a script to find and unlock it."</em></p>
+      <pre><code class="language-python">from P4 import P4, P4Exception
+
+def force_unlock_file(depot_path):
+    p4 = P4()
+    p4.user = "pipeline_admin"
+    p4.password = "secret123"
+    
+    try:
+        p4.connect()
+        # 1. Find who has the file
+        # fstat returns a list of dictionaries
+        info = p4.run_fstat(depot_path)[0]
+        
+        if 'action' in info:
+            user = info['otherOpen'][0] # User who has it open
+            client = info['otherClient'][0] # Their workspace
+            
+            print(f"File locked by {user} on {client}. Reverting...")
+            
+            # 2. Impersonate the user to Revert (Admin privilege required)
+            p4.client = client
+            p4.user = user
+            p4.run_revert(depot_path)
+            print("File Unlocked!")
+            
+    except P4Exception as e:
+        print(e)
+    finally:
+        p4.disconnect()</code></pre>
+    </div>
+
+    <h2>3. Admin Strategy: Triggers & Typemaps</h2>
+    <p>You cannot trust humans to follow naming conventions. You must enforce them programmatically using <strong>Server-Side Triggers</strong>.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    THE TRIGGER GAUNTLET                         │
+│                                                                 │
+│   ┌────────────┐                                                │
+│   │ ARTIST     │  (Submits Changelist)                          │
+│   └─────┬──────┘                                                │
+│         │                                                       │
+│         ▼                                                       │
+│   ┌────────────┐   ┌────────────┐   ┌────────────┐              │
+│   │ CHANGE-    │   │ CHANGE-    │   │ CHANGE-    │              │
+│   │ SUBMIT     │   │ CONTENT    │   │ COMMIT     │              │
+│   │ (Metadata) │   │ (Files)    │   │ (Final)    │              │
+│   └─────┬──────┘   └─────┬──────┘   └─────┬──────┘              │
+│         │                │                │                     │
+│    Check Desc.      Check Naming     Success Email              │
+│    "Fix Bug"        "asset_v1.fbx"                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="code-block">
+      <h3>Python: The "Bad Name" Rejector</h3>
+      <p>This script runs on the Perforce Server itself. If it returns <code>exit(1)</code>, the user's submit fails.</p>
+      <pre><code class="language-python">import sys
+# Arguments passed by P4: [TriggerName, ChangelistID, User]
+changelist = sys.argv[2] 
+
+def validate_filename(filename):
+    # Rule: Must be lowercase and no spaces
+    if " " in filename:
+        return False
+    if filename != filename.lower():
+        return False
+    return True
+
+# Pseudo-code for checking a changelist
+files = p4.run_describe(changelist)
+for file in files:
+    if not validate_filename(file['depotFile']):
+        print(f"ERROR: File '{file['depotFile']}' has spaces or caps.")
+        sys.exit(1) # BLOCK THE SUBMIT
+
+sys.exit(0) # ALLOW THE SUBMIT</code></pre>
+    </div>
+    
+    <h3>The Typemap</h3>
+    <p>The `p4 typemap` table tells the server how to handle file extensions. This is your first line of defense.</p>
+    <pre><code>TypeMap:
+    binary+l //....fbx   <-- Auto-Lock all FBX files
+    binary+l //....uasset
+    text     //....py
+    text     //....json</code></pre>
+
+    <h2>4. Streams: The Branching Strategy</h2>
+    <p>We organize data into <strong>Streams</strong> to allow parallel development. A "Stream" is a branch with strict flow rules.</p>
+    <ul>
+      <li><strong>Mainline:</strong> The "Truth". Always stable. The game builds from here.</li>
+      <li><strong>Development:</strong> The "Lab". Unstable. Where new features are tested.</li>
+      <li><strong>Release:</strong> The "Snapshot". Frozen code for shipping (e.g., E3 Demo).</li>
+    </ul>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Flow Rules</div>
+      <p><strong>Merge Down, Copy Up.</strong> You must merge changes from Main down to Dev daily (resolve conflicts). You only copy changes from Dev up to Main when they are stable. This protects the Mainline from breaking.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Battlefield Destruction</div>
+      <p>Imagine <strong>Battlefield</strong> level destruction. A single building might have 500 destruction swatches (rubble, rebar, glass). That asset is 50GB. If you try to merge 50GB of binary data in Git, your repo explodes. EA uses Perforce because we need to lock that file so two artists don't destroy the same building at the same time.</p>
+    </div>
+
+    <h2>5. Technical Drill: Interview Prep</h2>
+    <div class="callout callout-warning">
+      <div class="callout-title">🗣️ Interview Prompt</div>
+      <p><strong>"How do you prevent Artists from accidentally deleting the entire project?"</strong></p>
+    </div>
+    <p><strong>The Solution: The Protection Table (p4 protect)</strong></p>
+    <pre><code>Protections:
+    write   group   Artists     //...
+    read    group   Artists     //depot/Pipeline/...  (Code is Read-Only)
+    super   user    admin       //...
+    
+    # The Magic Line:
+    list    group   Artists     -//...  (Cannot Delete/Obliterate)</code></pre>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Binaries Don't Merge:</strong> This is why we use Perforce (locking) instead of Git (branching) for assets.</li>
+      <li><strong>Pessimistic Locking:</strong> The <code>+l</code> modifier ensures only one person edits a file at a time.</li>
+      <li><strong>Streams:</strong> Define the flow of data (Dev → Main → Release) and isolate stability.</li>
+      <li><strong>P4Python:</strong> The automation layer. Use it to write Triggers and administration scripts.</li>
+      <li><strong>Typemap:</strong> The `p4 typemap` file controls file locking behavior globally.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="01-capture-pipeline.html">
+        <span class="label">← Back to</span>
+        <span class="title">The Capture Pipeline</span>
+      </a>
+      <a href="03-tool-design.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Tooling & PySide</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 5: Distributed Computing | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 05</div>
+      <h1>Distributed Computing (The Farm)</h1>
+      <p class="lesson-subtitle">Horizontal Scaling, DAGs, and Python Job Submission APIs.</p>
+    </div>
+
+    <h2>Buying Time with Money</h2>
+    <p>A single capture shot needs 10 minutes to process (Solve + Retarget + Render). We shoot 600 shots a day. That's 100 hours of compute time. You can't do that on one workstation.</p>
+    <p>We use <strong>AWS Thinkbox Deadline</strong> (or OpenCue) to manage a farm of 100+ nodes.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    SCALING STRATEGIES                           │
+├─────────────────────────────────────────────────────────────────┤
+│   VERTICAL SCALING (Up)       HORIZONTAL SCALING (Out)          │
+│   (One Super Computer)        (100 Cheap Computers)             │
+│   ┌────────────┐              ┌──┐ ┌──┐ ┌──┐ ┌──┐               │
+│   │  CPU: 128  │              │  │ │  │ │  │ │  │               │
+│   └────────────┘              └──┘ └──┘ └──┘ └──┘               │
+│   Cost: $50,000               Cost: $500 each                   │
+│   Limit: Physics (Heat)       Limit: Network Bandwidth          │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>1. Implementation: Submitting a Job (Python)</h2>
+    <p>In a pipeline, you don't use the Monitor UI. You write scripts that submit jobs automatically. A "Job" in Deadline is just two text files: <code>JobInfo</code> and <code>PluginInfo</code>.</p>
+
+    <div class="code-block">
+      <h3>Python: The Submission Script</h3>
+      <pre><code class="language-python">import subprocess
+import os
+
+def submit_maya_job(scene_file, start, end, output_path):
+    # 1. Define Job Info (Metadata)
+    job_info = [
+        "Plugin=MayaBatch",
+        "Name=Render_Shot_01",
+        "Comment=Nightly Build",
+        "Pool=gpu_nodes",
+        "Frames={}-{}".format(start, end),
+        "ChunkSize=10" # Optimization!
+    ]
+    
+    # 2. Define Plugin Info (Arguments for Maya)
+    plugin_info = [
+        "SceneFile={}".format(scene_file),
+        "OutputFilePath={}".format(output_path),
+        "Version=2024",
+        "Renderer=Arnold"
+    ]
+    
+    # 3. Write files to temp
+    with open("job_info.txt", "w") as f:
+        f.write("\n".join(job_info))
+        
+    with open("plugin_info.txt", "w") as f:
+        f.write("\n".join(plugin_info))
+        
+    # 4. Call Deadline Command
+    # deadlinecommand.exe job_info.txt plugin_info.txt
+    result = subprocess.check_output(
+        ["deadlinecommand", "job_info.txt", "plugin_info.txt"]
+    )
+    print("Job Submitted! ID: " + result.decode())
+    return result.decode().strip()</code></pre>
+    </div>
+
+    <h2>2. Architecture: The Directed Acyclic Graph (DAG)</h2>
+    <p>A simple list of jobs isn't enough. Job B can't start until Job A finishes. This is a <strong>Dependency Graph</strong>.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    JOB DEPENDENCY CHAIN                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   [JOB A: Unzip] ──(ID: 001)──▶ [JOB B: Solve]                  │
+│   (Status: Active)              (Status: Pending)               │
+│                                 (Prop: JobDependency=001)       │
+│                                       │                         │
+│                                       ▼                         │
+│                                 [JOB C: Render]                 │
+│                                 (Status: Pending)               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Chaining Jobs</h3>
+      <pre><code class="language-python"># Submit Job A
+id_a = submit_maya_job("unzip.py", ...)
+
+# Submit Job B (Dependent on A)
+job_info_b = [
+    "Name=Solve_Shot_01",
+    "JobDependency={}".format(id_a) # <--- THE GLUE
+]
+# ... submit logic ...</code></pre>
+    </div>
+
+    <h2>3. Idempotency: The Re-Run Rule</h2>
+    <p>Computers crash. Networks fail. A job <em>will</em> fail eventually. The farm software will retry it automatically.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Concept: Idempotency</div>
+      <p><strong>Definition:</strong> Running a function multiple times produces the same result as running it once.<br>
+      <strong>Bad:</strong> Appending "Success" to a log file. (Run twice = "SuccessSuccess")<br>
+      <strong>Good:</strong> Overwriting the log file. (Run twice = "Success")<br>
+      <strong>Why:</strong> If a node dies halfway through, the Retry must not corrupt the data.</p>
+    </div>
+
+    <h2>4. Technical Drill: The Cloud Burst (Boto3)</h2>
+    <p>Sometimes local render nodes aren't enough. You need to upload to AWS S3. You use <strong>Boto3</strong>.</p>
+
+    <div class="code-block">
+      <h3>Python: The "Uploader"</h3>
+      <pre><code class="language-python">import boto3
+from botocore.exceptions import NoCredentialsError
+
+def upload_to_s3(local_file, bucket, s3_file):
+    s3 = boto3.client('s3')
+    
+    try:
+        # Upload with automatic multipart (fast for big files)
+        s3.upload_file(local_file, bucket, s3_file)
+        print("Upload Successful")
+        return True
+    except FileNotFoundError:
+        print("The file was not found")
+        return False
+    except NoCredentialsError:
+        print("Credentials not available")
+        return False</code></pre>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Horizontal Scaling:</strong> It's cheaper to buy 100 slow computers than 1 supercomputer.</li>
+      <li><strong>DAG (Directed Acyclic Graph):</strong> Jobs have dependencies. Render cannot start until Solve finishes.</li>
+      <li><strong>Idempotency:</strong> A job must produce the same result even if run multiple times. Safeguard against crashes.</li>
+      <li><strong>Chunking:</strong> Grouping frames together (1-10) to amortize the expensive startup time of Maya.</li>
+      <li><strong>Job Submission:</strong> Use Python APIs (Deadline/OpenCue) to submit jobs, not the GUI.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Madden NFL</div>
+      <p>For <strong>Madden</strong>, we process thousands of motion capture takes every week. We don't just render logic; we run <strong>Machine Learning</strong> queries on the farm to auto-tag animations ("Is this a tackle? Is this a touchdown?"). This requires a distributed graph of thousands of nodes running 24/7. Scaling is the only way to ship.</p>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="04-automation-ci.html">
+        <span class="label">← Back to</span>
+        <span class="title">Automation & CI</span>
+      </a>
+      <a href="06-data-strategy.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Data Strategy</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

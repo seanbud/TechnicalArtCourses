@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 4: Automation & GitLab CI | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 04</div>
+      <h1>Automation & GitLab CI</h1>
+      <p class="lesson-subtitle">Building the "Invisible Robot": .gitlab-ci.yml, Docker, and Runners.</p>
+    </div>
+
+    <h2>The Invisible Robot</h2>
+    <p>Imagine you hired a new employee. Their desk is in the server room. They have no monitor, no mouse, no keyboard. But they work 24/7 and never make a mistake. This employee is your <strong>CI System</strong>.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Concept: Headless Mode</div>
+      <p>How do you run Maya without a screen? You use <strong>Batch Mode</strong>.<br>
+      <code>mayapy.exe -batch -command "python(\"import my_script\")"</code><br>
+      If your script tries to open a popup window ("Are you sure?"), the robot waits forever. The build hangs. <strong>Rule #1: Separate Logic from UI.</strong></p>
+    </div>
+
+    <h2>1. Architecture: The GitLab CI Pipeline</h2>
+    <p>GitLab CI is defined by a single file: `.gitlab-ci.yml`. This file tells the "Runners" (worker machines) what to do.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    THE CI/CD GAUNTLET                           │
+├─────────────────────────────────────────────────────────────────┤
+│   STAGES:                                                       │
+│   1. BUILD (Compile/Bake)  2. TEST (Validate)   3. DEPLOY       │
+│                                                                 │
+│   ┌────────────┐          ┌──────────────┐     ┌──────────────┐ │
+│   │ Job: Bake  │          │ Job: Lint    │     │ Job: Upload  │ │
+│   │ NavMesh    │ ───────→ │ Python Check │ ──→ │ To S3        │ │
+│   └─────┬──────┘          └──────┬───────┘     └──────────────┘ │
+│         │                        │                              │
+│         ▼                        ▼                              │
+│   [Runner A]               [Runner B]             [Runner A]    │
+│   (Has Unity)              (Has Python)           (Has AWS CLI) │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>2. Implementation: The .gitlab-ci.yml</h2>
+    <p>This is what you need to be able to write from memory (or close to it).</p>
+
+    <div class="code-block">
+      <h3>The Pipeline Configuration</h3>
+      <pre><code class="language-yaml">stages:
+  - build
+  - test
+  - deploy
+
+# Define a "Base Job" to share config
+.maya_job:
+  image: polypipeline/maya-2024:latest # Custom Docker Image
+  tags:
+    - gpu-runner # Runs on a machine with a GPU
+  before_script:
+    - echo "Setting up License..."
+    - export MAYA_LICENSE=...
+
+validate_pyside:
+  stage: test
+  extends: .maya_job
+  script:
+    # Run the tests in Headless Maya
+    - mayapy.exe -batch -command "python(\"import tests; tests.run()\")"
+  artifacts:
+    when: always
+    paths:
+      - test_results.xml
+
+build_docs:
+  stage: deploy
+  image: python:3.9
+  script:
+    - pip install sphinx
+    - sphinx-build -b html docs/ public/
+  only:
+    - main # Only run on Main branch</code></pre>
+    </div>
+
+    <h2>3. The "Clean Room" (Docker)</h2>
+    <p>The most dangerous sentence in engineering is: <strong>"It works on my machine."</strong> Docker solves this by creating a "Container" (a lightweight Virtual Machine) that matches the production environment exactly.</p>
+    
+    <div class="code-block">
+      <h3>The Dockerfile</h3>
+      <p>This recipe builds the environment your pipeline runs in.</p>
+      <pre><code class="language-dockerfile"># Start from a base OS
+FROM centos:7
+
+# Install Dependencies
+RUN yum install -y git python3
+
+# Install Maya (Simplified)
+COPY Install/Maya2024 /tmp/Maya2024
+RUN /tmp/Maya2024/setup --silent
+
+# Set Environment Variables
+ENV MAYA_LOCATION=/usr/autodesk/maya2024
+ENV PATH=$MAYA_LOCATION/bin:$PATH
+
+# The command to run when container starts
+CMD ["mayapy"]</code></pre>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Environment Variables</div>
+      <p>Never hardcode paths like `Z:\Projects`. Use Environment Variables (`$PROJECT_ROOT`). Docker injects these at runtime, allowing the same code to run on your laptop AND the cloud.</p>
+    </div>
+
+    <h2>4. Technical Drill: Interview Prep</h2>
+    
+    <div class="callout callout-warning">
+      <div class="callout-title">🗣️ Interview Prompt</div>
+      <p><strong>"How do you handle License Servers in a Docker Container?"</strong></p>
+    </div>
+    <p><strong>The Answer: Network Bridging.</strong></p>
+    <p>Docker containers by default are isolated. They cannot see the corporate network where the License Server lives. You must run the container with <code>--network host</code> or pass the License Server IP as an ENV Variable so the container can "phone home" to check out a license.</p>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>"Works on my machine" is dead:</strong> CI/CD ensures code works in a clean, neutral environment.</li>
+      <li><strong>Headless Mode:</strong> Tools must run without a GUI (Batch Mode) to work on the farm/CI.</li>
+      <li><strong>Docker:</strong> A lightweight VM that defines the exact environment (OS, Maya version, Libraries).</li>
+      <li><strong>GitLab CI YAML:</strong> The recipe file that tells the runner what to do (Build -> Test -> Deploy).</li>
+      <li><strong>GPU Runners:</strong> You need specialized hardware runners to run Maya/Unity tests effectively.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Apex Legends</div>
+      <p><strong>Apex Legends</strong> updates every season. If we break a character rig, millions of players can't play their favorite Legend. We run thousands of automated tests every night on GitLab CI to ensure that every rig, every animation, and every skin loads correctly before the update goes live.</p>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="03-tool-design.html">
+        <span class="label">← Back to</span>
+        <span class="title">Tooling & PySide</span>
+      </a>
+      <a href="05-render-farm.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">The Render Farm</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 3: Tooling & PySide | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 03</div>
+      <h1>Tooling & PySide Architecture</h1>
+      <p class="lesson-subtitle">UX Architecture, Threading, and the "Cockpit" Philosophy in Python/Qt.</p>
+    </div>
+
+    <h2>The Pilot vs. The Engineer</h2>
+    <p>Your users are Pilots. They are flying the production at Mach 2. They don't care how the engine works, they just need the buttons to work <em>instantly</em>.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The "Cockpit" Philosophy</div>
+      <p>If a pilot presses "Landing Gear Down" and the stick freezes for 5 seconds, the plane crashes. Similarly, if an artist presses "Export" and Maya freezes (White Screen of Death), they panic. <strong>A robust tool never freezes the UI.</strong></p>
+    </div>
+
+    <h2>1. Implementation: The Production Boilerplate</h2>
+    <p>In a production environment, never write GUI code by hand (e.g. `QtWidgets.QPushButton("Click Me")`). Use <strong>Qt Designer</strong> and load the `.ui` file dynamically. This separates Design from Logic.</p>
+
+    <div class="code-block">
+      <h3>Python: The PySide6 Setup</h3>
+      <pre><code class="language-python">from PySide6 import QtWidgets, QtCore, QtGui
+from shiboken6 import wrapInstance
+import maya.cmds as cmds
+import maya.OpenMayaUI as omui
+
+def get_maya_window():
+    """Get the Maya main window as a QWidget pointer"""
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+
+class CaptureTool(QtWidgets.QMainWindow):
+    def __init__(self, parent=get_maya_window()):
+        super(CaptureTool, self).__init__(parent)
+        
+        # 1. Load UI (Dynamic Loading)
+        # Note: In PySide6, we typically use QUiLoader or convert via pyside6-uic
+        self.ui = self.load_ui("capture_tool.ui")
+        self.setCentralWidget(self.ui)
+        
+        # 2. Connect Signals (The Wiring)
+        self.ui.btn_export.clicked.connect(self.on_export_clicked)
+        
+    def load_ui(self, path):
+        # ... logic to load .ui file ...
+        pass
+
+    def on_export_clicked(self):
+        print("Exporting...")</code></pre>
+    </div>
+
+    <h2>2. Architecure: The Model-View-Controller (MVC)</h2>
+    <p>Junior TAs write "Spaghetti Code" where the button click logic is mixed with the math logic. Senior TAs use <strong>MVC</strong>.</p>
+    
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                  MODEL - VIEW - CONTROLLER                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌────────────┐        ┌────────────┐        ┌────────────┐    │
+│   │ VIEW (UI)  │ ◀────▶ │ CONTROLLER │ ◀────▶ │ MODEL      │    │
+│   │ " The Face"│        │ "The Bridge"│        │ "The Brain"│    │
+│   └────────────┘        └────────────┘        └────────────┘    │
+│         │                      │                      │         │
+│   Buttons, Windows      Connects Signals      Pure Logic        │
+│   (PySide/Qt)           to Functions          (Math, File I/O)  │
+│                                               *No UI imports*   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Why This Matters</div>
+      <p>By separating the <strong>Model</strong> (Brain), you can run your tool in <strong>Headless Mode</strong> on a server. The server doesn't have a screen, so it only loads the Model. If your logic is tied to a "Button Click", the server fails.</p>
+    </div>
+
+    <h2>3. The Anti-Freeze Rule: Threading</h2>
+    <p>Most content creation apps (Maya, Unity) are <strong>Single Threaded</strong> using the <strong>Global Interpreter Lock (GIL)</strong>. If you run a heavy loop on the main thread, the UI freezes.</p>
+
+    <div class="code-block">
+      <h3>Python: The Worker Pattern (QThread)</h3>
+      <p><em>Scenario: "Copy 100GB of data without freezing Maya."</em></p>
+      <pre><code class="language-python">from PySide6 import QtCore
+import time
+
+# 1. The Worker (Does the heavy lifting)
+class FileCopyWorker(QtCore.QObject):
+    finished = QtCore.Signal()
+    progress = QtCore.Signal(int)
+
+    def run(self):
+        # HEAVY TASK HERE
+        for i in range(100):
+            time.sleep(0.1) # Simulate copying file
+            self.progress.emit(i) # Update Progress Bar
+        
+        self.finished.emit()
+
+# 2. The Context (The UI)
+class MyTool(QtWidgets.QWidget):
+    def start_copy(self):
+        # Create Thread & Worker
+        self.thread = QtCore.QThread()
+        self.worker = FileCopyWorker()
+        self.worker.moveToThread(self.thread)
+        
+        # Connect Signals
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.worker.progress.connect(self.update_progress_bar)
+        
+        # Start!
+        self.thread.start()</code></pre>
+    </div>
+
+    <h2>4. Technical Drill: Interview Prep</h2>
+    <div class="callout callout-warning">
+      <div class="callout-title">🗣️ Interview Prompt</div>
+      <p><strong>"Why does my Maya tool crash when I try to create a sphere from a background thread?"</strong></p>
+    </div>
+    <p><strong>The Answer: Thread Safety.</strong></p>
+    <p>The Maya API (`maya.cmds` or `OpenMaya`) is <strong>NOT thread-safe</strong>. You simply cannot touch the Scene Graph from a secondary thread. It will segfault immediately.</p>
+    <p><strong>The Solution:</strong></p>
+    <ol>
+        <li>The Thread does the calculation (e.g., parsing a JSON file).</li>
+        <li>The Thread emits a <strong>Signal</strong> with the data (e.g., "Create Sphere at X,Y,Z").</li>
+        <li>The Main Thread (UI) receives the Signal and executes `maya.cmds.polySphere()`.</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>The Anti-Freeze Rule:</strong> Never run heavy calculations on the Main Thread. It freezes the UI.</li>
+      <li><strong>MVC Pattern:</strong> Separate your Logic (Model) from your GUI (View) so it can run headless later.</li>
+      <li><strong>Maya API Thread Safety:</strong> You cannot touch the Maya Scene from a worker thread. Use Signals to talk back to the main thread.</li>
+      <li><strong>Context Managers:</strong> Use `with` statements to ensure scene state (AutoKey, Undo) is restored even if the tool crashes.</li>
+      <li><strong>Production Boilerplate:</strong> Dynamically load `.ui` files instead of hardcoding buttons in Python.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: The Sims UGC</div>
+      <p>In <strong>The Sims</strong>, we release tools to the public. If our internal tool crashes, an artist complains. If a public tool crashes, the forums explode. We use <strong>Context Managers</strong> and <strong>Try/Except</strong> blocks obsessively to ensure that no matter what the user processes, the tool fails gracefully and never corrupts their save data.</p>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="02-asset-management.html">
+        <span class="label">← Back to</span>
+        <span class="title">Pipeline & Perforce</span>
+      </a>
+      <a href="04-automation-ci.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Automation & CI</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EA Capture Engineering | Balanced Prep</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="index.html">Curriculum</a>
+        <a href="cheatsheet.html">Reference</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>Capture Pipeline Engineering</h1>
+      <p class="hero-subtitle">The Strategy, The Tactics, and The Tech.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🎯 The Goal</div>
+      <p>This course prepares you for the <strong>Senior Technical Artist</strong> interview. We balance high-level system design (The "Why") with specific implementation details (The "How").</p>
+    </div>
+
+    <h2>Module 1: The Production Lifecycle</h2>
+    <p>How data flows from the real world into the game engine.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/01-capture-pipeline.html" class="lesson-card">
+        <div class="lesson-card-number">01</div>
+        <div class="lesson-card-content">
+          <h3>The Capture Pipeline</h3>
+          <p>From Stage to Engine. Understanding the journey of a motion clip: Solving, Retargeting, and the `.c3d` format.</p>
+        </div>
+      </a>
+
+      <a href="lessons/02-asset-management.html" class="lesson-card">
+        <div class="lesson-card-number">02</div>
+        <div class="lesson-card-content">
+          <h3>Asset Management Strategy</h3>
+          <p>Perforce Strategies. Why we lock binary files, how Streams work, and avoiding "Merge Hell".</p>
+        </div>
+      </a>
+    </div>
+
+    <h2>Module 2: Tech Art Tooling</h2>
+    <p>Building the cockpit for the artists.</p>
+    
+    <div class="lesson-grid">
+      <a href="lessons/03-tool-design.html" class="lesson-card">
+        <div class="lesson-card-number">03</div>
+        <div class="lesson-card-content">
+          <h3>Designing Robust Tools</h3>
+          <p>UX for Artists. The Model-View-Controller pattern, and why Threading prevents the "Frozen UI".</p>
+        </div>
+      </a>
+
+      <a href="lessons/04-automation-ci.html" class="lesson-card">
+        <div class="lesson-card-number">04</div>
+        <div class="lesson-card-content">
+          <h3>Automation & CI</h3>
+          <p>The Robot in the Basement. Headless execution, Docker containers, and catching errors early.</p>
+        </div>
+      </a>
+    </div>
+
+    <h2>Module 3: Infrastructure at Scale</h2>
+    <p>When "My Machine" isn't enough.</p>
+
+    <div class="lesson-grid">
+      <a href="lessons/05-render-farm.html" class="lesson-card">
+        <div class="lesson-card-number">05</div>
+        <div class="lesson-card-content">
+          <h3>The Render Farm</h3>
+          <p>Factory Logic. Jobs, Tasks, and Dependencies. How to process 10,000 files overnight.</p>
+        </div>
+      </a>
+
+      <a href="lessons/06-data-strategy.html" class="lesson-card">
+        <div class="lesson-card-number">06</div>
+        <div class="lesson-card-content">
+          <h3>Data Strategy</h3>
+          <p>The Digital Landfill. Validation pipelines (Hashes) and Tiered Storage (Hot/Warm/Cold).</p>
+        </div>
+      </a>
+    </div>
+
+    <h2>Module 4: Leadership</h2>
+    <p>Thinking like a Principal Engineer.</p>
+
+    <div class="lesson-grid">
+      <a href="lessons/07-leadership.html" class="lesson-card">
+        <div class="lesson-card-number">07</div>
+        <div class="lesson-card-content">
+          <h3>System Design & Soft Skills</h3>
+          <p>Whiteboarding complex systems and mentoring junior TAs. The art of the Code Review.</p>
+        </div>
+      </a>
+    </div>
+
+    <h2 style="margin-top: 4rem;">Technical Reference</h2>
+    <div class="lesson-grid">
+      <a href="cheatsheet.html" class="lesson-card" style="border-color: var(--accent-green);">
+        <div class="lesson-card-number" style="color: var(--accent-green);">📋</div>
+        <div class="lesson-card-content">
+          <h3 style="color: var(--accent-green);">Interview Cheat Sheet</h3>
+          <p>Key terms, definitions, and code snippets for quick recall.</p>
+        </div>
+      </a>
+    </div>
+
+  </div>
+</body>
+</html>

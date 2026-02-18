@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 7: System Design & Leadership | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 07</div>
+      <h1>System Design & Leadership</h1>
+      <p class="lesson-subtitle">Thinking like an Architect: Decoupling, Failure Modes, and Cultural Engineering.</p>
+    </div>
+
+    <h2>The Whiteboard Interview</h2>
+    <p>In a Senior TA interview, they will hand you a marker and say: "Design a pipeline to ingest 1TB of photos per day." Do not write code. Draw boxes. They are testing if you understand <strong>Latency vs Throughput</strong>.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    NAIVE DESIGN (The Junior)                    │
+│   [Camera] ────(Network)────▶ [Server]                          │
+│   *Fail:* If Network drops, Camera stops. Shoot ruined.         │
+│   *Issue:* Tightly Coupled.                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                    ROBUST DESIGN (The Architect)                │
+│   [Camera] ──▶ [Local SSD Buffer] ──▶ [Uploader Service]        │
+│                      │                       │                  │
+│                      ▼                       ▼                  │
+│               Safe even if Net       Retries until Success      │
+│               is down.               (Decoupled via Queue)      │
+│                                              │                  │
+│                                              ▼                  │
+│                                          [Server]               │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>1. The Principle of Decoupling (Queues)</h2>
+    <p>Never connect a critical producer (Camera) directly to a flaky consumer (Network). Always use a <strong>Message Queue</strong>.</p>
+    <ul>
+      <li><strong>Producer:</strong> Writes to Queue (Fast).</li>
+      <li><strong>Consumer:</strong> Reads from Queue (Slow).</li>
+      <li><strong>Benefit:</strong> The Producer can work even if the Consumer is offline.</li>
+    </ul>
+
+    <h2>2. Technical Drill: Design Prompts</h2>
+    <p>Practice these 3 scenarios. Draw them out.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">Scenario A: The Multi-Site Sync</div>
+      <p><strong>Problem:</strong> "We have a studio in Vancouver and one in Guildford (UK). How do we keep 50TB of data in sync so both teams can work?"</p>
+      <p><strong>Solution: The Proxy Pattern.</strong></p>
+      <ul>
+          <li><strong>Central Source:</strong> Perforce Server in Vancouver (Master).</li>
+          <li><strong>Local Caching:</strong> Perforce Proxy server in Guildford.</li>
+          <li><strong>Pre-Fetch:</strong> A script runs at 3AM to force-sync the Proxy with yesterday's dailies, so when Guildford artists arrive at 9AM, the data is local (Fast).</li>
+      </ul>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">Scenario B: The Global Asset ID</div>
+      <p><strong>Problem:</strong> "We have assets in Perforce, Shotgun, and Jira. How do we link them?"</p>
+      <p><strong>Solution: The UUID/manifest.</strong></p>
+      <ul>
+          <li><strong>The Key:</strong> Use a GUID (Globally Unique ID) generated at asset creation.</li>
+          <li><strong>The Sidecar:</strong> Every asset gets a `.json` sidecar file containing this ID.</li>
+          <li><strong>The Index:</strong> A central DB (Lesson 06) maps ID -> P4 Path -> Shotgun ID.</li>
+      </ul>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">Scenario C: The "Crash Reporter"</div>
+      <p><strong>Problem:</strong> "Maya is crashing randomly. We don't know why."</p>
+      <p><strong>Solution: Telemetry.</strong></p>
+      <ul>
+          <li><strong>Hook:</strong> Write a `userSetup.py` script that hooks into `maya.cmds.scriptJob(event="quitApplication")`.</li>
+          <li><strong>Payload:</strong> Capture RAM usage, Loaded Plugins, VRAM, and Last Command.</li>
+          <li><strong>Transport:</strong> Send JSON payload to an ELK Stack (Elasticsearch, Logstash, Kibana) for visualization. "Oh look, everyone crashing has the 'BetaTools' plugin loaded."</li>
+      </ul>
+    </div>
+
+    <h2>3. Cultural Engineering (Code Reviews)</h2>
+    <p>You are the gatekeeper. Your job is to improve the team, not just the code.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Concept: The "Why" Rule</div>
+      <p>Never just say "Fix this." Explain <strong>The Constraint</strong>.<br>
+      <strong>Bad:</strong> "Don't use `Z:\` path." (Author feels stupid).<br>
+      <strong>Good:</strong> "Linux render nodes don't have drive letters, so `Z:\` will cause a farm failure. Please use `os.getenv('PROJECT_ROOT')` instead." (Author learns system architecture).</p>
+    </div>
+
+    <h2>4. Behavioral Prep (The Bar Raiser)</h2>
+    <p>Finally, they will ask: "Tell me about a time you failed." Use the <strong>STAR Method</strong>.</p>
+    
+    <div class="code-block">
+      <h3>Example Answer: The Broken Build</h3>
+      <ul>
+        <li><strong>Situation:</strong> "We were shipping the E3 demo. The farm was crashing on every 10th frame."</li>
+        <li><strong>Task:</strong> "I needed to fix the stability without stopping the artists."</li>
+        <li><strong>Action:</strong> "I identified a memory leak in the shader compiler. I wrote a 'Chunking' script (Lesson 05) to restart Maya every 5 frames, bypassing the leak."</li>
+        <li><strong>Result:</strong> "The farm stability went from 50% to 100%. We shipped the demo on time."</li>
+      </ul>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Decoupling:</strong> Use queues to separate Producers (Camera) from Consumers (Network). Never couple tightly.</li>
+      <li><strong>Design for Failure:</strong> Assume the network will fail, the disk will fill up, and the renderer will crash. Plan for the "Sad Path".</li>
+      <li><strong>Latency vs Throughput:</strong> Understand the difference. Optimization requires knowing which one is the bottleneck.</li>
+      <li><strong>Code Review is Culture:</strong> Use reviews to teach architecture, not just to fix bugs. Explain the "Why".</li>
+      <li><strong>Telemetry:</strong> You can't fix what you can't measure. Log everything to a central server (ELK Stack).</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance: Need for Speed</div>
+      <p>In <strong>Need for Speed</strong>, the "car usage" telemetry tells designers which cars are popular. In Tech Art, "tool usage" telemetry tells us which tools are broken. If we see the "Import Car" tool throwing errors for 50% of users, we prioritize fixing it immediately. We don't wait for artists to report bugs—the system reports them for us.</p>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="06-data-strategy.html">
+        <span class="label">← Back to</span>
+        <span class="title">Data Strategy</span>
+      </a>
+      <a href="../cheatsheet.html">
+        <span class="label">Next Step →</span>
+        <span class="title">The Master Cheat Sheet</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
