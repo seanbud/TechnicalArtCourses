@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Architecture Map Pt. 2 | EA Capture Prep</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Custom styles for architecture diagrams */
+    .arch-section {
+      margin: 3rem 0;
+      padding-bottom: 3rem;
+      border-bottom: 1px solid #333;
+    }
+    .arch-section:last-of-type {
+      border-bottom: none;
+    }
+    .arch-section h2 {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .arch-section h2 .section-num {
+      background: var(--accent-green);
+      color: #000;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .arch-label {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+    }
+    .label-pattern { background: #1a3a2a; color: #00ff9d; border: 1px solid #00ff9d; }
+    .label-infra { background: #2a2a1a; color: #ffcc00; border: 1px solid #ffcc00; }
+    .label-strategy { background: #1a1a3a; color: #6699ff; border: 1px solid #6699ff; }
+    .label-defense { background: #3a1a1a; color: #ff6666; border: 1px solid #ff6666; }
+    .ref-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--accent-green);
+      text-decoration: none;
+      opacity: 0.7;
+    }
+    .ref-link:hover { opacity: 1; }
+    .diagram-caption {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
+    .pattern-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 768px) {
+      .pattern-grid { grid-template-columns: 1fr; }
+    }
+    .pattern-card {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .pattern-card h4 {
+      color: #00ff9d;
+      margin-bottom: 0.5rem;
+    }
+    .pattern-card p {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin: 0;
+    }
+    .state-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+    .state-node {
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    .state-closed { background: #1a3a2a; color: #00ff9d; border: 2px solid #00ff9d; }
+    .state-open { background: #3a1a1a; color: #ff6666; border: 2px solid #ff6666; }
+    .state-half { background: #2a2a1a; color: #ffcc00; border: 2px solid #ffcc00; }
+    .state-arrow {
+      color: #666;
+      font-size: 1.5rem;
+    }
+    .state-label {
+      font-size: 0.7rem;
+      color: #888;
+      text-align: center;
+      display: block;
+      margin-top: 0.25rem;
+    }
+    .metric-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 0.5rem 0;
+    }
+    .metric-bar-label {
+      min-width: 120px;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    .metric-bar-track {
+      flex: 1;
+      height: 8px;
+      background: #1e1e1e;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .metric-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .metric-bar-value {
+      min-width: 60px;
+      text-align: right;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Deep Dive</div>
+      <h1>System Architecture Map — Part 2</h1>
+      <p class="lesson-subtitle">Pipeline architecture patterns from Module 6. The blueprints behind centralization, resilience, and unification.</p>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 1 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">1</span> The Actual EA Capture Data Flow</h2>
+      <p><span class="arch-label label-infra">Infrastructure</span> What the pipeline ACTUALLY looks like — vendors, handoffs, and manual stages included.</p>
+
+      <div class="diagram">
+┌─────────┐     ┌─────────────┐     ┌─────────────────┐     ┌────────────────┐
+│  STAGE  │────▶│  VENDOR SW  │────▶│  POST-PRODUCTION │────▶│   DELIVERY     │
+│         │     │             │     │                  │     │                │
+│ • Actors│     │ • Vicon     │     │ • Bone rename    │     │ • NAS (SMB)    │
+│ • IR    │     │   Shogun    │     │ • Contact fix    │     │ • Perforce     │
+│   Cameras│    │ • DI4D      │     │ • Gap fill       │     │ • S3 archive   │
+│ • Markers│    │   (facial)  │     │ • Scale/units    │     │                │
+│         │     │ • Artec     │     │                  │     │ FBX ──▶ Artist │
+│ .c3d out│     │   (scans)   │     │ ⚠️ MANUAL WORK   │     │   workstation  │
+└─────────┘     └─────────────┘     └──────────────────┘     └────────────────┘
+      │                                      │
+      │         EA's Role: ORCHESTRATION      │
+      └──────── Config, Automation, QA ───────┘
+      </div>
+      <p class="diagram-caption">Lesson 09 — Vendors do the heavy compute. EA orchestrates the data flow between stages.</p>
+      <a href="lessons/09-real-ea-pipeline.html" class="ref-link">→ Full lesson: The Real EA Pipeline</a>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 2 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">2</span> Centralized Pipeline: Shared Core + Per-Client Config</h2>
+      <p><span class="arch-label label-pattern">Pattern</span> One pipeline engine, 15 configuration profiles. Client names never appear in source code.</p>
+
+      <div class="diagram">
+                         ┌───────────────┐
+                         │  SHARED CORE  │
+                         │  • Ingest     │
+                         │  • Validate   │
+                         │  • Solve      │
+                         │  • Retarget   │
+                         │  • Export     │
+                         │  • Deliver    │
+                         └───────┬───────┘
+                                 │
+                 ┌───────────────┼───────────────┐
+                 ▼               ▼               ▼
+          ┌────────────┐  ┌────────────┐  ┌────────────┐
+          │ fc.json    │  │ madden.json│  │ meta.json  │  ... (15 total)
+          │            │  │            │  │            │
+          │ skeleton:  │  │ skeleton:  │  │ skeleton:  │
+          │  EA_Sports │  │  Madden_v2 │  │  MetaHuman │
+          │ format:fbx │  │ format:fbx │  │ format:gltf│
+          │ deliver:p4 │  │ deliver:nas│  │ deliver:s3 │
+          └────────────┘  └────────────┘  └────────────┘
+      </div>
+      <p class="diagram-caption">Lesson 10 — The golden rule: grep for "FIFA" in source → design flaw.</p>
+
+      <h3>The Three Architecture Layers</h3>
+      <div class="pattern-grid">
+        <div class="pattern-card">
+          <h4>Config Registry</h4>
+          <p>Scans <code>/config/clients/*.json</code> at startup. Each profile specifies skeleton, naming pattern, export format, and delivery destination. New client = new JSON file, zero code changes.</p>
+        </div>
+        <div class="pattern-card">
+          <h4>Export Adapters (Factory)</h4>
+          <p>FBX, glTF, USD — each has its own adapter class. A factory picks the right one from the client config. Adding a format = one new class.</p>
+        </div>
+        <div class="pattern-card">
+          <h4>Delivery Adapters (Factory)</h4>
+          <p>Perforce, NAS/SMB, S3, SFTP — same factory pattern. The pipeline calls <code>deliver()</code> and doesn't know where the file goes.</p>
+        </div>
+        <div class="pattern-card">
+          <h4>Plugin Architecture</h4>
+          <p>When a client needs genuinely unique behavior (not configurable), isolate it in a plugin with defined hook points: <code>pre_export</code>, <code>post_export</code>, <code>custom_validate</code>.</p>
+        </div>
+      </div>
+      <a href="lessons/10-pipeline-centralization.html" class="ref-link">→ Full lesson: Pipeline Centralization</a>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 3 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">3</span> Defense in Depth: The Four Layers</h2>
+      <p><span class="arch-label label-defense">Resilience</span> Layered defenses guarantee the 10-minute rule: no pipeline failure costs more than 10 minutes of stage time.</p>
+
+      <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────┐
+│  Layer 1: PREVENTION                                                 │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Input validation · Disk monitoring · Config checks · Pinning  │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Layer 2: DETECTION                                                  │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Health daemon (30s heartbeat) · Queue depth · Error rate (>5%)│  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Layer 3: RECOVERY                                                   │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Retry + backoff · Circuit breaker · NAS failover · Local queue│  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Layer 4: HUMAN RESPONSE                                             │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Slack/PagerDuty · Runbooks · Escalation: TA → IT → Vendor     │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
+      </div>
+      <p class="diagram-caption">Lesson 11 — If one layer fails, the next catches it. The stage never stops recording.</p>
+
+      <h3>Circuit Breaker State Machine</h3>
+      <div class="state-diagram">
+        <div>
+          <div class="state-node state-closed">CLOSED</div>
+          <span class="state-label">Normal</span>
+        </div>
+        <div class="state-arrow">──▶<br><span style="font-size:0.65rem; color:#888;">N failures</span></div>
+        <div>
+          <div class="state-node state-open">OPEN</div>
+          <span class="state-label">All fail instantly</span>
+        </div>
+        <div class="state-arrow">──▶<br><span style="font-size:0.65rem; color:#888;">timeout</span></div>
+        <div>
+          <div class="state-node state-half">HALF-OPEN</div>
+          <span class="state-label">Test 1 request</span>
+        </div>
+        <div class="state-arrow">──▶<br><span style="font-size:0.65rem; color:#888;">success?</span></div>
+        <div>
+          <div class="state-node state-closed">CLOSED</div>
+          <span class="state-label">Recovered</span>
+        </div>
+      </div>
+
+      <h3>Graceful Degradation: NAS Failover</h3>
+      <div class="diagram">
+      Normal:   Stage ──▶ NAS Primary ──▶ Artists
+      Failover: Stage ──▶ Local SSD (queue) ──▶ [NAS recovers] ──▶ Auto-flush ──▶ NAS
+      Result:   Zero stage downtime. Actors never know.
+      </div>
+
+      <h3>Key Monitoring Metrics</h3>
+      <div style="margin: 1rem 0;">
+        <div class="metric-bar">
+          <span class="metric-bar-label">Queue Depth</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:30%; background:#00ff9d;"></div></div>
+          <span class="metric-bar-value" style="color:#00ff9d;">12 takes</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Error Rate</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:8%; background:#00ff9d;"></div></div>
+          <span class="metric-bar-value" style="color:#00ff9d;">1.2%</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">NAS Free</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:65%; background:#ffcc00;"></div></div>
+          <span class="metric-bar-value" style="color:#ffcc00;">35% free</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Delivery Latency</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:40%; background:#00ff9d;"></div></div>
+          <span class="metric-bar-value" style="color:#00ff9d;">18 min</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Sweeper Heartbeat</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#00ff9d;"></div></div>
+          <span class="metric-bar-value" style="color:#00ff9d;">ALIVE</span>
+        </div>
+      </div>
+      <a href="lessons/11-defensive-architecture.html" class="ref-link">→ Full lesson: Defensive Architecture</a>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 4 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">4</span> The Universal Pipeline: Marker + Markerless Unification</h2>
+      <p><span class="arch-label label-strategy">Strategy</span> Different input, same output. Both technologies converge at a universal internal format.</p>
+
+      <div class="diagram">
+  DIVERGENT (Technology-Specific)
+
+  ┌──────────────────┐         ┌──────────────────┐
+  │ MARKER PIPELINE  │         │ MARKERLESS PIPE  │
+  │                  │         │                  │
+  │ .c3d ingest      │         │ Video ingest     │
+  │ Vicon solve      │         │ ML inference     │
+  │ Marker cleanup   │         │ Jitter filter    │
+  └────────┬─────────┘         └────────┬─────────┘
+           │                            │
+           ▼                            ▼
+  ┌──────────────────────────────────────────────────┐
+  │        CONVERGENCE POINT: CaptureResult          │
+  │        • Joint names (standardized)              │
+  │        • Joint rotations per frame               │
+  │        • Metadata (take, fps, source tech)       │
+  └──────────────────────┬───────────────────────────┘
+                         │
+  CONVERGENT (Universal Code — identical for both)
+                         │
+  ┌──────────────────────▼───────────────────────────┐
+  │ • Retarget (HumanIK)       • Export (per config) │
+  │ • Validate (skeleton/QA)   • Deliver (per config)│
+  │ • Notify (Slack/email)                           │
+  └──────────────────────────────────────────────────┘
+      </div>
+      <p class="diagram-caption">Lesson 12 — Everything below the convergence point is shared code. That's the "universal code."</p>
+
+      <h3>Marker vs. Markerless Comparison</h3>
+      <table>
+        <tr><th>Aspect</th><th>Marker-Based</th><th>Markerless</th></tr>
+        <tr><td><strong>Input</strong></td><td>IR cameras + reflective markers</td><td>RGB video cameras</td></tr>
+        <tr><td><strong>Raw Data</strong></td><td>.c3d (KB/frame)</td><td>Video (MB/frame)</td></tr>
+        <tr><td><strong>Accuracy</strong></td><td>Sub-millimeter ✦</td><td>~5-15mm (improving)</td></tr>
+        <tr><td><strong>Setup</strong></td><td>High (suit, calibration)</td><td>Minimal (cameras only)</td></tr>
+        <tr><td><strong>Output</strong></td><td colspan="2" style="text-align:center; color: var(--accent-green); font-weight:bold;">Identical: joint rotations → skeleton → FBX</td></tr>
+      </table>
+
+      <h3>Phased Migration Roadmap</h3>
+      <div style="margin: 1.5rem 0;">
+        <div class="metric-bar">
+          <span class="metric-bar-label">Phase 1 (0-6mo)</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#00ff9d;"></div></div>
+          <span class="metric-bar-value" style="color:#aaa; min-width:180px;">Define convergence format</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Phase 2 (6-12mo)</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#6699ff;"></div></div>
+          <span class="metric-bar-value" style="color:#aaa; min-width:180px;">Parallel markerless testing</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Phase 3 (12-18mo)</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#ffcc00;"></div></div>
+          <span class="metric-bar-value" style="color:#aaa; min-width:180px;">A/B quality validation</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Phase 4 (18-24mo)</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#ff9933;"></div></div>
+          <span class="metric-bar-value" style="color:#aaa; min-width:180px;">Canary: low-risk content</span>
+        </div>
+        <div class="metric-bar">
+          <span class="metric-bar-label">Phase 5 (24-36mo)</span>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%; background:#ff6666;"></div></div>
+          <span class="metric-bar-value" style="color:#aaa; min-width:180px;">Full unified production</span>
+        </div>
+      </div>
+      <a href="lessons/12-universal-pipeline.html" class="ref-link">→ Full lesson: Universal Pipeline Vision</a>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 5 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">5</span> Design Pattern Quick-Reference</h2>
+      <p><span class="arch-label label-pattern">Patterns</span> The four patterns that answer 80% of interview architecture questions.</p>
+
+      <div class="pattern-grid">
+        <div class="pattern-card">
+          <h4>🔌 Adapter Pattern</h4>
+          <p><strong>Problem:</strong> Vendor lock-in<br>
+          <strong>Solution:</strong> Wrap each vendor's SDK behind a common interface<br>
+          <strong>Result:</strong> Swap vendors without changing downstream code<br>
+          <strong>Used in:</strong> Ingest (Vicon vs OptiTrack), Export (FBX vs glTF), Delivery (P4 vs NAS vs S3)</p>
+        </div>
+        <div class="pattern-card">
+          <h4>🏭 Factory Pattern</h4>
+          <p><strong>Problem:</strong> Choosing the right adapter at runtime<br>
+          <strong>Solution:</strong> A factory reads config and returns the correct adapter<br>
+          <strong>Result:</strong> <code>get_export_adapter(profile)</code> — one line, any format<br>
+          <strong>Used in:</strong> Export factory, Delivery factory, Ingest factory</p>
+        </div>
+        <div class="pattern-card">
+          <h4>♟️ Strategy Pattern</h4>
+          <p><strong>Problem:</strong> Marker vs markerless need different processing<br>
+          <strong>Solution:</strong> Abstract pipeline stages with swappable implementations<br>
+          <strong>Result:</strong> Technology choice is config, not code branches<br>
+          <strong>Used in:</strong> Universal pipeline (ingest + cleanup strategies)</p>
+        </div>
+        <div class="pattern-card">
+          <h4>🔒 Circuit Breaker</h4>
+          <p><strong>Problem:</strong> Hammering a dead service backs up the entire queue<br>
+          <strong>Solution:</strong> After N failures, fail ALL requests instantly. Auto-retry after cooldown<br>
+          <strong>Result:</strong> Cascading failures become instant failure + alert<br>
+          <strong>Used in:</strong> NAS writes, P4 submits, API calls</p>
+        </div>
+      </div>
+      <a href="lessons/13-tech-interview-prep.html" class="ref-link">→ Full lesson: Tech Interview Deep Dive</a>
+    </div>
+
+    <!-- ═══════════════════════════════ DIAGRAM 6 ═══════════════════════════════ -->
+    <div class="arch-section">
+      <h2><span class="section-num">6</span> Interview Answer Framework</h2>
+      <p><span class="arch-label label-strategy">Interview</span> Structure every technical answer with this 5-step framework.</p>
+
+      <div class="diagram">
+  ┌───────────────────────────────────────────────────────────────────┐
+  │                  TECHNICAL ANSWER FRAMEWORK                       │
+  ├───────────────────────────────────────────────────────────────────┤
+  │                                                                   │
+  │  1. CONTEXT        (10s)   "In a capture pipeline, the issue is…" │
+  │  2. ARCHITECTURE   (30s)   Name the pattern. Draw it.             │
+  │  3. IMPLEMENTATION (60s)   Python, specific libraries, APIs.      │
+  │  4. TRADEOFF       (15s)   "The alternative would be…"            │
+  │  5. METRIC         (10s)   "Reduced from X hours to Y minutes."   │
+  │                                                                   │
+  │  ⚠️  "Made it faster" = WEAK.                                     │
+  │  ✅  "1,000 hours/year of artist time recovered" = STRONG.        │
+  │                                                                   │
+  └───────────────────────────────────────────────────────────────────┘
+      </div>
+
+      <h3>Key Vocabulary — Drop These Naturally</h3>
+      <table>
+        <tr><th>Term</th><th>One-Liner</th></tr>
+        <tr><td><strong>Convergence point</strong></td><td>"Both technologies converge at the CaptureResult format"</td></tr>
+        <tr><td><strong>Config-driven</strong></td><td>"Client specifics are config-driven, never hardcoded"</td></tr>
+        <tr><td><strong>Graceful degradation</strong></td><td>"Stage never stops — queue locally, flush on recovery"</td></tr>
+        <tr><td><strong>Canary deployment</strong></td><td>"Route 10% through new version, monitor, then roll out"</td></tr>
+        <tr><td><strong>Sidecar metadata</strong></td><td>"Every FBX ships with a JSON sidecar for provenance"</td></tr>
+        <tr><td><strong>Data gravity</strong></td><td>"Processing moves to where data lives, not vice versa"</td></tr>
+        <tr><td><strong>Sweeper / watcher</strong></td><td>"File watcher daemon sweeps captures into the pipeline"</td></tr>
+        <tr><td><strong>Residual error</strong></td><td>"Solve quality measured by residual in millimeters"</td></tr>
+      </table>
+      <a href="lessons/13-tech-interview-prep.html" class="ref-link">→ Full lesson: Tech Interview Deep Dive</a>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="cheatsheet.html">
+        <span class="label">← Back to</span>
+        <span class="title">System Map Pt. 1</span>
+      </a>
+      <a href="index.html">
+        <span class="label">Return to →</span>
+        <span class="title">Course Home</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
