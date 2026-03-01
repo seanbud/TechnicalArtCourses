@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 10: Pipeline Centralization | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 10</div>
+      <h1>Pipeline Centralization: One Pipeline For 15 Vendor-Clients</h1>
+      <p class="lesson-subtitle">How to serve 15 different clients who all want different things — without maintaining 15 different pipelines.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Core Problem</div>
+      <p>EA's capture studio doesn't serve one team. It serves <strong>~15 different vendor-clients</strong> — different game teams, different external partners, different projects. Each wants output in a specific format, with specific naming, specific skeletons, delivered to a specific location. Without centralization, you end up maintaining 15 separate pipelines. That's a staffing and maintenance nightmare.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Problem: N Clients × M Requirements = Chaos</h2>
+    <p>Imagine this scenario:</p>
+
+    <table>
+      <tr>
+        <th>Client</th>
+        <th>Skeleton</th>
+        <th>Naming</th>
+        <th>Format</th>
+        <th>Delivery</th>
+      </tr>
+      <tr>
+        <td>FC (FIFA) Team</td>
+        <td>EA_Sports_v3</td>
+        <td><code>FC_YYYYMMDD_scNN_shNN</code></td>
+        <td>FBX 2020</td>
+        <td>Perforce //depot/fc/mocap/</td>
+      </tr>
+      <tr>
+        <td>Madden Team</td>
+        <td>Madden_v2</td>
+        <td><code>MN_shotName_take##</code></td>
+        <td>FBX 2020</td>
+        <td>NAS \\nas02\madden\</td>
+      </tr>
+      <tr>
+        <td>Battlefield</td>
+        <td>Frostbite_Generic</td>
+        <td><code>BF_actorID_actionType</code></td>
+        <td>FBX 2019</td>
+        <td>Perforce //depot/bf/anim/</td>
+      </tr>
+      <tr>
+        <td>Metaverse Partner</td>
+        <td>MetaHuman_compat</td>
+        <td><code>MV_avatarID_motion</code></td>
+        <td>glTF / USD</td>
+        <td>S3 bucket</td>
+      </tr>
+      <tr>
+        <td>External Vendor A</td>
+        <td>Vendor_Custom</td>
+        <td><code>VEND_YYMMDD_take</code></td>
+        <td>FBX 2020</td>
+        <td>SFTP drop</td>
+      </tr>
+    </table>
+
+    <p>If you write a custom script for each client, you end up with 15 export scripts, 15 naming validators, 15 delivery scripts. When you change the core pipeline (say, upgrading the FBX exporter), you have to update all 15. <strong>This doesn't scale.</strong></p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. The Solution: Shared Core + Per-Client Config</h2>
+    <p>The architecture pattern is: <strong>one pipeline engine, many configuration profiles.</strong></p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────┐
+│                   CENTRALIZED PIPELINE ARCHITECTURE                   │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│                    ┌───────────────┐                                   │
+│                    │  SHARED CORE  │                                   │
+│                    │  • Ingest     │                                   │
+│                    │  • Validate   │                                   │
+│                    │  • Solve      │                                   │
+│                    │  • Retarget   │                                   │
+│                    │  • Export     │                                   │
+│                    │  • Deliver    │                                   │
+│                    └───────┬───────┘                                   │
+│                            │                                           │
+│            ┌───────────────┼───────────────┐                           │
+│            ▼               ▼               ▼                           │
+│     ┌────────────┐  ┌────────────┐  ┌────────────┐                    │
+│     │ fc.json    │  │ madden.json│  │ meta.json  │   ... (15 total)   │
+│     │            │  │            │  │            │                     │
+│     │ skeleton:  │  │ skeleton:  │  │ skeleton:  │                     │
+│     │ EA_Sports  │  │ Madden_v2  │  │ MetaHuman  │                     │
+│     │ format:fbx │  │ format:fbx │  │ format:gltf│                     │
+│     │ deliver:p4 │  │ deliver:nas│  │ deliver:s3 │                     │
+│     └────────────┘  └────────────┘  └────────────┘                    │
+│                                                                       │
+│  RULE: The core code NEVER references a specific client.              │
+│  All client-specifics live in config files.                           │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Golden Rule</div>
+      <p>If you grep the core pipeline code and find the word "FIFA" or "Madden" or any client name, <strong>you have a design flaw.</strong> Client specifics belong ONLY in configuration files. The core code reads the config and acts generically.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Python: The Client Config System</h2>
+
+    <div class="code-block">
+      <h3>Example: Client Configuration File</h3>
+      <pre><code class="language-json">{
+    "client_id": "fc_sports",
+    "display_name": "FC (FIFA) Team",
+    
+    "skeleton": {
+        "template": "EA_Sports_v3",
+        "root_joint": "Hips",
+        "required_joints": ["Hips", "Spine", "Spine1", "Spine2", "Head",
+                           "L_Shoulder", "L_Arm", "L_ForeArm", "L_Hand",
+                           "R_Shoulder", "R_Arm", "R_ForeArm", "R_Hand",
+                           "L_UpLeg", "L_Leg", "L_Foot",
+                           "R_UpLeg", "R_Leg", "R_Foot"],
+        "joint_map_file": "maps/fc_joint_map.json"
+    },
+    
+    "naming": {
+        "pattern": "^FC_\\d{8}_sc\\d+_sh\\d+_v\\d{3}$",
+        "example": "FC_20260228_sc01_sh05_v001"
+    },
+    
+    "export": {
+        "format": "fbx",
+        "fbx_version": "FBX202000",
+        "up_axis": "y",
+        "units": "cm",
+        "bake_animation": true,
+        "remove_namespaces": true
+    },
+    
+    "delivery": {
+        "method": "perforce",
+        "depot_path": "//depot/fc/mocap/",
+        "notification": {
+            "slack_channel": "#fc-mocap-delivery",
+            "email": "fc-anim-team@ea.com"
+        }
+    },
+    
+    "validation": {
+        "max_frame_count": 50000,
+        "min_frame_count": 10,
+        "check_foot_contact": true,
+        "max_residual_mm": 1.5
+    }
+}</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: The Client Profile Registry</h3>
+      <pre><code class="language-python">"""
+Client Profile Registry — Loads and manages per-client configurations.
+The core pipeline asks: "What does this client need?" and the registry answers.
+"""
+import json
+import os
+import logging
+from pathlib import Path
+
+log = logging.getLogger("client_registry")
+
+class ClientProfile:
+    """Represents one client's configuration."""
+    
+    def __init__(self, config_path):
+        with open(config_path) as f:
+            self._config = json.load(f)
+        self.client_id = self._config["client_id"]
+        self.display_name = self._config["display_name"]
+        log.info(f"Loaded client profile: {self.display_name}")
+    
+    @property
+    def skeleton_template(self):
+        return self._config["skeleton"]["template"]
+    
+    @property
+    def required_joints(self):
+        return self._config["skeleton"]["required_joints"]
+    
+    @property
+    def naming_pattern(self):
+        return self._config["naming"]["pattern"]
+    
+    @property
+    def export_format(self):
+        return self._config["export"]["format"]
+    
+    @property
+    def delivery_method(self):
+        return self._config["delivery"]["method"]
+    
+    @property
+    def delivery_destination(self):
+        method = self.delivery_method
+        if method == "perforce":
+            return self._config["delivery"]["depot_path"]
+        elif method == "nas":
+            return self._config["delivery"]["nas_path"]
+        elif method == "s3":
+            return self._config["delivery"]["s3_bucket"]
+        elif method == "sftp":
+            return self._config["delivery"]["sftp_host"]
+    
+    def get(self, *keys, default=None):
+        """Dot-path access into the config."""
+        obj = self._config
+        for key in keys:
+            if isinstance(obj, dict) and key in obj:
+                obj = obj[key]
+            else:
+                return default
+        return obj
+
+
+class ClientRegistry:
+    """Discovers and manages all client profiles."""
+    
+    def __init__(self, config_dir):
+        self.config_dir = Path(config_dir)
+        self._profiles = {}
+        self._load_all()
+    
+    def _load_all(self):
+        """Scan the config directory for .json profiles."""
+        for config_file in self.config_dir.glob("*.json"):
+            try:
+                profile = ClientProfile(config_file)
+                self._profiles[profile.client_id] = profile
+                log.info(f"Registered client: {profile.client_id}")
+            except Exception as e:
+                log.error(f"Failed to load {config_file}: {e}")
+    
+    def get_profile(self, client_id) -> ClientProfile:
+        """Get a specific client's profile."""
+        if client_id not in self._profiles:
+            raise ValueError(
+                f"Unknown client: '{client_id}'. "
+                f"Available: {list(self._profiles.keys())}"
+            )
+        return self._profiles[client_id]
+    
+    def list_clients(self):
+        """Return all registered client IDs."""
+        return list(self._profiles.keys())
+
+
+# Usage:
+# registry = ClientRegistry("/pipeline/config/clients/")
+# profile = registry.get_profile("fc_sports")
+# print(profile.export_format)   # "fbx"
+# print(profile.delivery_method) # "perforce"</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Python: The Output Adapter Factory</h2>
+    <p>Different clients need different output formats. The Adapter + Factory pattern from Lesson 08 applies here too — but now for <strong>export</strong> instead of import:</p>
+
+    <div class="code-block">
+      <h3>Python: Per-Client Export Adapters</h3>
+      <pre><code class="language-python">"""
+Output Adapter Factory — Exports processed data in the client's required format.
+"""
+from abc import ABC, abstractmethod
+import logging
+
+log = logging.getLogger("export_adapter")
+
+class BaseExportAdapter(ABC):
+    """All export adapters implement export()."""
+    
+    @abstractmethod
+    def export(self, scene_data, output_path, profile):
+        pass
+
+class FBXExportAdapter(BaseExportAdapter):
+    """Export to FBX with client-specific settings."""
+    
+    def export(self, scene_data, output_path, profile):
+        import maya.cmds as cmds
+        import maya.mel as mel
+        
+        # Apply client-specific FBX settings
+        fbx_version = profile.get("export", "fbx_version", default="FBX202000")
+        mel.eval(f'FBXExportFileVersion -v "{fbx_version}"')
+        
+        if profile.get("export", "bake_animation", default=True):
+            mel.eval('FBXExportBakeComplexAnimation -v true')
+        
+        if profile.get("export", "remove_namespaces", default=False):
+            self._strip_namespaces()
+        
+        cmds.file(output_path, force=True, type="FBX export", exportAll=True)
+        log.info(f"FBX exported: {output_path} (version: {fbx_version})")
+    
+    def _strip_namespaces(self):
+        """Remove all namespaces — common client requirement."""
+        import maya.cmds as cmds
+        namespaces = cmds.namespaceInfo(lon=True, recurse=True)
+        # Remove in reverse order (children first)
+        for ns in reversed(namespaces):
+            if ns not in ('UI', 'shared'):
+                try:
+                    cmds.namespace(removeNamespace=ns, mergeNamespaceWithRoot=True)
+                except:
+                    pass
+
+class GLTFExportAdapter(BaseExportAdapter):
+    """Export to glTF — used by metaverse/real-time clients."""
+    
+    def export(self, scene_data, output_path, profile):
+        # glTF export might use a plugin or external converter
+        import subprocess
+        
+        # First export FBX, then convert
+        temp_fbx = output_path.replace('.gltf', '_temp.fbx')
+        FBXExportAdapter().export(scene_data, temp_fbx, profile)
+        
+        # Convert using FBX2glTF (Facebook's open-source converter)
+        subprocess.run([
+            "FBX2glTF",
+            "--input", temp_fbx,
+            "--output", output_path,
+            "--binary",  # .glb for smaller files
+        ], check=True)
+        
+        import os
+        os.remove(temp_fbx)
+        log.info(f"glTF exported: {output_path}")
+
+class USDExportAdapter(BaseExportAdapter):
+    """Export to USD — for Pixar/Apple/NVIDIA ecosystem clients."""
+    
+    def export(self, scene_data, output_path, profile):
+        import maya.cmds as cmds
+        
+        # Maya 2022+ has built-in USD support
+        cmds.loadPlugin("mayaUsdPlugin", quiet=True)
+        cmds.file(
+            output_path,
+            force=True,
+            type="USD Export",
+            exportAll=True,
+            options="shadingMode=none;exportSkels=auto"
+        )
+        log.info(f"USD exported: {output_path}")
+
+
+# === Factory: Pick adapter based on client config ===
+EXPORT_ADAPTERS = {
+    "fbx":  FBXExportAdapter,
+    "gltf": GLTFExportAdapter,
+    "glb":  GLTFExportAdapter,
+    "usd":  USDExportAdapter,
+    "usda": USDExportAdapter,
+}
+
+def get_export_adapter(profile):
+    """Factory: returns the right exporter for a client."""
+    fmt = profile.export_format.lower()
+    adapter_class = EXPORT_ADAPTERS.get(fmt)
+    if not adapter_class:
+        raise ValueError(f"No export adapter for format: '{fmt}'")
+    return adapter_class()</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Custom Tools for Specific Clients</h2>
+    <p>Beyond config-driven output, some clients need genuinely custom tooling. Here's what that looks like in practice:</p>
+
+    <h3>Example: The "Metaverse Client"</h3>
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 What is "Metaverse Stuff"?</div>
+      <p>When EA mentioned building tools for a "metaverse client," this likely means:</p>
+      <ul>
+        <li><strong>Real-time avatar animation:</strong> Mocap driving a 3D avatar live (think VTubers, virtual concerts, or Meta's Horizon Worlds).</li>
+        <li><strong>Lightweight skeletons:</strong> Metaverse avatars have simpler rigs than AAA game characters — maybe 40 joints instead of 200. You need a retarget template that maps your full mocap solve down to a simplified skeleton.</li>
+        <li><strong>glTF/USD output:</strong> The metaverse ecosystem runs on web-friendly formats, not FBX. glTF (GL Transmission Format) is the "JPEG of 3D" — small, fast to load, browser-compatible.</li>
+        <li><strong>Streaming-ready data:</strong> Instead of delivering a complete FBX file, you might need to stream joint rotations in real-time via WebSockets or a service like LiveLink.</li>
+        <li><strong>Custom LOD requirements:</strong> Metaverse has aggressive performance constraints. Meshes might need to be under 5K triangles with aggressive texture compression.</li>
+      </ul>
+    </div>
+
+    <h3>When Custom Tools Are Justified</h3>
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Config-Driven?</th>
+        <th>Custom Tool?</th>
+      </tr>
+      <tr>
+        <td>Different naming convention</td>
+        <td>✅ Just a regex in JSON</td>
+        <td>❌ No</td>
+      </tr>
+      <tr>
+        <td>Different skeleton template</td>
+        <td>✅ Joint map in JSON</td>
+        <td>❌ No</td>
+      </tr>
+      <tr>
+        <td>Different export format (FBX vs glTF)</td>
+        <td>✅ Export adapter</td>
+        <td>❌ No</td>
+      </tr>
+      <tr>
+        <td>Real-time mocap streaming to avatars</td>
+        <td>❌</td>
+        <td>✅ Custom LiveLink bridge</td>
+      </tr>
+      <tr>
+        <td>Custom facial blendshape mapping</td>
+        <td>❌</td>
+        <td>✅ Client-specific retarget tool</td>
+      </tr>
+      <tr>
+        <td>Auto-LOD generation for mobile metaverse</td>
+        <td>❌</td>
+        <td>✅ Custom decimation pipeline</td>
+      </tr>
+      <tr>
+        <td>Custom QA for client-specific constraints</td>
+        <td>Partially</td>
+        <td>✅ Custom validator plugin</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance</div>
+      <p>The interview mentioned that building custom solutions for specific vendor-clients is "heavy on the pipeline." This is why centralization is critical — you absorb as much as possible into configurable core behavior, and only build custom tools when the requirement is genuinely unique. Every custom tool is technical debt that someone has to maintain.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. The Plugin Architecture for Client-Specific Extensions</h2>
+    <p>When you DO need custom behavior, use a plugin architecture so it's isolated from the core:</p>
+
+    <div class="code-block">
+      <h3>Python: Client Plugin System</h3>
+      <pre><code class="language-python">"""
+Plugin Architecture — Client-specific extensions that plug into the core pipeline.
+Each plugin is a Python module in the plugins/ directory.
+"""
+import importlib
+import os
+import logging
+from pathlib import Path
+
+log = logging.getLogger("plugin_system")
+
+class PluginManager:
+    """Discovers and loads client-specific plugins at runtime."""
+    
+    def __init__(self, plugin_dir):
+        self.plugin_dir = Path(plugin_dir)
+        self._plugins = {}
+    
+    def discover(self):
+        """Scan for plugin modules (each is a .py file with a register() function)."""
+        for py_file in self.plugin_dir.glob("*.py"):
+            if py_file.name.startswith("_"):
+                continue
+            
+            module_name = py_file.stem
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, py_file)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                if hasattr(module, 'register'):
+                    plugin_info = module.register()
+                    self._plugins[plugin_info['client_id']] = module
+                    log.info(f"Loaded plugin: {module_name} → {plugin_info['client_id']}")
+                else:
+                    log.warning(f"Plugin {module_name} has no register() function, skipping")
+            except Exception as e:
+                log.error(f"Failed to load plugin {module_name}: {e}")
+    
+    def get_hooks(self, client_id):
+        """Get all hook functions for a client."""
+        module = self._plugins.get(client_id)
+        if not module:
+            return {}
+        
+        hooks = {}
+        for hook_name in ['pre_export', 'post_export', 'custom_validate',
+                          'custom_retarget', 'custom_delivery']:
+            if hasattr(module, hook_name):
+                hooks[hook_name] = getattr(module, hook_name)
+        
+        return hooks
+
+
+# === Example Plugin: plugins/metaverse_client.py ===
+"""
+def register():
+    return {
+        'client_id': 'metaverse_partner',
+        'name': 'Metaverse Partner Extensions',
+        'version': '1.0',
+    }
+
+def pre_export(scene_data, profile):
+    '''Strip LOD hierarchy to mobile-grade.'''
+    # Custom decimation for metaverse constraints
+    from pipeline.tools import decimator
+    decimator.reduce_to_target(scene_data, max_tris=5000)
+
+def post_export(output_path, profile):
+    '''Generate a thumbnail and preview video.'''
+    from pipeline.tools import preview_gen
+    preview_gen.create_turntable(output_path)
+
+def custom_validate(scene_data, profile):
+    '''Metaverse-specific checks (texture budget, skeleton complexity).'''
+    joint_count = len(scene_data.get_joints())
+    if joint_count > 50:
+        return False, f"Too many joints for metaverse: {joint_count} (max: 50)"
+    return True, "OK"
+"""</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. The Centralized Pipeline Runner</h2>
+    <p>Putting it all together — the core pipeline that reads a client config and runs the appropriate steps:</p>
+
+    <div class="code-block">
+      <h3>Python: The Unified Pipeline Runner</h3>
+      <pre><code class="language-python">"""
+Unified Pipeline Runner — The single entry point for all clients.
+Takes capture data + client_id, does everything else automatically.
+"""
+import logging
+
+log = logging.getLogger("pipeline_runner")
+
+class PipelineRunner:
+    def __init__(self, registry, plugin_manager, delivery_bot):
+        self.registry = registry
+        self.plugins = plugin_manager
+        self.delivery = delivery_bot
+    
+    def process(self, input_path, client_id, output_dir):
+        """Process one capture file for a specific client."""
+        
+        # 1. Load client profile
+        profile = self.registry.get_profile(client_id)
+        log.info(f"Processing for: {profile.display_name}")
+        
+        # 2. Load capture data (vendor-agnostic via Adapter Pattern)
+        from pipeline.adapters import load_capture
+        capture_data = load_capture(input_path)
+        
+        # 3. Run pre-export plugin hooks (if any)
+        hooks = self.plugins.get_hooks(client_id)
+        if 'pre_export' in hooks:
+            hooks['pre_export'](capture_data, profile)
+        
+        # 4. Validate (core + optional custom)
+        from pipeline.validation import CaptureValidator
+        validator = CaptureValidator(profile)
+        results = validator.validate_all(input_path)
+        
+        if 'custom_validate' in hooks:
+            ok, msg = hooks['custom_validate'](capture_data, profile)
+            if not ok:
+                log.error(f"Custom validation failed: {msg}")
+                return False
+        
+        # 5. Export in client's format
+        from pipeline.export import get_export_adapter
+        adapter = get_export_adapter(profile)
+        
+        output_filename = self._build_output_name(input_path, profile)
+        output_path = os.path.join(output_dir, output_filename)
+        adapter.export(capture_data, output_path, profile)
+        
+        # 6. Run post-export hooks
+        if 'post_export' in hooks:
+            hooks['post_export'](output_path, profile)
+        
+        # 7. Deliver
+        self.delivery.deliver(output_path, profile)
+        
+        log.info(f"Pipeline complete: {output_path}")
+        return True
+    
+    def _build_output_name(self, input_path, profile):
+        """Generate output filename from naming convention."""
+        import os, re
+        from datetime import datetime
+        
+        base = os.path.splitext(os.path.basename(input_path))[0]
+        ext = profile.export_format
+        
+        # Apply client naming pattern if specified
+        return f"{base}.{ext}"</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. The Delivery Layer: Multiple Destinations</h2>
+    <p>Just as export format varies by client, so does the delivery destination:</p>
+
+    <div class="code-block">
+      <h3>Python: Multi-Destination Delivery</h3>
+      <pre><code class="language-python">"""
+Delivery Adapters — Each client's output goes to a different place.
+"""
+from abc import ABC, abstractmethod
+
+class BaseDeliveryAdapter(ABC):
+    @abstractmethod
+    def deliver(self, file_path, profile):
+        pass
+
+class PerforceDelivery(BaseDeliveryAdapter):
+    def deliver(self, file_path, profile):
+        depot = profile.get("delivery", "depot_path")
+        # P4Python submit (from Lesson 08)
+        publish_to_perforce(file_path, depot)
+
+class NASDelivery(BaseDeliveryAdapter):
+    def deliver(self, file_path, profile):
+        import shutil
+        dest = profile.get("delivery", "nas_path")
+        shutil.copy2(file_path, dest)
+
+class S3Delivery(BaseDeliveryAdapter):
+    def deliver(self, file_path, profile):
+        import boto3
+        bucket = profile.get("delivery", "s3_bucket")
+        s3 = boto3.client('s3')
+        s3.upload_file(file_path, bucket, os.path.basename(file_path))
+
+class SFTPDelivery(BaseDeliveryAdapter):
+    def deliver(self, file_path, profile):
+        import paramiko
+        host = profile.get("delivery", "sftp_host")
+        # ... SFTP upload logic ...
+
+DELIVERY_MAP = {
+    "perforce": PerforceDelivery,
+    "nas":      NASDelivery,
+    "s3":       S3Delivery,
+    "sftp":     SFTPDelivery,
+}
+
+def get_delivery_adapter(profile):
+    method = profile.delivery_method
+    return DELIVERY_MAP[method]()</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>One core pipeline, many configs:</strong> Client specifics belong in JSON configuration files, never in the core code. If you grep for "FIFA" in your pipeline source, you have a design flaw.</li>
+      <li><strong>Adapter + Factory for export:</strong> Each format (FBX, glTF, USD) has its own exporter class. A factory picks the right one based on the client config.</li>
+      <li><strong>Plugin architecture for custom tools:</strong> When a client needs genuinely unique behavior, isolate it in a plugin module. The core pipeline calls plugin hooks at defined stages.</li>
+      <li><strong>"Metaverse" = real-time avatars, lightweight rigs, web-friendly formats:</strong> glTF instead of FBX, 40 joints instead of 200, streaming instead of file delivery.</li>
+      <li><strong>Multi-destination delivery:</strong> Perforce, NAS, S3, SFTP — each client gets their output delivered where they need it, driven by config.</li>
+      <li><strong>Centralization ≠ one-size-fits-all:</strong> It means having a unified architecture that flexes to accommodate differences without forking the codebase.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="09-real-ea-pipeline.html">
+        <span class="label">← Back to</span>
+        <span class="title">The Real EA Pipeline</span>
+      </a>
+      <a href="11-defensive-architecture.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Defensive Architecture</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

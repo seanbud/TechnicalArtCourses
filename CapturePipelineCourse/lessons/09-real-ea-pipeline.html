@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 9: The Real EA Pipeline | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 09</div>
+      <h1>The Real EA Pipeline: Vendors, Post-Production & Manual Cleanup</h1>
+      <p class="lesson-subtitle">What actually happens after the mocap stage wraps. Spoiler: a lot of it is still done by hand.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Reality Check</div>
+      <p>From previous lessons you might think EA builds every piece of the pipeline in-house. They don't. <strong>Third-party proprietary software handles the heavy math</strong> — solving point clouds into bones, performing 3D scans, retargeting skeletons. EA's role is to <strong>orchestrate the data flow</strong>, validate output, automate handoffs, and fix what the machines get wrong. This lesson gives you the real picture.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Vendor Landscape: Who Does What</h2>
+    <p>The capture pipeline is a relay race. EA doesn't run every leg — they hand the baton to specialized vendors and receive it back.</p>
+
+    <table>
+      <tr>
+        <th>Stage</th>
+        <th>Who Does It</th>
+        <th>Software</th>
+        <th>EA's Role</th>
+      </tr>
+      <tr>
+        <td><strong>Capture</strong></td>
+        <td>Stage crew (EA or outsourced)</td>
+        <td>Vicon Shogun, OptiTrack Motive</td>
+        <td>Define marker sets, calibration, session naming</td>
+      </tr>
+      <tr>
+        <td><strong>Solving</strong></td>
+        <td>Vendor software (automated)</td>
+        <td>Shogun Post, Motive Body</td>
+        <td>Configure solver templates, validate output</td>
+      </tr>
+      <tr>
+        <td><strong>Retargeting</strong></td>
+        <td>Vendor software + Manual cleanup</td>
+        <td>MotionBuilder (HumanIK)</td>
+        <td>Build retarget templates, fix artifacts</td>
+      </tr>
+      <tr>
+        <td><strong>3D Scanning</strong></td>
+        <td>External scan vendors</td>
+        <td>Artec, FARO, RealityCapture</td>
+        <td>Receive meshes, validate topology, integrate</td>
+      </tr>
+      <tr>
+        <td><strong>Post-Production</strong></td>
+        <td>EA artists + TAs</td>
+        <td>MotionBuilder, Maya, custom tools</td>
+        <td>Manual cleanup, naming, bone fixes, final QA</td>
+      </tr>
+      <tr>
+        <td><strong>Delivery</strong></td>
+        <td>EA pipeline automation</td>
+        <td>Python scripts, P4Python</td>
+        <td>Export FBX → network drive/Perforce → notify</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Insight</div>
+      <p>Your value isn't in <em>doing</em> the solve or the retarget. It's in <strong>making the data flow seamlessly between all these stages</strong> and catching problems before they reach artists. You are the connective tissue.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Post-Production: The Manual Reality</h2>
+    <p>After automated solving and retargeting, the data is <em>close</em> but rarely perfect. "Post-production" is the manual cleanup phase where humans fix what algorithms can't.</p>
+
+    <h3>What Gets Fixed By Hand</h3>
+    <ul>
+      <li><strong>Bone corrections:</strong> After retargeting, fingers might interpenetrate, shoulders might pop, or the spine might twist unnaturally. An animator scrubs frame-by-frame and fixes the curves.</li>
+      <li><strong>Naming conventions:</strong> Vendor output uses their naming scheme (<code>Vicon_LFemur</code>) but your engine expects yours (<code>L_Thigh</code>). Someone has to remap or rename — ideally your tool does this, but edge cases still need manual intervention.</li>
+      <li><strong>Contact cleanup:</strong> Foot plants, hand contacts on props. The solver doesn't know about the environment. A human locks feet to the ground plane and keys the IK targets.</li>
+      <li><strong>Marker occlusion gaps:</strong> The solver fills gaps with interpolation. Sometimes the interpolation is wrong (the hand goes through the table). Manual curve editing fixes this.</li>
+      <li><strong>Scale and world-space fixes:</strong> Different vendors deliver at different scales (cm vs m) or different up-axes (Y-up vs Z-up). Manual or scripted correction needed.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance</div>
+      <p>Reducing this manual cleanup time is one of the highest-impact things a Senior Pipeline TA can do. Every minute saved in post-production multiplied by thousands of takes per year equals <strong>months</strong> of artist time recovered. This is exactly the kind of "reduced processing time" the interview prompt is asking about.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Python: The Batch Renamer</h2>
+    <p>Naming convention enforcement is one of the most common automation targets. Here's a production-grade tool that batch-renames joints to match your studio template:</p>
+
+    <div class="code-block">
+      <h3>Python: Joint Renaming Tool (MotionBuilder)</h3>
+      <pre><code class="language-python">"""
+Batch Joint Renamer — Maps vendor joint names to studio convention.
+Runs headless in MotionBuilder via mobupy or as a GUI tool.
+"""
+import json
+import os
+import logging
+
+log = logging.getLogger("joint_renamer")
+
+# The mapping lives in a JSON config, NOT hardcoded
+# config/joint_map_vicon.json:
+# {
+#   "Vicon_Hips": "Hips",
+#   "Vicon_LFemur": "L_Thigh",
+#   "Vicon_RFemur": "R_Thigh",
+#   "Vicon_Spine": "Spine",
+#   ...
+# }
+
+def load_joint_map(config_path):
+    """Load a vendor-specific joint name mapping."""
+    with open(config_path) as f:
+        return json.load(f)
+
+def rename_joints_motionbuilder(joint_map):
+    """Rename joints in the current MotionBuilder scene."""
+    from pyfbsdk import FBSystem, FBModelList, FBModel
+    
+    scene = FBSystem().Scene
+    renamed = 0
+    skipped = 0
+    
+    for component in scene.Components:
+        if isinstance(component, FBModel):
+            old_name = component.Name
+            if old_name in joint_map:
+                new_name = joint_map[old_name]
+                component.Name = new_name
+                log.info(f"Renamed: {old_name} → {new_name}")
+                renamed += 1
+            else:
+                skipped += 1
+    
+    log.info(f"Done. Renamed: {renamed}, Skipped: {skipped}")
+    return renamed, skipped
+
+def rename_joints_maya(joint_map):
+    """Rename joints in the current Maya scene."""
+    import maya.cmds as cmds
+    
+    all_joints = cmds.ls(type="joint", long=True)
+    renamed = 0
+    
+    # Sort by depth (deepest first) to avoid parent rename breaking child paths
+    all_joints.sort(key=lambda x: x.count('|'), reverse=True)
+    
+    for joint_path in all_joints:
+        short_name = joint_path.split('|')[-1]
+        if short_name in joint_map:
+            new_name = joint_map[short_name]
+            cmds.rename(joint_path, new_name)
+            log.info(f"Renamed: {short_name} → {new_name}")
+            renamed += 1
+    
+    return renamed
+
+def validate_naming(expected_names):
+    """Post-rename validation: are all expected joints present?"""
+    import maya.cmds as cmds
+    
+    actual = set(cmds.ls(type="joint", shortNames=True))
+    expected = set(expected_names)
+    missing = expected - actual
+    extra = actual - expected
+    
+    if missing:
+        log.error(f"MISSING joints after rename: {missing}")
+    if extra:
+        log.warning(f"EXTRA joints found: {extra}")
+    
+    return len(missing) == 0</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. FBX Delivery: Network Drives, NAS, and File Handoffs</h2>
+    <p>At the end of the pipeline, the final deliverable is an <strong>FBX file dropped onto a network drive</strong>. This sounds simple, but at scale it's a real engineering problem.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 "Is a NAS a Network Drive?"</div>
+      <p><strong>Yes.</strong> A NAS (Network-Attached Storage) <em>is</em> a type of network drive. More precisely:</p>
+      <ul>
+        <li><strong>Network Drive</strong> = any storage you access over a network. It's a generic term. Could be a Windows file share, a Linux NFS mount, or a cloud-mounted bucket.</li>
+        <li><strong>NAS</strong> = a dedicated hardware appliance (like Synology, QNAP, or enterprise-grade NetApp) that exists <em>only</em> to serve files over the network. It speaks SMB (Windows) or NFS (Linux/Mac) or both.</li>
+        <li><strong>SAN</strong> = Storage Area Network. Block-level storage (like a raw hard drive over the network). Faster, more expensive, usually for databases or video editing bays, not file delivery.</li>
+      </ul>
+      <p>When EA says "we put FBX files on a network drive," they almost certainly mean a <strong>NAS or enterprise file server</strong> with SMB shares that artists map as a drive letter on Windows (e.g., <code>N:\captures\</code>).</p>
+    </div>
+
+    <h3>Delivery Mechanisms Compared</h3>
+    <table>
+      <tr>
+        <th>Method</th>
+        <th>Pros</th>
+        <th>Cons</th>
+        <th>When to Use</th>
+      </tr>
+      <tr>
+        <td><strong>NAS / Network Drive</strong></td>
+        <td>Simple, familiar, fast on LAN</td>
+        <td>No versioning, no audit trail, no conflict detection</td>
+        <td>Final deliverables, read-only output for artists</td>
+      </tr>
+      <tr>
+        <td><strong>Perforce Depot</strong></td>
+        <td>Full version control, locking, audit trail</td>
+        <td>Client setup, sync overhead, P4 expertise needed</td>
+        <td>Source-of-truth for game-ready assets</td>
+      </tr>
+      <tr>
+        <td><strong>S3 / Cloud Storage</strong></td>
+        <td>Unlimited scale, global access, event triggers</td>
+        <td>Latency, egress cost, requires SDK</td>
+        <td>Archival, global distribution, cloud processing</td>
+      </tr>
+      <tr>
+        <td><strong>ShotGrid / Asset DB</strong></td>
+        <td>Metadata-rich, review tools, approval workflow</td>
+        <td>Additional complexity, licensing cost</td>
+        <td>Review + approval pipeline before final delivery</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The Layered Approach (Most Studios)</div>
+      <p>Most production pipelines use <strong>all of these in layers</strong>: NAS as the fast staging area → Perforce as the versioned source of truth → S3 as the long-term archive. Your Python scripts move data between layers automatically.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Python: Automated FBX Delivery Pipeline</h2>
+    <p>A real delivery script that moves validated FBX files from the processing farm output to the artist-facing network drive and Perforce simultaneously:</p>
+
+    <div class="code-block">
+      <h3>Python: The Delivery Bot</h3>
+      <pre><code class="language-python">"""
+Delivery Bot — Moves processed FBX from farm output to:
+  1. Network drive (NAS) for immediate artist access
+  2. Perforce for version control
+  3. Slack notification on completion
+"""
+import shutil
+import os
+import hashlib
+import json
+import logging
+import requests
+from pathlib import Path
+
+log = logging.getLogger("delivery_bot")
+
+class DeliveryBot:
+    def __init__(self, config_path):
+        with open(config_path) as f:
+            self.config = json.load(f)
+    
+    def deliver(self, fbx_path):
+        """Full delivery pipeline for one FBX file."""
+        log.info(f"Starting delivery: {fbx_path}")
+        
+        # 1. Validate before touching anything
+        if not self._validate(fbx_path):
+            self._notify_failure(fbx_path, "Validation failed")
+            return False
+        
+        # 2. Copy to NAS (immediate artist access)
+        nas_path = self._copy_to_nas(fbx_path)
+        
+        # 3. Submit to Perforce (version control)
+        self._submit_to_perforce(fbx_path)
+        
+        # 4. Generate manifest (metadata for downstream)
+        self._write_manifest(fbx_path, nas_path)
+        
+        # 5. Notify
+        self._notify_success(fbx_path)
+        
+        return True
+    
+    def _validate(self, path):
+        """Pre-delivery sanity checks."""
+        # File exists and isn't empty
+        if not os.path.exists(path) or os.path.getsize(path) < 1024:
+            log.error(f"File missing or empty: {path}")
+            return False
+        
+        # Naming convention check
+        import re
+        basename = os.path.basename(path)
+        pattern = self.config.get("naming_pattern",
+            r'^[a-zA-Z]+_\d{8}_.*\.fbx$')
+        if not re.match(pattern, basename):
+            log.error(f"Naming violation: {basename}")
+            return False
+        
+        return True
+    
+    def _copy_to_nas(self, fbx_path):
+        """Copy to the artist-facing network drive."""
+        nas_root = self.config["nas_output_path"]  # e.g., "//nas01/captures/output"
+        dest = os.path.join(nas_root, os.path.basename(fbx_path))
+        
+        shutil.copy2(fbx_path, dest)
+        
+        # Verify copy integrity with MD5
+        src_hash = self._md5(fbx_path)
+        dst_hash = self._md5(dest)
+        if src_hash != dst_hash:
+            raise RuntimeError(f"Hash mismatch after copy! {src_hash} != {dst_hash}")
+        
+        log.info(f"NAS delivery OK: {dest} (MD5: {src_hash[:8]}...)")
+        return dest
+    
+    def _md5(self, filepath):
+        """Calculate MD5 hash of a file."""
+        h = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        return h.hexdigest()
+    
+    def _submit_to_perforce(self, fbx_path):
+        """Auto-submit to Perforce depot."""
+        from P4 import P4, P4Exception
+        p4 = P4()
+        p4.port = self.config["p4_port"]
+        p4.user = self.config["p4_user"]
+        p4.client = self.config["p4_client"]
+        
+        try:
+            p4.connect()
+            depot_path = self.config["p4_depot_root"] + os.path.basename(fbx_path)
+            
+            try:
+                p4.run_fstat(depot_path)
+                p4.run_edit(depot_path)
+            except P4Exception:
+                p4.run_add(fbx_path)
+            
+            change = p4.fetch_change()
+            change['Description'] = (
+                f"[AUTO] Delivery: {os.path.basename(fbx_path)}\n"
+                f"MD5: {self._md5(fbx_path)}\n"
+                f"Source: Capture Farm"
+            )
+            p4.run_submit(change)
+            log.info(f"P4 submit OK: {depot_path}")
+        finally:
+            p4.disconnect()
+    
+    def _write_manifest(self, fbx_path, nas_path):
+        """Write a JSON manifest alongside the FBX for downstream tools."""
+        manifest = {
+            "filename": os.path.basename(fbx_path),
+            "md5": self._md5(fbx_path),
+            "size_mb": round(os.path.getsize(fbx_path) / (1024**2), 2),
+            "nas_path": nas_path,
+            "delivered_by": "delivery_bot_v2",
+        }
+        manifest_path = fbx_path.replace(".fbx", "_manifest.json")
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest, f, indent=2)
+    
+    def _notify_success(self, fbx_path):
+        """Post to Slack."""
+        webhook = self.config.get("slack_webhook")
+        if webhook:
+            requests.post(webhook, json={
+                "text": f"✅ Delivered: `{os.path.basename(fbx_path)}`"
+            })
+    
+    def _notify_failure(self, fbx_path, reason):
+        webhook = self.config.get("slack_webhook")
+        if webhook:
+            requests.post(webhook, json={
+                "text": f"❌ DELIVERY FAILED: `{os.path.basename(fbx_path)}`\nReason: {reason}"
+            })</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Python: The Post-Production Checklist Tool</h2>
+    <p>A checklist tool that artists run before marking a take as "post-production complete." This catches the most common manual cleanup mistakes:</p>
+
+    <div class="code-block">
+      <h3>Python: Post-Production QA Checklist</h3>
+      <pre><code class="language-python">"""
+Post-Production QA Checklist — Runs in Maya or MotionBuilder.
+Artists click one button. The tool checks everything.
+"""
+import maya.cmds as cmds
+import logging
+import re
+
+log = logging.getLogger("postprod_qa")
+
+class PostProdChecker:
+    """Validates a scene is ready for delivery after manual cleanup."""
+    
+    def __init__(self, config):
+        self.config = config
+        self.results = []
+    
+    def run_all(self):
+        """Run the full checklist."""
+        self.check_naming_conventions()
+        self.check_skeleton_completeness()
+        self.check_world_space()
+        self.check_frame_range()
+        self.check_no_keyframes_on_root_translation()
+        self.check_scale()
+        self.check_up_axis()
+        return self.results
+    
+    def _add_result(self, name, passed, detail=""):
+        status = "✅ PASS" if passed else "❌ FAIL"
+        self.results.append({"check": name, "passed": passed, "detail": detail})
+        log.info(f"{status}: {name} — {detail}")
+    
+    def check_naming_conventions(self):
+        """All joints must match studio naming convention."""
+        joints = cmds.ls(type="joint", shortNames=True)
+        expected_pattern = self.config.get("joint_name_pattern", r'^[A-Z][a-zA-Z_]+$')
+        
+        bad_names = [j for j in joints if not re.match(expected_pattern, j)]
+        if bad_names:
+            self._add_result("Naming", False, f"Bad names: {bad_names[:5]}")
+        else:
+            self._add_result("Naming", True, f"All {len(joints)} joints OK")
+    
+    def check_skeleton_completeness(self):
+        """All required joints exist."""
+        required = set(self.config.get("required_joints", []))
+        actual = set(cmds.ls(type="joint", shortNames=True))
+        missing = required - actual
+        if missing:
+            self._add_result("Skeleton", False, f"Missing: {missing}")
+        else:
+            self._add_result("Skeleton", True, "All required joints present")
+    
+    def check_world_space(self):
+        """Root joint should be at or near world origin at frame 0."""
+        root = self.config.get("root_joint", "Hips")
+        if not cmds.objExists(root):
+            self._add_result("WorldSpace", False, f"Root '{root}' not found")
+            return
+        
+        cmds.currentTime(cmds.playbackOptions(q=True, min=True))
+        pos = cmds.xform(root, q=True, ws=True, t=True)
+        dist = (pos[0]**2 + pos[1]**2 + pos[2]**2) ** 0.5
+        
+        if dist > 100:  # More than 1 meter from origin
+            self._add_result("WorldSpace", False,
+                f"Root is {dist:.1f}cm from origin at frame 0")
+        else:
+            self._add_result("WorldSpace", True, f"Root at ({pos[0]:.1f}, {pos[1]:.1f}, {pos[2]:.1f})")
+    
+    def check_scale(self):
+        """Scene should be in centimeters."""
+        unit = cmds.currentUnit(q=True, linear=True)
+        if unit != "cm":
+            self._add_result("Scale", False, f"Scene units: '{unit}', expected 'cm'")
+        else:
+            self._add_result("Scale", True, "Units: cm")
+    
+    def check_up_axis(self):
+        """Scene up-axis should be Y."""
+        up = cmds.upAxis(q=True, axis=True)
+        if up != "y":
+            self._add_result("UpAxis", False, f"Up-axis: '{up}', expected 'y'")
+        else:
+            self._add_result("UpAxis", True, "Up-axis: Y")
+    
+    def check_frame_range(self):
+        """Frame range must be within sane bounds."""
+        start = cmds.playbackOptions(q=True, min=True)
+        end = cmds.playbackOptions(q=True, max=True)
+        duration = end - start
+        
+        if duration < 10:
+            self._add_result("FrameRange", False, f"Only {duration} frames — truncated?")
+        elif duration > 100000:
+            self._add_result("FrameRange", False, f"{duration} frames — recording left on?")
+        else:
+            self._add_result("FrameRange", True, f"{int(duration)} frames ({start}-{end})")
+    
+    def check_no_keyframes_on_root_translation(self):
+        """Root should not have stray translation keys (common vendor artifact)."""
+        root = self.config.get("root_joint", "Hips")
+        if not cmds.objExists(root):
+            return
+        
+        # Check for animation on translateX/Y/Z
+        for attr in ['tx', 'ty', 'tz']:
+            keys = cmds.keyframe(f"{root}.{attr}", q=True, keyframeCount=True)
+            if keys and keys > 0:
+                # This may be intentional (locomotion), but flag it
+                self._add_result("RootTranslation", True,
+                    f"Root has {keys} translation keys — verify locomotion is intentional")
+                return
+        
+        self._add_result("RootTranslation", True, "No root translation keys")</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. The Data Flow Diagram: Real EA Pipeline</h2>
+    <p>This is the actual flow through EA's capture studio, corrected from what we learned in the first three interviews:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    THE REAL EA CAPTURE PIPELINE                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  STAGE (Physical)         VENDOR SOFTWARE (Automated)                    │
+│  ┌──────────────┐         ┌──────────────────────┐                       │
+│  │ Actors +     │  .c3d   │ Vicon Shogun Post    │                       │
+│  │ Cameras      │ ──────→ │ or OptiTrack Motive  │                       │
+│  │ (Markers)    │  raw    │ SOLVES the skeleton  │                       │
+│  └──────────────┘         └─────────┬────────────┘                       │
+│                                     │ .fbx (solved)                      │
+│                                     ▼                                    │
+│  POST-PRODUCTION (Manual + Semi-Automated)                               │
+│  ┌──────────────────────────────────────────────────────┐                │
+│  │  MotionBuilder / Maya                                 │                │
+│  │  • Retarget to game skeleton (HumanIK)               │                │
+│  │  • Fix naming conventions (Python batch renamer)     │                │
+│  │  • Clean up bone artifacts / contact issues          │                │
+│  │  • Run QA checklist tool                             │                │
+│  └─────────┬────────────────────────────────────────────┘                │
+│            │ .fbx (cleaned, renamed, validated)                          │
+│            ▼                                                             │
+│  DELIVERY (Automated)                                                    │
+│  ┌──────────────────────────────────────────────────────┐                │
+│  │  Python Delivery Bot                                  │                │
+│  │  • Copy to NAS (//nas01/captures/output/)            │                │
+│  │  • P4 submit to Perforce depot                       │                │
+│  │  • MD5 verification                                   │                │
+│  │  • Slack notification                                 │                │
+│  └──────────────────────────────────────────────────────┘                │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. Scale & Unit Conversion: A Constant Headache</h2>
+    <p>Different vendors deliver in different units. Your pipeline must normalize everything.</p>
+
+    <div class="code-block">
+      <h3>Python: Unit Normalizer</h3>
+      <pre><code class="language-python">"""
+Converts between common unit systems used by different vendors.
+Runs as a pre-processing step before any other pipeline operation.
+"""
+
+UNIT_SCALES = {
+    "mm": 0.1,     # millimeters → centimeters
+    "cm": 1.0,     # centimeters (our standard)
+    "m":  100.0,   # meters → centimeters
+    "in": 2.54,    # inches → centimeters
+    "ft": 30.48,   # feet → centimeters
+}
+
+UP_AXIS_ROTATIONS = {
+    ("z", "y"): (90, 0, 0),   # Z-up to Y-up
+    ("y", "z"): (-90, 0, 0),  # Y-up to Z-up
+    ("x", "y"): (0, 0, 90),   # X-up to Y-up (rare)
+}
+
+def normalize_scene(source_unit="m", source_up="z", target_unit="cm", target_up="y"):
+    """Normalize a Maya scene to studio standards."""
+    import maya.cmds as cmds
+    
+    # Scale conversion
+    scale_factor = UNIT_SCALES[source_unit] / UNIT_SCALES[target_unit]
+    if abs(scale_factor - 1.0) > 0.001:
+        root = cmds.ls(assemblies=True)
+        for node in root:
+            for attr in ['sx', 'sy', 'sz']:
+                current = cmds.getAttr(f"{node}.{attr}")
+                cmds.setAttr(f"{node}.{attr}", current * scale_factor)
+        cmds.currentUnit(linear=target_unit)
+    
+    # Up-axis conversion
+    key = (source_up.lower(), target_up.lower())
+    if key in UP_AXIS_ROTATIONS:
+        rotation = UP_AXIS_ROTATIONS[key]
+        cmds.upAxis(axis=target_up)
+    
+    return scale_factor</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>EA orchestrates, vendors execute:</strong> Proprietary software does the solving and scanning. Your value is in the data flow, validation, and automation between stages.</li>
+      <li><strong>Post-production is manual and expensive:</strong> Naming fixes, bone cleanup, contact correction — all done by hand. Automating any part of this has huge ROI.</li>
+      <li><strong>NAS = Network Drive:</strong> A NAS is just a dedicated file server. FBX files are delivered to artists via mapped network drives (SMB shares).</li>
+      <li><strong>Layer your delivery:</strong> NAS for speed, Perforce for versioning, S3 for archival. Each layer serves a purpose.</li>
+      <li><strong>Config over code:</strong> Joint mappings, naming patterns, delivery paths — all in JSON config files, never hardcoded.</li>
+      <li><strong>Validate everything:</strong> MD5 hashes after every copy. QA checklists before every delivery. No exceptions.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="08-interview-rapidfire.html">
+        <span class="label">← Back to</span>
+        <span class="title">Interview Rapid-Fire</span>
+      </a>
+      <a href="10-pipeline-centralization.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Pipeline Centralization</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

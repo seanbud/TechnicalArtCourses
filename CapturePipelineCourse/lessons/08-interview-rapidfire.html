@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 8: Interview Rapid-Fire | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 08</div>
+      <h1>Interview Rapid-Fire: Nigel Round</h1>
+      <p class="lesson-subtitle">Infrastructure, APIs, Vendor Integration, and the "Future Development" Mindset.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Context: What This Round Is About</div>
+      <p>"Future Development" = Platform Engineering for Content. Nigel partners with Engineering, IT, and external vendors. He is NOT asking "can you write a shader." He is asking: <strong>"Can you build a system that 500 people depend on?"</strong></p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. Infrastructure as Code (IaC)</h2>
+    <p>The philosophy: Your pipeline IS your product. Treat it like software, not a collection of scripts on someone's desktop.</p>
+
+    <ul>
+      <li><strong>What it means:</strong> Every server config, every tool deployment, every environment setup is defined in <strong>version-controlled code</strong> (YAML, Dockerfiles, Python scripts).</li>
+      <li><strong>Why it matters:</strong> If the build server dies, you can rebuild it in 30 minutes from the repo. No tribal knowledge.</li>
+      <li><strong>Key tools:</strong> <code>.gitlab-ci.yml</code>, <code>Dockerfile</code>, <code>pip install -r requirements.txt</code>, <code>pyproject.toml</code></li>
+    </ul>
+
+    <div class="code-block">
+      <h3>Example: Deploying a Tool via CI</h3>
+      <pre><code class="language-yaml"># .gitlab-ci.yml
+stages:
+  - test
+  - deploy
+
+test_pipeline:
+  stage: test
+  image: polypipeline/maya-2024:latest
+  tags: [gpu-runner]
+  script:
+    - mayapy -batch -command "python(\"import pipeline.tests; pipeline.tests.run_all()\")"
+  artifacts:
+    when: always
+    paths:
+      - test_results.xml
+
+deploy_tool:
+  stage: deploy
+  script:
+    - pip install -r requirements.txt
+    - python setup.py install --prefix=$TOOL_INSTALL_PATH
+    - python -m sphinx docs/ public/  # Auto-gen docs
+  only:
+    - tags  # Only deploy on release tags
+  environment:
+    name: production</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>The requirements.txt (Version Pinning)</h3>
+      <pre><code class="language-text"># NEVER use un-pinned versions in production
+PySide6==6.5.2
+numpy==1.24.3
+P4Python==2023.2
+c3d==0.5.2
+boto3==1.28.0
+Pillow==10.0.0</code></pre>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The "Bus Factor" Test</div>
+      <p>If you get hit by a bus, can someone else rebuild your pipeline from scratch? If the answer is "no," your infrastructure is not code—it's tribal knowledge. IaC means a new hire can <code>git clone</code> + <code>docker build</code> and be operational in an afternoon.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Data Gravity & The Capture-to-Engine Bridge</h2>
+    <p>This is the single most important topic for this interview. "Data Gravity" = large data is hard to move. The bigger the file, the more it resists movement.</p>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│              THE CAPTURE-TO-ENGINE HANDOFF                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  MONDAY (Stage)        MONDAY NIGHT (Farm)     TUESDAY (Artist) │
+│                                                                 │
+│  ┌──────────┐         ┌──────────────┐        ┌──────────────┐  │
+│  │ RAW DATA │  ──→    │ AUTO-PROCESS │  ──→   │ GAME-READY   │  │
+│  │ 500GB    │  Copy   │ Solve+Export │  Push  │ .fbx/.anim   │  │
+│  └──────────┘  to NAS └──────────────┘  to P4 └──────────────┘  │
+│       │                      │                       │          │
+│   File Watcher          Deadline Farm           P4 Auto-Submit  │
+│   (inotify/watchdog)    (100 nodes)             + Slack Notify  │
+│                                                                 │
+│  Key: NO HUMAN TOUCH between Monday PM and Tuesday AM.          │
+│  The pipeline must be fully automated and idempotent.           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <p><strong>The answer pattern:</strong></p>
+    <ol>
+      <li><strong>Ingest:</strong> Capture finishes → Sweeper bot (Python <code>watchdog</code> library) detects new files on the NAS.</li>
+      <li><strong>Validate:</strong> MD5 hash check → file size sanity → marker count check.</li>
+      <li><strong>Process:</strong> Submit to Deadline farm → Solve skeleton → Export FBX.</li>
+      <li><strong>Publish:</strong> Auto-submit to Perforce via P4Python → Notify artist via Slack webhook.</li>
+    </ol>
+
+    <div class="code-block">
+      <h3>Python: The File Watcher (Sweeper)</h3>
+      <pre><code class="language-python">from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import time
+import subprocess
+
+class CaptureIngestHandler(FileSystemEventHandler):
+    """Watches a directory for new .c3d files and auto-submits to farm."""
+    
+    VALID_EXTENSIONS = {'.c3d', '.fbx', '.bvh'}
+    
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        
+        ext = os.path.splitext(event.src_path)[1].lower()
+        if ext not in self.VALID_EXTENSIONS:
+            return
+        
+        # Wait for file to finish writing (network copy)
+        self._wait_for_stable(event.src_path)
+        
+        # Validate
+        if not self._validate(event.src_path):
+            log.error(f"Validation FAILED: {event.src_path}")
+            return
+        
+        # Submit to Farm
+        log.info(f"New capture detected: {event.src_path}")
+        self._submit_to_deadline(event.src_path)
+    
+    def _wait_for_stable(self, path, interval=2, checks=3):
+        """Wait until file size stops changing (copy complete)."""
+        sizes = []
+        for _ in range(checks):
+            sizes.append(os.path.getsize(path))
+            time.sleep(interval)
+        return len(set(sizes)) == 1  # All sizes identical = stable
+    
+    def _validate(self, path):
+        size_mb = os.path.getsize(path) / (1024**2)
+        if size_mb < 1:
+            return False  # Suspiciously small
+        if size_mb > 50000:
+            return False  # >50GB? Something is wrong.
+        return True
+    
+    def _submit_to_deadline(self, path):
+        subprocess.Popen([
+            "deadlinecommand", 
+            "-SubmitCommandLineJob",
+            "-executable", "mayapy",
+            "-arguments", f"-batch -script solve.py --input {path}",
+            "-name", f"AutoSolve_{os.path.basename(path)}"
+        ])
+
+# Usage: Run as a daemon/service
+observer = Observer()
+observer.schedule(CaptureIngestHandler(), "/mnt/nas/capture_inbox/", recursive=True)
+observer.start()</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Vendor API Integration</h2>
+    <p>EA works with vendors like Vicon, OptiTrack, Faceware, DI4D, Move.ai, etc. Their data formats are proprietary. Your job is to normalize them.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Adapter Pattern</div>
+      <p>Never let a vendor's format infect your pipeline. Write an <strong>Adapter</strong> that converts vendor data into YOUR internal format. If the vendor changes their SDK from v3 to v4, you rewrite ONE file (the adapter), not 50 tools.</p>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: The Vendor Adapter (Full Implementation)</h3>
+      <pre><code class="language-python">from abc import ABC, abstractmethod
+import json
+
+class CaptureData:
+    """Our internal, vendor-agnostic data format."""
+    def __init__(self):
+        self.markers = []        # List[List[Vector3]] per frame
+        self.marker_names = []   # List[str]
+        self.frame_rate = 120
+        self.take_name = ""
+        self.frame_count = 0
+        self.metadata = {}       # Arbitrary key-value pairs
+
+    def to_json(self, filepath):
+        """Serialize to our internal JSON manifest."""
+        with open(filepath, 'w') as f:
+            json.dump({
+                'take_name': self.take_name,
+                'frame_rate': self.frame_rate,
+                'frame_count': self.frame_count,
+                'marker_count': len(self.marker_names),
+                'marker_names': self.marker_names,
+                'metadata': self.metadata
+            }, f, indent=2)
+
+class BaseCaptureAdapter(ABC):
+    """Abstract base class. All vendor adapters must implement load()."""
+    @abstractmethod
+    def load(self, filepath) -> CaptureData:
+        pass
+
+class ViconAdapter(BaseCaptureAdapter):
+    """Converts Vicon .c3d files into our internal format."""
+    def load(self, filepath):
+        import c3d
+        reader = c3d.Reader(open(filepath, 'rb'))
+        
+        data = CaptureData()
+        data.frame_rate = reader.header.frame_rate
+        data.take_name = reader.header.events[0].desc if reader.header.events else ""
+        data.marker_names = reader.point_labels
+        
+        for frame_idx, points, analog in reader.read_frames():
+            data.markers.append(points[:, :3].tolist())
+            data.frame_count += 1
+        
+        return data
+
+class OptiTrackAdapter(BaseCaptureAdapter):
+    """Converts OptiTrack .csv exports into our internal format."""
+    def load(self, filepath):
+        import csv
+        data = CaptureData()
+        with open(filepath) as f:
+            reader = csv.DictReader(f, delimiter=',')
+            for row in reader:
+                # Parse OptiTrack's specific column layout
+                data.markers.append([float(row['X']), float(row['Y']), float(row['Z'])])
+                data.frame_count += 1
+        return data
+
+class MoveAIAdapter(BaseCaptureAdapter):
+    """Converts Move.ai JSON exports (markerless mocap)."""
+    def load(self, filepath):
+        data = CaptureData()
+        with open(filepath) as f:
+            raw = json.load(f)
+        data.frame_rate = raw.get('fps', 30)
+        data.take_name = raw.get('name', '')
+        data.markers = raw.get('joints', [])
+        data.frame_count = len(data.markers)
+        return data
+
+# === Factory Pattern: Auto-detect vendor by extension ===
+ADAPTER_MAP = {
+    '.c3d':  ViconAdapter,
+    '.csv':  OptiTrackAdapter,
+    '.json': MoveAIAdapter,
+}
+
+def load_capture(filepath) -> CaptureData:
+    """Factory: automatically picks the right adapter."""
+    ext = os.path.splitext(filepath)[1].lower()
+    adapter_class = ADAPTER_MAP.get(ext)
+    if not adapter_class:
+        raise ValueError(f"Unsupported capture format: {ext}")
+    return adapter_class().load(filepath)</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. System Reliability: The Maya Update Problem</h2>
+    <p><strong>"What happens when Maya 2025 ships and breaks your tools?"</strong></p>
+
+    <ul>
+      <li><strong>Pinning:</strong> Never use "latest". Pin your Maya version in Docker: <code>FROM maya:2024.2</code>.</li>
+      <li><strong>Abstraction Layer:</strong> Wrap <code>maya.cmds</code> in YOUR API. If Maya changes <code>cmds.parent()</code>, you fix ONE wrapper file.</li>
+      <li><strong>CI Gate:</strong> Run your test suite against Maya 2025 in a <strong>separate CI branch</strong> before rolling it out to artists.</li>
+      <li><strong>Rollback Plan:</strong> Keep Maya 2024 Docker images alive. If 2025 fails, revert the farm in minutes.</li>
+    </ul>
+
+    <div class="code-block">
+      <h3>Python: The DCC Abstraction Layer</h3>
+      <pre><code class="language-python"># pipeline/dcc_bridge.py
+# Artists import THIS, never maya.cmds directly.
+# If Maya changes an API, we fix THIS file only.
+
+import maya.cmds as cmds
+import logging
+
+log = logging.getLogger("dcc_bridge")
+
+def get_selected():
+    """Returns selected nodes as long paths."""
+    return cmds.ls(selection=True, long=True) or []
+
+def parent_node(child, parent):
+    """Wraps cmds.parent with error handling and logging."""
+    try:
+        cmds.parent(child, parent)
+        log.debug(f"Parented {child} -> {parent}")
+    except RuntimeError as e:
+        log.error(f"Parent failed: {child} -> {parent}: {e}")
+        raise
+
+def export_fbx(filepath, selected_only=True):
+    """Wraps FBX export with studio defaults."""
+    cmds.loadPlugin("fbxmaya", quiet=True)
+    
+    # Studio-standard FBX settings
+    mel.eval('FBXExportSmoothingGroups -v true')
+    mel.eval('FBXExportInputConnections -v false')
+    mel.eval('FBXExportBakeComplexAnimation -v true')
+    
+    if selected_only:
+        cmds.file(filepath, force=True, type="FBX export", exportSelected=True)
+    else:
+        cmds.file(filepath, force=True, type="FBX export", exportAll=True)
+    
+    log.info(f"FBX Export: {filepath}")
+
+def get_skeleton_hierarchy(root_joint):
+    """Returns the full joint chain from a root."""
+    joints = cmds.listRelatives(root_joint, allDescendents=True, type="joint") or []
+    return [root_joint] + joints
+
+def validate_skeleton(root_joint, expected_joints):
+    """Check if skeleton matches the studio template."""
+    actual = set(cmds.ls(cmds.listRelatives(root_joint, ad=True, type="joint"), shortNames=True))
+    expected = set(expected_joints)
+    missing = expected - actual
+    extra = actual - expected
+    if missing:
+        log.error(f"Missing joints: {missing}")
+    if extra:
+        log.warning(f"Extra joints: {extra}")
+    return len(missing) == 0</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Context Manager for Scene Safety</h3>
+      <pre><code class="language-python">import contextlib
+import maya.cmds as cmds
+
+@contextlib.contextmanager
+def undo_chunk(name="PipelineOperation"):
+    """Groups all operations into a single Undo.
+    If the tool crashes, you Ctrl+Z ONCE to undo everything."""
+    cmds.undoInfo(openChunk=True, chunkName=name)
+    try:
+        yield
+    except Exception:
+        cmds.undoInfo(closeChunk=True)
+        cmds.undo()  # Auto-rollback on crash
+        raise
+    else:
+        cmds.undoInfo(closeChunk=True)
+
+@contextlib.contextmanager
+def maintain_selection():
+    """Restore the user's selection after the tool runs."""
+    original = cmds.ls(selection=True, long=True)
+    try:
+        yield
+    finally:
+        if original:
+            cmds.select(original)
+        else:
+            cmds.select(clear=True)
+
+# Usage:
+with undo_chunk("BatchExport"), maintain_selection():
+    export_all_characters()  # Even if this crashes, scene is safe.</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Automated Validation: Sanity Checks</h2>
+    <p><strong>"How do you automate quality checks for captured data?"</strong></p>
+
+    <div class="code-block">
+      <h3>Python: The Validation Framework</h3>
+      <pre><code class="language-python">class ValidationResult:
+    def __init__(self, name, passed, message=""):
+        self.name = name
+        self.passed = passed
+        self.message = message
+
+class CaptureValidator:
+    """Runs a gauntlet of checks on processed capture data."""
+
+    def __init__(self, config):
+        self.config = config  # JSON config with thresholds
+
+    def validate_all(self, fbx_path) -> list:
+        results = []
+        results.append(self.check_file_integrity(fbx_path))
+        results.append(self.check_skeleton_hierarchy(fbx_path))
+        results.append(self.check_frame_range(fbx_path))
+        results.append(self.check_foot_contact(fbx_path))
+        results.append(self.check_naming_convention(fbx_path))
+        return results
+
+    def check_file_integrity(self, path):
+        """Can Maya even open this file?"""
+        try:
+            cmds.file(path, open=True, force=True)
+            return ValidationResult("FileLoad", True)
+        except:
+            return ValidationResult("FileLoad", False, "File is corrupt or unreadable.")
+
+    def check_skeleton_hierarchy(self, path):
+        """Does Root -> Hips -> Spine exist?"""
+        expected = self.config['expected_hierarchy']  # ["Root","Hips","Spine",...]
+        root = cmds.ls(type="joint")[0]
+        for joint_name in expected:
+            if not cmds.objExists(joint_name):
+                return ValidationResult("Hierarchy", False, f"Missing joint: {joint_name}")
+        return ValidationResult("Hierarchy", True)
+
+    def check_frame_range(self, path):
+        """Is the animation absurdly short or long?"""
+        start = cmds.playbackOptions(q=True, min=True)
+        end = cmds.playbackOptions(q=True, max=True)
+        duration = end - start
+        if duration < 10:
+            return ValidationResult("FrameRange", False, f"Only {duration} frames. Likely truncated.")
+        if duration > 50000:
+            return ValidationResult("FrameRange", False, f"{duration} frames. Suspiciously long.")
+        return ValidationResult("FrameRange", True, f"{int(duration)} frames OK.")
+
+    def check_foot_contact(self, path):
+        """Detect foot skating: velocity at 'grounded' frames should be ~0."""
+        # Simplified: check if foot joints have near-zero velocity
+        # when they are below a height threshold (on the floor).
+        foot_joints = ["LeftFoot", "RightFoot"]
+        for jnt in foot_joints:
+            for frame in range(int(cmds.playbackOptions(q=True, min=True)),
+                               int(cmds.playbackOptions(q=True, max=True))):
+                cmds.currentTime(frame)
+                pos = cmds.xform(jnt, q=True, ws=True, t=True)
+                if pos[1] < 2.0:  # Below 2cm = "grounded"
+                    cmds.currentTime(frame + 1)
+                    pos2 = cmds.xform(jnt, q=True, ws=True, t=True)
+                    delta = sum((a-b)**2 for a,b in zip(pos, pos2)) ** 0.5
+                    if delta > 5.0:  # More than 5cm movement while "grounded"
+                        return ValidationResult("FootContact", False,
+                            f"Foot skating at frame {frame}: {delta:.1f}cm")
+        return ValidationResult("FootContact", True)
+
+    def check_naming_convention(self, path):
+        """Filename must match: project_date_shotID_version.fbx"""
+        import re
+        basename = os.path.basename(path)
+        pattern = r'^[a-z]+_\d{8}_sc\d+_sh\d+_v\d{3}\.fbx$'
+        if not re.match(pattern, basename):
+            return ValidationResult("Naming", False,
+                f"'{basename}' doesn't match schema: project_YYYYMMDD_scNN_shNN_vNNN.fbx")
+        return ValidationResult("Naming", True)</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Scalability: 10 Captures vs 1,000</h2>
+    <p><strong>"How does your pipeline handle 10x the volume?"</strong></p>
+
+    <table>
+      <tr>
+        <th>Scale</th>
+        <th>Strategy</th>
+        <th>Tool</th>
+      </tr>
+      <tr>
+        <td><strong>10 Takes/Day</strong></td>
+        <td>Manual trigger, single workstation</td>
+        <td>Python Script + Maya GUI</td>
+      </tr>
+      <tr>
+        <td><strong>100 Takes/Day</strong></td>
+        <td>Automated ingestion, local farm (10 nodes)</td>
+        <td>Deadline + Sweeper Bot</td>
+      </tr>
+      <tr>
+        <td><strong>1,000 Takes/Day</strong></td>
+        <td>Cloud burst, containerized workers, auto-scaling</td>
+        <td>AWS Batch + Docker + S3</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Key Phrase</div>
+      <p>"The pipeline code doesn't change. Only the <strong>deployment target</strong> changes. The same Docker container that runs on my laptop runs on 1,000 AWS nodes. That's the power of containerization."</p>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Cloud Burst to AWS</h3>
+      <pre><code class="language-python">import boto3
+
+def submit_cloud_job(scene_file, s3_bucket):
+    """When local farm is full, burst to AWS Batch."""
+    s3 = boto3.client('s3')
+    batch = boto3.client('batch')
+    
+    # 1. Upload scene to S3
+    s3_key = f"inbox/{os.path.basename(scene_file)}"
+    s3.upload_file(scene_file, s3_bucket, s3_key)
+    
+    # 2. Submit AWS Batch job (runs our Docker container)
+    response = batch.submit_job(
+        jobName=f"solve_{os.path.basename(scene_file)}",
+        jobQueue="capture-processing-queue",
+        jobDefinition="maya-solve-job:3",  # Our Docker image
+        containerOverrides={
+            'environment': [
+                {'name': 'INPUT_S3_KEY', 'value': s3_key},
+                {'name': 'OUTPUT_S3_PREFIX', 'value': 'output/'},
+            ]
+        }
+    )
+    return response['jobId']</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Perforce Automation (P4Python)</h2>
+    <p>As a pipeline TA you don't use the P4V GUI. You script everything.</p>
+
+    <div class="code-block">
+      <h3>Python: Auto-Publishing Processed Assets</h3>
+      <pre><code class="language-python">from P4 import P4, P4Exception
+
+def publish_to_perforce(local_path, depot_path):
+    """Auto-submit a processed asset to Perforce."""
+    p4 = P4()
+    p4.user = os.environ['P4USER']
+    p4.port = os.environ['P4PORT']
+    p4.client = os.environ['P4CLIENT']
+    
+    try:
+        p4.connect()
+        
+        # Check if file exists in depot
+        try:
+            p4.run_fstat(depot_path)
+            # File exists: edit it
+            p4.run_edit(depot_path)
+        except P4Exception:
+            # File is new: add it
+            p4.run_add(local_path)
+        
+        # Submit with a structured changelist
+        change = p4.fetch_change()
+        change['Description'] = (
+            f"[AUTO] Pipeline publish: {os.path.basename(local_path)}\n"
+            f"Source: Capture Farm\n"
+            f"Validated: True\n"
+            f"Hash: {calculate_md5(local_path)}"
+        )
+        p4.run_submit(change)
+        
+    except P4Exception as e:
+        log.error(f"P4 Error: {e}")
+        raise
+    finally:
+        p4.disconnect()</code></pre>
+    </div>
+
+    <h3>Key P4 Commands to Know</h3>
+    <table>
+      <tr><th>Command</th><th>What It Does</th></tr>
+      <tr><td><code>p4 fstat</code></td><td>File status: who has it, revision, lock state.</td></tr>
+      <tr><td><code>p4 edit</code></td><td>Check out (lock) a file for editing.</td></tr>
+      <tr><td><code>p4 add</code></td><td>Mark a new file for submission.</td></tr>
+      <tr><td><code>p4 submit -d "msg"</code></td><td>Commit the changelist.</td></tr>
+      <tr><td><code>p4 revert</code></td><td>Unlock without saving changes.</td></tr>
+      <tr><td><code>p4 sync</code></td><td>Pull latest from server.</td></tr>
+      <tr><td><code>p4 typemap</code></td><td>Server-wide file type rules (auto-lock .fbx).</td></tr>
+      <tr><td><code>p4 protect</code></td><td>Permission table (who can write where).</td></tr>
+      <tr><td><code>p4 triggers</code></td><td>Server-side scripts that run on submit.</td></tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. Bones, Retargeting & Skeletons (Quick Reference)</h2>
+    <p>Fast-reference table if Nigel probes on capture fundamentals.</p>
+
+    <table>
+      <tr>
+        <th>Term</th>
+        <th>One-Liner</th>
+      </tr>
+      <tr>
+        <td><strong>Rigid Body</strong></td>
+        <td>A cluster of 3+ non-collinear markers that define one bone's 6DOF (position + rotation).</td>
+      </tr>
+      <tr>
+        <td><strong>Solving</strong></td>
+        <td>Fitting a skeleton inside a point cloud using SVD / Least Squares.</td>
+      </tr>
+      <tr>
+        <td><strong>Retargeting</strong></td>
+        <td>Mapping motion from Actor skeleton → Game character (different proportions). Uses HumanIK constraints.</td>
+      </tr>
+      <tr>
+        <td><strong>IK</strong></td>
+        <td>"Put the foot HERE." Solver calculates knee/hip angles. Used for contact (feet, hands).</td>
+      </tr>
+      <tr>
+        <td><strong>FK</strong></td>
+        <td>"Rotate the shoulder 45°." Child bones follow. Used for free-swinging motion (arms).</td>
+      </tr>
+      <tr>
+        <td><strong>Marker Swap</strong></td>
+        <td>Mislabeled marker after occlusion. Detect by velocity spike (impossible speed = error).</td>
+      </tr>
+      <tr>
+        <td><strong>Residual</strong></td>
+        <td>Error metric (mm) of camera ray intersection. &lt; 1mm = gold. &gt; 10mm = garbage.</td>
+      </tr>
+      <tr>
+        <td><strong>HumanIK (HIK)</strong></td>
+        <td>MotionBuilder's full-body retargeting solver. Maps source to target via characterization.</td>
+      </tr>
+      <tr>
+        <td><strong>Characterization</strong></td>
+        <td>Mapping YOUR skeleton's joint names to HIK's internal template. "LeftUpLeg" → your "L_Thigh".</td>
+      </tr>
+      <tr>
+        <td><strong>Foot Skating</strong></td>
+        <td>Feet sliding on ground = bad IK solve. Detect by checking velocity at grounded frames.</td>
+      </tr>
+      <tr>
+        <td><strong>T-Pose / A-Pose</strong></td>
+        <td>The "Reset" pose. Both solver and retarget need to agree on the rest pose. Mismatch = broken.</td>
+      </tr>
+      <tr>
+        <td><strong>.c3d Format</strong></td>
+        <td>Industry standard for 3D point data. Contains marker positions, analog data, and metadata.</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>9. Photogrammetry Pipeline</h2>
+    <p>If the role involves 3D scanning (likely for "Future Development"), know this flow:</p>
+    
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                 PHOTOGRAMMETRY PIPELINE                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ [200 Photos] → [Alignment] → [Dense Cloud] → [Mesh] → [Texture]│
+│   (DSLR/LED)    (SfM)         (MVS)          (Poisson)  (UV)   │
+│                                                                 │
+│   Tool: RealityCapture / Metashape / Meshroom (open source)     │
+│                                                                 │
+│   Output: High-poly mesh (50M tris) → Decimate → Retopo → LOD  │
+│   Final:  Game-ready mesh (10K tris) + Normal Map + Diffuse     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <ul>
+      <li><strong>SfM (Structure from Motion):</strong> Computes camera positions from overlapping photos.</li>
+      <li><strong>MVS (Multi-View Stereo):</strong> Generates a dense 3D point cloud from the camera positions.</li>
+      <li><strong>Retopology:</strong> Converting the messy scan mesh into clean quads for animation.</li>
+      <li><strong>LOD (Level of Detail):</strong> Multiple mesh resolutions: 50K (cinematic), 10K (gameplay), 2K (background).</li>
+      <li><strong>Automation:</strong> RealityCapture has a CLI: <code>RealityCaptureApp -set "Input Folder" photos/ -align -reconstruct -exportModel output.obj</code></li>
+    </ul>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>10. Pipeline API Design & Documentation</h2>
+    <p><strong>"How do you ensure IT and Engineering can support your tools?"</strong></p>
+
+    <ul>
+      <li><strong>CLI-First:</strong> Every tool must have a command-line interface. GUI is a wrapper, not the core.</li>
+      <li><strong>Logging:</strong> Use Python's <code>logging</code> module with levels (DEBUG/INFO/WARNING/ERROR). Pipe to ELK Stack.</li>
+      <li><strong>Auto-docs:</strong> Sphinx generates docs from docstrings. <code>make html</code> → hosted on internal wiki.</li>
+      <li><strong>Config over Code:</strong> JSON/YAML for paths, thresholds, studio-specific settings. Never hardcode.</li>
+    </ul>
+
+    <div class="code-block">
+      <h3>Python: CLI-First Tool with Proper Logging</h3>
+      <pre><code class="language-python">import argparse
+import logging
+import json
+import sys
+
+def setup_logging(verbose=False):
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler("pipeline.log")
+        ]
+    )
+
+def main():
+    parser = argparse.ArgumentParser(description="Process MoCap Take")
+    parser.add_argument("--input", required=True, help="Path to .c3d file")
+    parser.add_argument("--output", required=True, help="Output .fbx path")
+    parser.add_argument("--config", default="config.json", help="Pipeline config")
+    parser.add_argument("--verbose", action="store_true", help="Debug logging")
+    parser.add_argument("--dry-run", action="store_true", help="Validate only, don't export")
+    args = parser.parse_args()
+
+    setup_logging(args.verbose)
+    log = logging.getLogger("capture_pipeline")
+
+    # Load studio config (never hardcoded)
+    with open(args.config) as f:
+        config = json.load(f)
+
+    log.info(f"Processing: {args.input}")
+    log.info(f"Config: frame_rate={config['frame_rate']}, solver={config['solver']}")
+
+    if args.dry_run:
+        log.info("DRY RUN: Validation only.")
+        # Run validation, skip export
+        return 0
+    
+    # ... full processing logic ...
+    log.info(f"Export Complete: {args.output}")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>Example: config.json (No Hardcoded Paths)</h3>
+      <pre><code class="language-json">{
+    "frame_rate": 120,
+    "solver": "HumanIK",
+    "export_format": "fbx",
+    "perforce": {
+        "port": "ssl:p4.ea.com:1666",
+        "depot": "//depot/captures/"
+    },
+    "validation": {
+        "max_file_size_gb": 50,
+        "expected_joints": ["Root", "Hips", "Spine", "Spine1", "Head"],
+        "min_frame_count": 10,
+        "max_residual_mm": 1.0
+    },
+    "notifications": {
+        "slack_webhook": "https://hooks.slack.com/services/XXX",
+        "email_on_failure": "pipeline-alerts@ea.com"
+    }
+}</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>11. The Infrastructure Bottleneck Story</h2>
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 Your Story: Solving a Pipeline Bottleneck</div>
+      <p><strong>Problem:</strong> "Our capture team was producing 200 takes per day, but our processing pipeline could only handle 50. Artists were waiting 3-4 days for cleaned data. The bottleneck was a single workstation running MotionBuilder sequentially."</p>
+      <p><strong>Diagnosis:</strong> "I profiled the process. Each take took 12 minutes: 2 minutes to solve, 10 minutes waiting for file I/O on a shared network drive. The real bottleneck wasn't CPU—it was the NAS throughput."</p>
+      <p><strong>Solution:</strong> "Three changes: (1) I containerized the solve into a headless Docker image and deployed it to 20 Deadline farm nodes. (2) I wrote a Python file watcher (`watchdog`) that auto-detected new .c3d files and submitted farm jobs. (3) I moved the intermediate cache to each node's local SSD, only writing the final .fbx to the NAS. This eliminated the I/O bottleneck."</p>
+      <p><strong>Result:</strong> "Processing went from 50 takes/day to 200+/day. Overnight turnaround. Captured Monday → game-ready Tuesday morning. No manual intervention. I also added MD5 validation and Slack notifications."</p>
+      <p><strong>Key architecture:</strong> "<strong>Decoupling.</strong> The capture stage writes to a buffer (NAS inbox). The sweeper reads from the buffer. The farm processes using local disks. Perforce publishes the final output. No single point of failure."</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>12. Global Collaboration: The Multi-Site Question</h2>
+    <p><strong>"If a capture happens in Vancouver, how does Stockholm use it?"</strong></p>
+    <ol>
+      <li><strong>Perforce Proxy:</strong> A caching server in Stockholm. First request is slow (WAN). Every request after is instant (cached).</li>
+      <li><strong>Pre-fetch Script:</strong> Runs at 3AM Stockholm time. Force-syncs yesterday's dailies so data is local when artists arrive at 9AM.</li>
+      <li><strong>Tiered Replication:</strong> Raw data stays in Vancouver (Cold). Game-ready FBX is replicated to all sites (Hot).</li>
+      <li><strong>Metadata First:</strong> Publish a small JSON manifest immediately (take name, frame count, thumbnail). Artists can search/preview before syncing the heavy 2GB file.</li>
+      <li><strong>Bandwidth Budget:</strong> Schedule large syncs for off-peak hours. Use <code>p4 sync --parallel=threads=8</code> for throughput.</li>
+    </ol>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>13. Questions YOU Should Ask Nigel</h2>
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Show Senior Thinking</div>
+      <ul>
+        <li>"How does Future Development balance bespoke solutions for current titles versus building a <strong>unified platform</strong> across all EA studios?"</li>
+        <li>"What are the biggest <strong>IT or infrastructure hurdles</strong> currently slowing capture-to-engine throughput?"</li>
+        <li>"How do you handle <strong>global collaboration</strong>? If a capture happens in Vancouver, how is that data optimized for Stockholm?"</li>
+        <li>"What does the team's relationship with <strong>external vendors</strong> (Vicon, DI4D) look like in terms of API integration?"</li>
+        <li>"What is the team's stance on <strong>markerless mocap</strong> (Move.ai, DeepMotion)? Is that on the roadmap?"</li>
+      </ul>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Think Systems, Not Scripts:</strong> Every answer should mention reliability, scalability, and automation.</li>
+      <li><strong>Adapter Pattern:</strong> Isolate vendor dependencies behind a clean internal API. Use a Factory to auto-detect formats.</li>
+      <li><strong>IaC:</strong> Your pipeline should be rebuildable from <code>git clone</code> + <code>docker build</code>.</li>
+      <li><strong>CLI-First:</strong> Every tool needs a command-line interface for automation and farm usage.</li>
+      <li><strong>Overnight Turnaround:</strong> Captured Monday → game-ready Tuesday. That's the benchmark.</li>
+      <li><strong>Pin Everything:</strong> Maya version, Python version, library versions. Never rely on "latest".</li>
+      <li><strong>Validation is Non-Negotiable:</strong> MD5 hashes, skeleton checks, naming conventions—automate all of it.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="07-leadership.html">
+        <span class="label">← Back to</span>
+        <span class="title">System Design</span>
+      </a>
+      <a href="09-real-ea-pipeline.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">The Real EA Pipeline</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 11: Defensive Pipeline Architecture | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 11</div>
+      <h1>Defensive Pipeline Architecture: Zero-Downtime & Resilience</h1>
+      <p class="lesson-subtitle">The mandate: no more than 10 minutes of stage downtime. Ever. Here's how you build a pipeline that delivers on that promise.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The 10-Minute Rule</div>
+      <p>Stage time is the most expensive resource in the capture studio. Actors, directors, cameramen, lighting, costumes — all burning money while the stage is live. If the pipeline breaks and the stage can't record, every minute of downtime costs thousands. The mandate from EA leadership: <strong>build defensive resilience so no pipeline failure ever lasts more than 10 minutes of stage time.</strong></p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. Failure Taxonomy: What Can Break</h2>
+    <p>Before you can defend against failures, you need to name them. Here's every failure mode in the capture pipeline, ranked by severity:</p>
+
+    <table>
+      <tr>
+        <th>Failure</th>
+        <th>Severity</th>
+        <th>Impact</th>
+        <th>Recovery Time (Without Defense)</th>
+      </tr>
+      <tr>
+        <td><strong>NAS goes offline</strong></td>
+        <td style="color: var(--accent-red);">CRITICAL</td>
+        <td>Can't save captures. Stage stops.</td>
+        <td>Hours (hardware fix)</td>
+      </tr>
+      <tr>
+        <td><strong>Vendor SDK crash</strong></td>
+        <td style="color: var(--accent-red);">CRITICAL</td>
+        <td>Solver stops working</td>
+        <td>Hours (vendor support)</td>
+      </tr>
+      <tr>
+        <td><strong>Network switch failure</strong></td>
+        <td style="color: var(--accent-red);">CRITICAL</td>
+        <td>All data transfer stops</td>
+        <td>30 min–2 hours</td>
+      </tr>
+      <tr>
+        <td><strong>Perforce server down</strong></td>
+        <td style="color: var(--accent-orange);">HIGH</td>
+        <td>Can't publish, artists can't sync</td>
+        <td>30 min–1 hour (IT)</td>
+      </tr>
+      <tr>
+        <td><strong>Disk full on processing node</strong></td>
+        <td style="color: var(--accent-orange);">HIGH</td>
+        <td>Processing fails silently</td>
+        <td>5-30 min</td>
+      </tr>
+      <tr>
+        <td><strong>Python script exception</strong></td>
+        <td style="color: var(--accent-orange);">MEDIUM</td>
+        <td>One take fails</td>
+        <td>Minutes (if logged)</td>
+      </tr>
+      <tr>
+        <td><strong>Wrong naming convention</strong></td>
+        <td style="color: var(--text-muted);">LOW</td>
+        <td>Delivery rejected, needs re-run</td>
+        <td>Minutes</td>
+      </tr>
+      <tr>
+        <td><strong>Stale config file</strong></td>
+        <td style="color: var(--text-muted);">LOW</td>
+        <td>Wrong skeleton or format</td>
+        <td>Minutes (re-export)</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. The Defense Layers</h2>
+    <p>A resilient pipeline doesn't rely on one defense. It uses <strong>layered defenses</strong> — if one fails, the next catches it:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    DEFENSE IN DEPTH                                   │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Layer 1: PREVENTION                                                  │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │ • Input validation (reject bad data early)                    │     │
+│  │ • Disk space monitoring (alert at 80%, block at 90%)         │     │
+│  │ • Config validation (check before pipeline runs)              │     │
+│  │ • Version pinning (no surprise upgrades)                      │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│                                                                       │
+│  Layer 2: DETECTION                                                   │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │ • Health check daemon (heartbeat every 30 seconds)           │     │
+│  │ • File watcher monitoring (is the sweeper still alive?)      │     │
+│  │ • Processing queue depth alerts (backlog growing?)           │     │
+│  │ • Error rate thresholds (>5% failure = alert)                │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│                                                                       │
+│  Layer 3: RECOVERY                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │ • Automatic retry with exponential backoff                    │     │
+│  │ • Circuit breaker (stop hammering a dead service)            │     │
+│  │ • Failover to backup NAS                                      │     │
+│  │ • Graceful degradation (queue to local disk if NAS dies)     │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│                                                                       │
+│  Layer 4: HUMAN RESPONSE                                              │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │ • Slack + PagerDuty alerts with severity classification      │     │
+│  │ • Runbook: step-by-step recovery procedures                  │     │
+│  │ • Escalation path: TA → IT → Vendor                          │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Python: The Retry Decorator</h2>
+    <p>The single most common defense pattern. Any operation that talks to a network resource (NAS, Perforce, S3) should retry on failure:</p>
+
+    <div class="code-block">
+      <h3>Python: Exponential Backoff Retry</h3>
+      <pre><code class="language-python">"""
+Retry decorator with exponential backoff.
+Usage: @retry(max_attempts=3, delay=1.0, backoff=2.0)
+"""
+import time
+import functools
+import logging
+
+log = logging.getLogger("retry")
+
+def retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,)):
+    """
+    Retry a function on failure with exponential backoff.
+    
+    Args:
+        max_attempts: Total number of attempts (including the first).
+        delay:        Initial delay in seconds between retries.
+        backoff:      Multiply delay by this factor each retry.
+        exceptions:   Tuple of exception types to catch and retry on.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            current_delay = delay
+            last_exception = None
+            
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt == max_attempts:
+                        log.error(
+                            f"{func.__name__} FAILED after {max_attempts} attempts: {e}"
+                        )
+                        raise
+                    
+                    log.warning(
+                        f"{func.__name__} attempt {attempt}/{max_attempts} "
+                        f"failed: {e}. Retrying in {current_delay:.1f}s..."
+                    )
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        
+        return wrapper
+    return decorator
+
+# Usage:
+@retry(max_attempts=3, delay=2.0, backoff=2.0, exceptions=(IOError, OSError))
+def copy_to_nas(src, dest):
+    """Copy file to NAS. Auto-retries on network failure."""
+    import shutil
+    shutil.copy2(src, dest)
+
+@retry(max_attempts=5, delay=1.0, backoff=3.0)
+def submit_to_perforce(filepath, depot_path):
+    """P4 submit. If the server is briefly unreachable, retry."""
+    from P4 import P4, P4Exception
+    # ... P4 logic ...</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Python: The Circuit Breaker</h2>
+    <p>A retry keeps trying. A circuit breaker <strong>stops trying</strong> when a service is clearly dead — preventing your pipeline from hammering a broken server and making things worse:</p>
+
+    <div class="code-block">
+      <h3>Python: Circuit Breaker Pattern</h3>
+      <pre><code class="language-python">"""
+Circuit Breaker — Prevents cascading failures.
+
+States:
+  CLOSED  = Normal operation. Requests go through.
+  OPEN    = Service is down. All requests fail immediately (no timeout wait).
+  HALF_OPEN = After a cooldown, try ONE request. If it works, close. If not, stay open.
+"""
+import time
+import logging
+
+log = logging.getLogger("circuit_breaker")
+
+class CircuitBreaker:
+    def __init__(self, name, failure_threshold=5, recovery_timeout=60):
+        self.name = name
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout  # seconds
+        
+        self._failure_count = 0
+        self._last_failure_time = 0
+        self._state = "CLOSED"
+    
+    @property
+    def state(self):
+        if self._state == "OPEN":
+            # Check if recovery timeout has passed
+            if time.time() - self._last_failure_time > self.recovery_timeout:
+                self._state = "HALF_OPEN"
+                log.info(f"[{self.name}] Circuit HALF_OPEN — testing recovery")
+        return self._state
+    
+    def call(self, func, *args, **kwargs):
+        """Execute a function through the circuit breaker."""
+        
+        if self.state == "OPEN":
+            raise CircuitOpenError(
+                f"[{self.name}] Circuit is OPEN. Service is down. "
+                f"Will retry in {self._time_until_retry():.0f}s."
+            )
+        
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except Exception as e:
+            self._on_failure()
+            raise
+    
+    def _on_success(self):
+        if self._state == "HALF_OPEN":
+            log.info(f"[{self.name}] Service recovered! Circuit CLOSED.")
+        self._failure_count = 0
+        self._state = "CLOSED"
+    
+    def _on_failure(self):
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        
+        if self._failure_count >= self.failure_threshold:
+            self._state = "OPEN"
+            log.error(
+                f"[{self.name}] Circuit OPEN after {self._failure_count} failures. "
+                f"Blocking requests for {self.recovery_timeout}s."
+            )
+    
+    def _time_until_retry(self):
+        elapsed = time.time() - self._last_failure_time
+        return max(0, self.recovery_timeout - elapsed)
+
+
+class CircuitOpenError(Exception):
+    """Raised when a circuit breaker is in the OPEN state."""
+    pass
+
+
+# Usage:
+nas_circuit = CircuitBreaker("NAS", failure_threshold=3, recovery_timeout=30)
+p4_circuit = CircuitBreaker("Perforce", failure_threshold=5, recovery_timeout=60)
+
+def safe_copy_to_nas(src, dest):
+    """Copy to NAS with circuit breaker protection."""
+    return nas_circuit.call(shutil.copy2, src, dest)
+
+def safe_p4_submit(filepath, depot_path):
+    """P4 submit with circuit breaker protection."""
+    return p4_circuit.call(submit_to_perforce, filepath, depot_path)</code></pre>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Why Circuit Breakers Matter</div>
+      <p>Without a circuit breaker, when the NAS dies, your file watcher tries to copy a file, waits 30 seconds for timeout, fails, tries the next file, waits 30 seconds, fails... Your entire queue backs up for hours. With a circuit breaker: after 3 failures, ALL subsequent copies fail <strong>instantly</strong> (no timeout wait), an alert fires, and the circuit automatically retries after 30 seconds. If the NAS comes back, operations resume. If not, humans are already responding.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Python: The Health Monitor Daemon</h2>
+    <p>A background process that continuously checks the health of every critical system:</p>
+
+    <div class="code-block">
+      <h3>Python: Pipeline Health Monitor</h3>
+      <pre><code class="language-python">"""
+Health Monitor — Checks the pulse of every critical pipeline component.
+Runs as a daemon/service. Alerts via Slack on any degradation.
+"""
+import time
+import os
+import socket
+import logging
+import requests
+import json
+from datetime import datetime
+
+log = logging.getLogger("health_monitor")
+
+class HealthCheck:
+    def __init__(self, name, check_fn, severity="HIGH"):
+        self.name = name
+        self.check_fn = check_fn
+        self.severity = severity
+        self.consecutive_failures = 0
+        self.last_status = True
+
+class HealthMonitor:
+    def __init__(self, config_path):
+        with open(config_path) as f:
+            self.config = json.load(f)
+        
+        self.checks = []
+        self.slack_webhook = self.config.get("slack_webhook", "")
+        self._setup_checks()
+    
+    def _setup_checks(self):
+        """Register all health checks."""
+        
+        # NAS accessibility
+        for nas in self.config.get("nas_paths", []):
+            self.checks.append(HealthCheck(
+                f"NAS: {nas}",
+                lambda p=nas: os.path.isdir(p) and os.access(p, os.W_OK),
+                severity="CRITICAL"
+            ))
+        
+        # Disk space on processing nodes
+        for path in self.config.get("disk_paths", []):
+            self.checks.append(HealthCheck(
+                f"Disk: {path}",
+                lambda p=path: self._check_disk_space(p),
+                severity="HIGH"
+            ))
+        
+        # Perforce connectivity
+        self.checks.append(HealthCheck(
+            "Perforce Server",
+            self._check_perforce,
+            severity="HIGH"
+        ))
+        
+        # Deadline farm
+        self.checks.append(HealthCheck(
+            "Deadline Farm",
+            self._check_deadline,
+            severity="MEDIUM"
+        ))
+        
+        # File watcher process
+        self.checks.append(HealthCheck(
+            "File Watcher (Sweeper)",
+            lambda: self._check_process_alive("sweeper"),
+            severity="HIGH"
+        ))
+    
+    def _check_disk_space(self, path, min_free_gb=50):
+        """Check that a disk has enough free space."""
+        stat = os.statvfs(path)
+        free_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
+        return free_gb > min_free_gb
+    
+    def _check_perforce(self):
+        """Can we reach the Perforce server?"""
+        host, port = self.config["p4_port"].replace("ssl:", "").split(":")
+        try:
+            sock = socket.create_connection((host, int(port)), timeout=5)
+            sock.close()
+            return True
+        except (socket.timeout, socket.error):
+            return False
+    
+    def _check_deadline(self):
+        """Is the Deadline web service responding?"""
+        url = self.config.get("deadline_api", "http://deadline:8081")
+        try:
+            r = requests.get(f"{url}/api/pools", timeout=5)
+            return r.status_code == 200
+        except:
+            return False
+    
+    def _check_process_alive(self, process_name):
+        """Check if a named process is running."""
+        import subprocess
+        result = subprocess.run(
+            ["pgrep", "-f", process_name],
+            capture_output=True, text=True
+        )
+        return result.returncode == 0
+    
+    def run_once(self):
+        """Run all health checks once. Returns list of failures."""
+        failures = []
+        for check in self.checks:
+            try:
+                healthy = check.check_fn()
+            except Exception as e:
+                healthy = False
+                log.error(f"Health check '{check.name}' threw error: {e}")
+            
+            if healthy:
+                if not check.last_status:  # Was down, now recovered
+                    log.info(f"✅ RECOVERED: {check.name}")
+                    self._alert(check.name, "RECOVERED", "resolved")
+                check.consecutive_failures = 0
+                check.last_status = True
+            else:
+                check.consecutive_failures += 1
+                check.last_status = False
+                
+                if check.consecutive_failures == 1:
+                    log.warning(f"⚠️ DEGRADED: {check.name}")
+                elif check.consecutive_failures == 3:
+                    log.error(f"❌ DOWN: {check.name} (3 consecutive failures)")
+                    self._alert(check.name, check.severity, "firing")
+                
+                failures.append(check)
+        
+        return failures
+    
+    def _alert(self, check_name, severity, status):
+        """Send alert to Slack."""
+        if not self.slack_webhook:
+            return
+        
+        emoji = "🔴" if status == "firing" else "🟢"
+        color = "#FF0000" if status == "firing" else "#00FF00"
+        
+        requests.post(self.slack_webhook, json={
+            "attachments": [{
+                "color": color,
+                "title": f"{emoji} Pipeline Health: {check_name}",
+                "text": f"Status: {status.upper()}\nSeverity: {severity}",
+                "ts": int(time.time())
+            }]
+        })
+    
+    def run_forever(self, interval=30):
+        """Main daemon loop. Check every `interval` seconds."""
+        log.info(f"Health monitor started. Checking every {interval}s.")
+        while True:
+            self.run_once()
+            time.sleep(interval)</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Graceful Degradation: The Fallback Strategy</h2>
+    <p>When a critical system goes down, the pipeline shouldn't stop — it should <strong>degrade gracefully</strong> and continue recording:</p>
+
+    <div class="code-block">
+      <h3>Python: NAS Failover with Local Queue</h3>
+      <pre><code class="language-python">"""
+Graceful degradation: if the primary NAS is unreachable,
+queue files to a local disk and flush when NAS recovers.
+"""
+import os
+import shutil
+import logging
+from pathlib import Path
+
+log = logging.getLogger("failover")
+
+class ResilientStorage:
+    """Writes to primary NAS. Falls back to local queue if NAS is down."""
+    
+    def __init__(self, primary_path, fallback_path, circuit_breaker):
+        self.primary = Path(primary_path)
+        self.fallback = Path(fallback_path)
+        self.circuit = circuit_breaker
+        
+        self.fallback.mkdir(parents=True, exist_ok=True)
+    
+    def write(self, src_path, dest_filename):
+        """Write a file to storage. Primary NAS if up, local queue if down."""
+        try:
+            dest = self.primary / dest_filename
+            self.circuit.call(shutil.copy2, src_path, dest)
+            log.info(f"Written to PRIMARY: {dest}")
+            
+            # If we just recovered, flush the queue
+            self._flush_queue()
+            
+        except CircuitOpenError:
+            # NAS is down — queue locally
+            fallback_dest = self.fallback / dest_filename
+            shutil.copy2(src_path, fallback_dest)
+            log.warning(f"NAS DOWN — queued locally: {fallback_dest}")
+    
+    def _flush_queue(self):
+        """Move queued files from local fallback back to primary NAS."""
+        queued = list(self.fallback.iterdir())
+        if not queued:
+            return
+        
+        log.info(f"Flushing {len(queued)} queued files to NAS...")
+        for f in queued:
+            try:
+                dest = self.primary / f.name
+                shutil.move(str(f), dest)
+                log.info(f"Flushed: {f.name}")
+            except Exception as e:
+                log.error(f"Flush failed for {f.name}: {e}")
+                break  # Stop flushing, NAS may be failing again
+
+
+# Usage:
+nas_breaker = CircuitBreaker("NAS", failure_threshold=3, recovery_timeout=30)
+storage = ResilientStorage(
+    primary_path="//nas01/captures/",
+    fallback_path="/tmp/capture_queue/",
+    circuit_breaker=nas_breaker
+)</code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 EA Studio Relevance</div>
+      <p>This is exactly how you deliver on the "10-minute rule." The stage never stops recording. If the NAS dies, capture data queues to the stage machine's local SSD. When the NAS recovers, the queue flushes automatically. Total stage downtime: <strong>zero.</strong> The issue is invisible to the actors and directors on the stage floor.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Runbook Culture: When Humans Must Respond</h2>
+    <p>Not everything can be automated. For situations that need a human, you need a <strong>runbook</strong> — a step-by-step recovery procedure that anyone can follow:</p>
+
+    <div class="code-block">
+      <h3>Markdown: Example Runbook Template</h3>
+      <pre><code class="language-markdown"># RUNBOOK: NAS Primary Storage Failure
+
+## Severity: CRITICAL
+## Time to Resolve Target: 10 minutes
+
+## Symptoms
+- Health monitor alert: "NAS: //nas01/captures/ — DOWN"
+- Delivery bot logs showing CircuitOpenError
+- Queued files accumulating in /tmp/capture_queue/
+
+## Immediate Actions (0-5 minutes)
+1. **Check Slack** — Is IT already aware? (#infra-alerts)
+2. **Verify** — Can you ping the NAS? `ping nas01.internal`
+3. **Check mount** — Is the SMB share still mounted? `mount | grep nas01`
+4. **Remount** — `sudo mount -t cifs //nas01/captures /mnt/captures -o credentials=/etc/nas.cred`
+5. **If remount fails** — Contact IT: [IT Escalation Contact]
+
+## If NAS Cannot Be Recovered (5-10 minutes)
+1. **Switch to backup NAS:**
+   ```bash
+   python3 /pipeline/tools/switch_storage.py --target nas02
+   ```
+2. **Verify backup NAS:**
+   ```bash
+   ls -la //nas02/captures/
+   ```
+3. **Notify stage:**
+   "Pipeline is running on backup storage. No impact to capture."
+
+## After Recovery
+1. Run queue flush: `python3 /pipeline/tools/flush_queue.py`
+2. Verify all queued files are on the NAS
+3. Post incident report to #pipeline-incidents</code></pre>
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The Runbook Rule</div>
+      <p>If you can't write a runbook for a failure scenario, it means <strong>you don't understand the failure scenario.</strong> Every critical system needs a runbook. Every runbook should be tested (fire drill) at least once a quarter. The runbook lives in version control alongside the pipeline code.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. Hot-Swap and Rollback Strategies</h2>
+    <p>When you deploy a new version of a pipeline tool, you need the ability to instantly revert if something breaks:</p>
+
+    <ul>
+      <li><strong>Blue-Green Deployment:</strong> Keep two versions of the pipeline running simultaneously (v2.3 = "blue", v2.4 = "green"). All traffic goes to blue. When green is tested and ready, flip a config flag to switch. If green breaks, flip back to blue instantly.</li>
+      <li><strong>Canary Deployment:</strong> Route 10% of captures through the new pipeline version. If error rate stays low for 24 hours, roll out to 100%. If errors spike, revert the canary.</li>
+      <li><strong>Symlink Swapping:</strong> The live pipeline path <code>/pipeline/current</code> is a symlink to <code>/pipeline/v2.3/</code>. To upgrade: deploy v2.4 to a new directory, then <code>ln -sf /pipeline/v2.4 /pipeline/current</code>. To rollback: <code>ln -sf /pipeline/v2.3 /pipeline/current</code>. One command, instant swap.</li>
+    </ul>
+
+    <div class="code-block">
+      <h3>Bash: Symlink-Based Deployment</h3>
+      <pre><code class="language-bash">#!/bin/bash
+# deploy.sh — Zero-downtime pipeline deployment
+
+NEW_VERSION=$1  # e.g., "v2.4"
+PIPELINE_ROOT="/pipeline"
+
+echo "Deploying ${NEW_VERSION}..."
+
+# 1. Install new version alongside the old
+pip install -r "${PIPELINE_ROOT}/${NEW_VERSION}/requirements.txt" \
+    --target "${PIPELINE_ROOT}/${NEW_VERSION}/lib/"
+
+# 2. Run smoke tests against the new version
+python3 "${PIPELINE_ROOT}/${NEW_VERSION}/tests/smoke_test.py"
+if [ $? -ne 0 ]; then
+    echo "❌ Smoke tests FAILED. Aborting deployment."
+    exit 1
+fi
+
+# 3. Swap the symlink (atomic operation)
+PREVIOUS=$(readlink "${PIPELINE_ROOT}/current")
+ln -sfn "${PIPELINE_ROOT}/${NEW_VERSION}" "${PIPELINE_ROOT}/current"
+
+echo "✅ Deployed: ${NEW_VERSION} (previous: ${PREVIOUS})"
+echo "To rollback: ln -sfn ${PREVIOUS} ${PIPELINE_ROOT}/current"</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>9. Monitoring Dashboard: What to Track</h2>
+    <p>A production pipeline needs a monitoring dashboard. Here's what to put on it:</p>
+
+    <table>
+      <tr>
+        <th>Metric</th>
+        <th>What It Tells You</th>
+        <th>Alert Threshold</th>
+      </tr>
+      <tr>
+        <td><strong>Queue Depth</strong></td>
+        <td>How many takes are waiting to be processed</td>
+        <td>> 50 takes = investigate</td>
+      </tr>
+      <tr>
+        <td><strong>Processing Time per Take</strong></td>
+        <td>Is the solver getting slower? Hardware degradation?</td>
+        <td>> 2x average = alert</td>
+      </tr>
+      <tr>
+        <td><strong>Error Rate</strong></td>
+        <td>What % of takes fail validation</td>
+        <td>> 5% = alert, > 15% = critical</td>
+      </tr>
+      <tr>
+        <td><strong>Disk Free (NAS)</strong></td>
+        <td>How much storage is left</td>
+        <td>< 20% = alert, < 10% = critical</td>
+      </tr>
+      <tr>
+        <td><strong>Circuit Breaker State</strong></td>
+        <td>Is any service in OPEN (down) state?</td>
+        <td>Any OPEN = alert</td>
+      </tr>
+      <tr>
+        <td><strong>Delivery Latency</strong></td>
+        <td>Time from farm completion to artist availability</td>
+        <td>> 30 min = investigate</td>
+      </tr>
+      <tr>
+        <td><strong>Sweeper Heartbeat</strong></td>
+        <td>Is the file watcher process alive?</td>
+        <td>No heartbeat for 60s = critical</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Name your failures:</strong> You can't defend against what you haven't identified. Build a failure taxonomy first.</li>
+      <li><strong>Defense in depth:</strong> Prevention → Detection → Recovery → Human Response. Four layers, each catching what the previous missed.</li>
+      <li><strong>Retry + Circuit Breaker:</strong> Retry handles transient failures. Circuit breaker prevents cascading failures when a service is truly down.</li>
+      <li><strong>Graceful degradation:</strong> The stage never stops recording. If the NAS dies, capture data queues locally and flushes when the NAS recovers.</li>
+      <li><strong>Runbooks are code:</strong> Version-controlled, tested, accessible. If you can't write a runbook for a failure, you don't understand the failure.</li>
+      <li><strong>Zero-downtime deployment:</strong> Symlink swapping gives you instant rollback. Never deploy "in-place" to a live pipeline.</li>
+      <li><strong>Monitor everything:</strong> Queue depth, error rate, disk space, heartbeats. If you're not measuring it, you won't notice when it breaks.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="10-pipeline-centralization.html">
+        <span class="label">← Back to</span>
+        <span class="title">Pipeline Centralization</span>
+      </a>
+      <a href="12-universal-pipeline.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Universal Pipeline Vision</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

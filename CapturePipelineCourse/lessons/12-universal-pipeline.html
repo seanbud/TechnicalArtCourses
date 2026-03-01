@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 12: The Universal Pipeline Vision | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 12</div>
+      <h1>The Universal Code Vision: Markerless + Marker Pipeline Unification</h1>
+      <p class="lesson-subtitle">The 2–5 year strategic direction: one pipeline that services both marker-based and markerless mocap, without maintaining two codebases.</p>
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Why This Lesson Is the Most Important</div>
+      <p>The stage TA told you this directly: the long-term goal of the studio is to <strong>incorporate markerless tracking into the existing pipeline</strong> — not as a separate system, but as a unified pipeline that services both. Your predecessor in this role was focused on building "universal code" — generic, high-level abstraction layers that sit above the specifics of what vendor or technology is doing the actual work. <strong>This is the strategic heart of the job.</strong></p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. Marker-Based vs. Markerless: How the Data Differs</h2>
+    <p>Before unifying the pipelines, understand what makes them different:</p>
+
+    <table>
+      <tr>
+        <th>Aspect</th>
+        <th>Marker-Based (Current)</th>
+        <th>Markerless (Future)</th>
+      </tr>
+      <tr>
+        <td><strong>Input</strong></td>
+        <td>Infrared cameras + reflective markers</td>
+        <td>RGB video cameras (sometimes depth)</td>
+      </tr>
+      <tr>
+        <td><strong>Raw Data</strong></td>
+        <td>.c3d (3D point cloud, kilobytes/frame)</td>
+        <td>Video files (.mp4/.mov, megabytes/frame)</td>
+      </tr>
+      <tr>
+        <td><strong>Solving</strong></td>
+        <td>Rigid body math (SVD) on marker clusters</td>
+        <td>Deep learning inference (neural network)</td>
+      </tr>
+      <tr>
+        <td><strong>Accuracy</strong></td>
+        <td>Sub-millimeter (gold standard)</td>
+        <td>~5-15mm (improving rapidly)</td>
+      </tr>
+      <tr>
+        <td><strong>Setup Time</strong></td>
+        <td>High (marker suit, calibration)</td>
+        <td>Minimal (just cameras)</td>
+      </tr>
+      <tr>
+        <td><strong>Solver Software</strong></td>
+        <td>Vicon Shogun, OptiTrack Motive</td>
+        <td>Move.ai, DeepMotion, Radical, MediaPipe</td>
+      </tr>
+      <tr>
+        <td><strong>Output</strong></td>
+        <td>Joint rotations + positions per frame</td>
+        <td>Joint rotations + positions per frame</td>
+      </tr>
+      <tr>
+        <td><strong>Post-Production</strong></td>
+        <td>Marker swap fixes, contact cleanup</td>
+        <td>Jitter filtering, penetration fixes, contact cleanup</td>
+      </tr>
+      <tr>
+        <td><strong>Final Deliverable</strong></td>
+        <td>.fbx with skeleton animation</td>
+        <td>.fbx with skeleton animation</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Key Insight: Convergence at the Output</div>
+      <p>The input is completely different. The solving is completely different. But <strong>the output is identical</strong>: joint rotations and positions per frame, baked onto a skeleton, exported as FBX. This is why unification is possible — the pipelines diverge at the beginning but converge at the middle.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. The Universal Code Philosophy</h2>
+    <p>Your predecessor's approach — and the approach the studio wants you to continue — is to write code that is <strong>agnostic to the capture technology</strong>. The code doesn't know or care whether the data came from markers or from a neural network. It only cares about the data format at the convergence point.</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    THE UNIVERSAL PIPELINE                                │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  DIVERGENT (Technology-Specific)                                         │
+│                                                                          │
+│  ┌──────────────────┐         ┌──────────────────┐                       │
+│  │ MARKER PIPELINE  │         │ MARKERLESS PIPE  │                       │
+│  │                  │         │                  │                       │
+│  │ .c3d ingest      │         │ Video ingest     │                       │
+│  │ Vicon solve      │         │ ML inference     │                       │
+│  │ Marker cleanup   │         │ Jitter filter    │                       │
+│  └────────┬─────────┘         └────────┬─────────┘                       │
+│           │                            │                                 │
+│           ▼                            ▼                                 │
+│  ┌──────────────────────────────────────────────────┐                    │
+│  │        CONVERGENCE POINT: CaptureData            │                    │
+│  │        (Vendor-agnostic internal format)          │                    │
+│  │        • Joint names (standardized)               │                    │
+│  │        • Joint rotations per frame                │                    │
+│  │        • Metadata (take name, frame rate, source) │                    │
+│  └──────────────────────┬───────────────────────────┘                    │
+│                         │                                                │
+│  CONVERGENT (Universal Code)                                             │
+│                         │                                                │
+│  ┌──────────────────────▼───────────────────────────┐                    │
+│  │ • Retarget (HumanIK / custom)                     │                    │
+│  │ • Validate (skeleton, naming, contacts)           │                    │
+│  │ • Export (FBX / glTF / USD per client config)     │                    │
+│  │ • Deliver (NAS / P4 / S3 per client config)      │                    │
+│  │ • Notify (Slack / email)                          │                    │
+│  └──────────────────────────────────────────────────┘                    │
+│                                                                          │
+│  The bottom half is IDENTICAL for both pipelines.                        │
+│  That's the "universal code."                                            │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Design Pattern: The Strategy Pattern</h2>
+    <p>The Strategy Pattern lets you swap the "how" while keeping the "what" constant. The pipeline defines abstract stages. Each stage has multiple implementations (strategies) that can be swapped via configuration:</p>
+
+    <div class="code-block">
+      <h3>Python: Abstract Pipeline Stages</h3>
+      <pre><code class="language-python">"""
+The Universal Pipeline — Abstract stages with swappable strategies.
+"""
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+import logging
+
+log = logging.getLogger("universal_pipeline")
+
+# ═══════════════════════════════════════════
+# THE CONVERGENCE FORMAT
+# ═══════════════════════════════════════════
+@dataclass
+class CaptureResult:
+    """The universal internal format. Both marker and markerless
+    pipelines produce this SAME object."""
+    
+    take_name: str = ""
+    frame_rate: float = 120.0
+    frame_count: int = 0
+    
+    # Joint data: dict of joint_name -> list of (position, rotation) per frame
+    joints: Dict[str, list] = field(default_factory=dict)
+    joint_hierarchy: Dict[str, str] = field(default_factory=dict)  # child -> parent
+    
+    # Metadata
+    source_technology: str = ""   # "marker" or "markerless"
+    source_vendor: str = ""       # "vicon", "moveai", etc.
+    source_file: str = ""
+    confidence: float = 1.0       # Markerless has per-frame confidence
+    
+    metadata: Dict = field(default_factory=dict)
+
+
+# ═══════════════════════════════════════════
+# ABSTRACT PIPELINE STAGES
+# ═══════════════════════════════════════════
+class IngestStage(ABC):
+    """Stage 1: Read raw data from any source."""
+    @abstractmethod
+    def ingest(self, input_path) -> CaptureResult:
+        pass
+
+class CleanupStage(ABC):
+    """Stage 2: Technology-specific cleanup."""
+    @abstractmethod
+    def cleanup(self, data: CaptureResult) -> CaptureResult:
+        pass
+
+class RetargetStage(ABC):
+    """Stage 3: Map to target skeleton."""
+    @abstractmethod
+    def retarget(self, data: CaptureResult, target_skeleton: str) -> CaptureResult:
+        pass
+
+class ValidateStage(ABC):
+    """Stage 4: Quality assurance checks."""
+    @abstractmethod
+    def validate(self, data: CaptureResult) -> List[dict]:
+        pass
+
+class ExportStage(ABC):
+    """Stage 5: Write to output format."""
+    @abstractmethod
+    def export(self, data: CaptureResult, output_path: str, profile) -> str:
+        pass</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Marker-Based Strategies</h3>
+      <pre><code class="language-python">"""
+Marker-based implementations of each pipeline stage.
+"""
+
+class MarkerIngest(IngestStage):
+    """Ingest .c3d marker data via Vicon/OptiTrack adapter."""
+    
+    def ingest(self, input_path) -> CaptureResult:
+        from pipeline.adapters import load_capture
+        raw = load_capture(input_path)  # Uses the Adapter Pattern from Lesson 08
+        
+        result = CaptureResult()
+        result.take_name = raw.take_name
+        result.frame_rate = raw.frame_rate
+        result.frame_count = raw.frame_count
+        result.source_technology = "marker"
+        result.source_vendor = "vicon"
+        result.source_file = input_path
+        
+        # Convert marker data to joint data
+        # (This would involve the solving step — or reading pre-solved data)
+        result.joints = self._markers_to_joints(raw)
+        result.confidence = 1.0  # Marker data has implicit high confidence
+        
+        return result
+    
+    def _markers_to_joints(self, raw):
+        """Convert marker positions to joint rotations.
+        In practice, Vicon Shogun does this. We read the result."""
+        # Simplified — real code reads the Shogun output
+        return {}
+
+
+class MarkerCleanup(CleanupStage):
+    """Fix marker-specific artifacts: swaps, occlusion gaps, spikes."""
+    
+    def cleanup(self, data: CaptureResult) -> CaptureResult:
+        log.info(f"Running marker cleanup on {data.take_name}")
+        
+        # 1. Detect and fix marker swaps (velocity spike detection)
+        self._fix_swaps(data)
+        
+        # 2. Fill occlusion gaps (interpolation)  
+        self._fill_gaps(data)
+        
+        # 3. Filter noise (Butterworth low-pass)
+        self._filter_noise(data)
+        
+        return data
+    
+    def _fix_swaps(self, data):
+        """Detect impossible velocity spikes and correct them."""
+        pass  # Implementation from Lesson 01
+    
+    def _fill_gaps(self, data):
+        """Interpolate through occluded frames."""
+        pass
+    
+    def _filter_noise(self, data):
+        """Apply Butterworth filter to smooth noise."""
+        pass</code></pre>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Markerless Strategies</h3>
+      <pre><code class="language-python">"""
+Markerless implementations of each pipeline stage.
+"""
+
+class MarkerlessIngest(IngestStage):
+    """Ingest markerless mocap data (Move.ai, MediaPipe, etc.)."""
+    
+    def ingest(self, input_path) -> CaptureResult:
+        import json
+        
+        with open(input_path) as f:
+            raw = json.load(f)
+        
+        result = CaptureResult()
+        result.take_name = raw.get("name", "")
+        result.frame_rate = raw.get("fps", 30)
+        result.source_technology = "markerless"
+        result.source_vendor = raw.get("vendor", "moveai")
+        result.source_file = input_path
+        
+        # Markerless data often has per-frame confidence
+        result.confidence = raw.get("average_confidence", 0.85)
+        
+        # Joint data from ML inference
+        for joint_name, frames in raw.get("joints", {}).items():
+            result.joints[joint_name] = frames
+            result.frame_count = max(result.frame_count, len(frames))
+        
+        # Markerless typically provides hierarchy too
+        result.joint_hierarchy = raw.get("hierarchy", {})
+        
+        return result
+
+
+class MarkerlessCleanup(CleanupStage):
+    """Fix markerless-specific artifacts: jitter, temporal inconsistency."""
+    
+    def cleanup(self, data: CaptureResult) -> CaptureResult:
+        log.info(f"Running markerless cleanup on {data.take_name}")
+        
+        # 1. Temporal smoothing (ML output is noisier than markers)
+        self._temporal_smooth(data)
+        
+        # 2. Bone length stabilization
+        # (ML can output inconsistent bone lengths frame-to-frame)
+        self._stabilize_bone_lengths(data)
+        
+        # 3. Ground contact estimation
+        # (Markerless doesn't have force plates, must estimate from joint positions)
+        self._estimate_contacts(data)
+        
+        # 4. Confidence-based filtering
+        # (Low-confidence frames get stronger filtering)
+        self._confidence_filter(data)
+        
+        return data
+    
+    def _temporal_smooth(self, data):
+        """Gaussian or Savitzky-Golay smoothing on joint trajectories."""
+        pass
+    
+    def _stabilize_bone_lengths(self, data):
+        """Enforce constant bone lengths across all frames."""
+        pass
+    
+    def _estimate_contacts(self, data):
+        """Heuristic: if foot velocity < threshold and y < threshold, it's planted."""
+        pass
+    
+    def _confidence_filter(self, data):
+        """Apply stronger smoothing to low-confidence frames."""
+        pass</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. The Universal Pipeline Runner</h2>
+    <p>The runner assembles the right strategies based on the source technology and runs them in order:</p>
+
+    <div class="code-block">
+      <h3>Python: The Universal Runner</h3>
+      <pre><code class="language-python">"""
+Universal Pipeline Runner — Picks the right strategies based on input type
+and runs the shared stages identically for both technologies.
+"""
+
+class UniversalPipeline:
+    """
+    The core pipeline. Technology-agnostic after the convergence point.
+    """
+    
+    # Strategy registry: maps technology to implementations
+    STRATEGIES = {
+        "marker": {
+            "ingest": MarkerIngest,
+            "cleanup": MarkerCleanup,
+        },
+        "markerless": {
+            "ingest": MarkerlessIngest,
+            "cleanup": MarkerlessCleanup,
+        }
+    }
+    
+    def __init__(self, client_registry, plugin_manager):
+        self.registry = client_registry
+        self.plugins = plugin_manager
+    
+    def process(self, input_path, technology, client_id):
+        """
+        Process a capture file through the universal pipeline.
+        
+        Args:
+            input_path:  Path to the raw capture data
+            technology:  "marker" or "markerless"
+            client_id:   Which client to deliver to
+        """
+        profile = self.registry.get_profile(client_id)
+        strategies = self.STRATEGIES[technology]
+        
+        log.info(f"Processing [{technology}] for [{client_id}]: {input_path}")
+        
+        # ─── DIVERGENT STAGES (technology-specific) ───
+        
+        # Stage 1: Ingest (technology-specific)
+        ingest = strategies["ingest"]()
+        data = ingest.ingest(input_path)
+        
+        # Stage 2: Cleanup (technology-specific)
+        cleanup = strategies["cleanup"]()
+        data = cleanup.cleanup(data)
+        
+        # ─── CONVERGENCE POINT ───
+        # From here on, the code is IDENTICAL for both technologies.
+        # This is the "universal code."
+        
+        # Stage 3: Retarget (universal)
+        from pipeline.retarget import HumanIKRetarget
+        retargeter = HumanIKRetarget()
+        data = retargeter.retarget(data, profile.skeleton_template)
+        
+        # Stage 4: Validate (universal)
+        from pipeline.validation import UniversalValidator
+        validator = UniversalValidator(profile)
+        results = validator.validate(data)
+        
+        failures = [r for r in results if not r["passed"]]
+        if failures:
+            log.error(f"Validation failures: {failures}")
+            return False
+        
+        # Stage 5: Export (universal, format from client config)
+        from pipeline.export import get_export_adapter
+        exporter = get_export_adapter(profile)
+        output_path = self._build_output_path(input_path, profile)
+        exporter.export(data, output_path, profile)
+        
+        # Stage 6: Deliver (universal, destination from client config)
+        from pipeline.delivery import get_delivery_adapter
+        delivery = get_delivery_adapter(profile)
+        delivery.deliver(output_path, profile)
+        
+        log.info(f"✅ Complete: {output_path}")
+        return True
+    
+    def _detect_technology(self, input_path):
+        """Auto-detect whether input is marker or markerless."""
+        ext = os.path.splitext(input_path)[1].lower()
+        if ext in ('.c3d', '.fbx'):
+            return "marker"
+        elif ext in ('.json', '.mp4', '.mov'):
+            return "markerless"
+        else:
+            raise ValueError(f"Cannot detect technology from: {ext}")</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. The Phased Migration Roadmap</h2>
+    <p>You don't unify pipelines overnight. Here's a practical multi-year roadmap:</p>
+
+    <table>
+      <tr>
+        <th>Phase</th>
+        <th>Timeline</th>
+        <th>Goal</th>
+        <th>Key Work</th>
+      </tr>
+      <tr>
+        <td><strong>Phase 1: Foundation</strong></td>
+        <td>Months 1-6</td>
+        <td>Define the convergence format</td>
+        <td>Design <code>CaptureResult</code> data class. Build marker ingest + cleanup. Ensure all existing marker pipeline flows through the new format. No behavior change for users — just a refactor under the hood.</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2: Parallel Run</strong></td>
+        <td>Months 6-12</td>
+        <td>Add markerless as a parallel path</td>
+        <td>Build markerless ingest + cleanup. Run both pipelines on the same test captures. Compare outputs. Measure accuracy delta. <strong>Do not ship markerless to production yet.</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3: Validation Parity</strong></td>
+        <td>Months 12-18</td>
+        <td>Prove markerless quality is sufficient</td>
+        <td>Build A/B comparison tooling. Run side-by-side: same performance, processed through marker and markerless, compared frame-by-frame. Define acceptance criteria (e.g., <3mm average error vs marker).</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4: Canary Production</strong></td>
+        <td>Months 18-24</td>
+        <td>Ship markerless for low-risk takes</td>
+        <td>Use markerless for background characters, crowd shots, non-hero animations. Keep markers for hero performances. Gather production feedback.</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 5: Unified Production</strong></td>
+        <td>Months 24-36</td>
+        <td>Single pipeline for all captures</td>
+        <td>Markerless accuracy meets bar. Remove marker-specific code paths as they become redundant. Pipeline auto-detects input type and processes accordingly.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">🎬 Interview Relevance</div>
+      <p>If asked "how would you approach incorporating markerless into the existing pipeline?" — walk them through this phased roadmap. It shows you think in terms of <strong>risk management</strong> (don't ship unproven tech to hero content), <strong>graduated rollout</strong> (canary before full deployment), and <strong>measurable criteria</strong> (3mm accuracy threshold).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Building the Predecessor's Vision</h2>
+    <p>The previous Senior Pipeline TA was focused on "universal code" — generic abstractions that sit above vendor specifics. Here's how to build on that philosophy:</p>
+
+    <h3>The Three Principles of Universal Code</h3>
+    <ol>
+      <li>
+        <strong>The Convergence Principle:</strong> Define a clear internal data format (<code>CaptureResult</code>) that is the handoff point between technology-specific code and universal code. Everything below the convergence point is generic.
+      </li>
+      <li>
+        <strong>The Substitution Principle:</strong> Any ingest or cleanup strategy can be swapped out without changing the downstream pipeline. If a new markerless vendor appears in 2028, you write ONE new adapter. The 50 downstream tools don't change.
+      </li>
+      <li>
+        <strong>The Configuration Principle:</strong> The choice of technology ("marker" vs "markerless") is a config parameter, not a code branch. The pipeline reads the config and assembles the right strategies. No <code>if technology == "marker"</code> in the core.
+      </li>
+    </ol>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 How to Frame Your Beginner Experience as a Strength</div>
+      <p>You mentioned having beginner-level experience with big production pipelines. In the interview, frame this honestly but strategically:</p>
+      <p><strong>"I'm coming in with fresh eyes. I don't have ingrained assumptions about how this has always been done. I can see the abstraction layer clearly because I haven't been buried in the implementation details for years. My predecessor built the vision — I can see it for what it is and build on it without the bias of 'we've always done it this way.'"</strong></p>
+      <p>Combine this with your demonstrated understanding of the patterns (Strategy, Factory, Adapter) and they'll see someone who can learn the specifics quickly because the architectural thinking is already there.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. A/B Comparison Tooling</h2>
+    <p>During Phase 3, you need to prove markerless quality. Here's a conceptual A/B comparison tool:</p>
+
+    <div class="code-block">
+      <h3>Python: Marker vs Markerless Quality Comparison</h3>
+      <pre><code class="language-python">"""
+A/B Comparison Tool — Quantifies the quality delta between marker and 
+markerless processing of the same performance.
+"""
+import numpy as np
+import json
+import logging
+
+log = logging.getLogger("ab_compare")
+
+class CaptureComparator:
+    """Compare two CaptureResult objects (same performance, different technology)."""
+    
+    def compare(self, marker_result, markerless_result):
+        """
+        Returns a quality report comparing the two results.
+        """
+        report = {
+            "take_name": marker_result.take_name,
+            "frame_count": marker_result.frame_count,
+            "joint_errors": {},
+            "global_metrics": {},
+        }
+        
+        # Per-joint error analysis
+        for joint_name in marker_result.joints:
+            if joint_name not in markerless_result.joints:
+                report["joint_errors"][joint_name] = {"status": "MISSING_IN_MARKERLESS"}
+                continue
+            
+            marker_frames = np.array(marker_result.joints[joint_name])
+            markerless_frames = np.array(markerless_result.joints[joint_name])
+            
+            # Truncate to same length
+            min_frames = min(len(marker_frames), len(markerless_frames))
+            marker_frames = marker_frames[:min_frames]
+            markerless_frames = markerless_frames[:min_frames]
+            
+            # Position error (Euclidean distance per frame)
+            position_errors = np.linalg.norm(
+                marker_frames[:, :3] - markerless_frames[:, :3], axis=1
+            )
+            
+            report["joint_errors"][joint_name] = {
+                "mean_error_mm": float(np.mean(position_errors)),
+                "max_error_mm": float(np.max(position_errors)),
+                "p95_error_mm": float(np.percentile(position_errors, 95)),
+                "worst_frame": int(np.argmax(position_errors)),
+            }
+        
+        # Global metrics
+        all_errors = [
+            v["mean_error_mm"] for v in report["joint_errors"].values()
+            if isinstance(v, dict) and "mean_error_mm" in v
+        ]
+        
+        report["global_metrics"] = {
+            "average_joint_error_mm": float(np.mean(all_errors)),
+            "worst_joint": max(report["joint_errors"].keys(),
+                key=lambda k: report["joint_errors"][k].get("mean_error_mm", 0)),
+            "pass": float(np.mean(all_errors)) < 3.0,  # 3mm threshold
+        }
+        
+        log.info(
+            f"A/B Compare: avg error = {report['global_metrics']['average_joint_error_mm']:.2f}mm, "
+            f"PASS = {report['global_metrics']['pass']}"
+        )
+        
+        return report</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Different input, same output:</strong> Marker-based and markerless capture produce completely different raw data, but the final output is identical: joint rotations on a skeleton, exported as FBX.</li>
+      <li><strong>The Convergence Point:</strong> Define a universal internal format (<code>CaptureResult</code>) where both technologies meet. Everything below this point is shared code.</li>
+      <li><strong>Strategy Pattern:</strong> Swap ingest and cleanup implementations via config. The core pipeline doesn't know which technology is running.</li>
+      <li><strong>Phased migration over 2–3 years:</strong> Foundation → Parallel run → Validation parity → Canary production → Unified production. Never ship unproven tech to hero content.</li>
+      <li><strong>Universal code = abstraction above vendor specifics.</strong> If a new vendor appears in 2028, you write one adapter. The 50 downstream tools don't change.</li>
+      <li><strong>Frame beginner experience as fresh perspective.</strong> You see the architecture clearly because you're not biased by "how it's always been done."</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="11-defensive-architecture.html">
+        <span class="label">← Back to</span>
+        <span class="title">Defensive Architecture</span>
+      </a>
+      <a href="13-tech-interview-prep.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Tech Interview Prep</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 13: Technical Interview Deep Dive | EA Capture Prep</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">EA Capture Prep</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">System Map</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 13</div>
+      <h1>Technical Interview Deep Dive: Data Flow, Automation & Problem Solving</h1>
+      <p class="lesson-subtitle">Battle-tested answers for every technical question from the EA interview description. This is the capstone — everything in Module 6 converges here.</p>
+    </div>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 The Interview Description (Verbatim)</div>
+      <p><em>"Deliver tooling, automation, or integrations that improved cross-departmental data flow or reduced processing time."</em></p>
+      <p>Every answer in this lesson maps directly to this requirement. You need to demonstrate that you can build tools and automation that make data flow faster across departments (capture → post-production → game team delivery).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Question Framework: How to Structure Every Answer</h2>
+    <p>For deep technical questions (not behavioral), use this framework:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    TECHNICAL ANSWER FRAMEWORK                        │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. CONTEXT (10 seconds)                                             │
+│     "In a capture pipeline, the problem is..."                       │
+│                                                                      │
+│  2. ARCHITECTURE (30 seconds)                                        │
+│     "The way I'd approach this is..."                                │
+│     Name the pattern. Draw it out if possible.                       │
+│                                                                      │
+│  3. IMPLEMENTATION (60 seconds)                                      │
+│     "Specifically, in Python, I would..."                            │
+│     Mention specific libraries, APIs, file formats.                  │
+│                                                                      │
+│  4. TRADEOFF (15 seconds)                                            │
+│     "The tradeoff here is... / An alternative would be..."           │
+│     Show you've considered alternatives.                             │
+│                                                                      │
+│  5. METRIC (10 seconds)                                              │
+│     "This reduces processing time from X to Y" or                    │
+│     "This eliminates N hours of manual work per week."               │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Question Bank: Cross-Departmental Data Flow</h2>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How would you design a system that gets mocap data from the capture stage to the game team in under 30 minutes?"</div>
+      <p><strong>Your Answer:</strong></p>
+      <p><strong>Context:</strong> In a marker-based capture pipeline, there are 6 stages between the raw capture and the game team receiving an FBX: ingest, solve, retarget, validate, export, and deliver. Each stage currently has manual handoffs with waiting time.</p>
+      <p><strong>Architecture:</strong> I'd build an event-driven pipeline using a file-system watcher (Python's <code>watchdog</code>) that monitors the stage output directory. Each stage is a discrete step that triggers the next automatically. No human hands-off required between stages. This is the "sweeper" pattern — a daemon that sweeps new files and pushes them through the pipeline.</p>
+      <p><strong>Implementation:</strong> The watcher detects a new .c3d file, validates it, and submits a Deadline farm job for the solve+retarget. When the farm job completes, a callback triggers the export adapter which writes FBX in the client's format. The delivery adapter (Perforce or NAS copy) then publishes the file. A Slack notification pings the game team's channel with the asset link.</p>
+      <p><strong>Tradeoff:</strong> Full automation vs. human QA. For hero performances, I'd add a "hold for review" gate where an animator approves the solve before delivery. For background animations, fully automated.</p>
+      <p><strong>Metric:</strong> This reduces the stage-to-artist time from "whenever someone remembers to process it" — often hours or next-day — to a consistent 15-25 minutes.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How do you handle versioning for mocap data?"</div>
+      <p><strong>Your Answer:</strong></p>
+      <p><strong>Context:</strong> Mocap data goes through multiple iterations — raw capture, first solve, manual cleanup, re-solve, final delivery. Each version needs to be tracked, and artists need to be able to access any previous version.</p>
+      <p><strong>Architecture:</strong> I'd use a three-tier versioning approach. Perforce for the source-of-truth version control. A semantic version suffix on every file (<code>_v001</code>, <code>_v002</code>) so the naming itself communicates the version. And a metadata JSON sidecar file per take that records the full history.</p>
+      <p><strong>Implementation:</strong></p>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Version-Tracked Delivery</h3>
+      <pre><code class="language-python">"""
+Version-tracked delivery: every file gets a version, every version
+gets a sidecar with metadata history.
+"""
+import json
+import os
+import hashlib
+from datetime import datetime
+
+def get_next_version(output_dir, take_name, extension="fbx"):
+    """Find the next available version number for a take."""
+    version = 1
+    while True:
+        filename = f"{take_name}_v{version:03d}.{extension}"
+        if not os.path.exists(os.path.join(output_dir, filename)):
+            return version, filename
+        version += 1
+
+def create_sidecar(output_path, metadata):
+    """Create a JSON sidecar file with version metadata."""
+    sidecar_path = output_path.replace('.fbx', '_meta.json')
+    
+    # Load existing sidecar if it exists
+    history = []
+    if os.path.exists(sidecar_path):
+        with open(sidecar_path) as f:
+            existing = json.load(f)
+            history = existing.get("version_history", [])
+    
+    # Add this version's entry
+    with open(output_path, 'rb') as f:
+        md5 = hashlib.md5(f.read()).hexdigest()
+    
+    history.append({
+        "version": metadata["version"],
+        "timestamp": datetime.now().isoformat(),
+        "source_file": metadata["source_file"],
+        "technology": metadata.get("technology", "marker"),
+        "operator": metadata.get("operator", "automated"),
+        "md5": md5,
+        "notes": metadata.get("notes", ""),
+    })
+    
+    sidecar = {
+        "take_name": metadata["take_name"],
+        "latest_version": metadata["version"],
+        "version_history": history,
+    }
+    
+    with open(sidecar_path, 'w') as f:
+        json.dump(sidecar, f, indent=2)
+    
+    return sidecar_path
+
+
+# Usage:
+version_num, filename = get_next_version("/output/fc/", "FC_20260228_sc01_sh05")
+# → (3, "FC_20260228_sc01_sh05_v003.fbx")
+
+create_sidecar(output_path, {
+    "take_name": "FC_20260228_sc01_sh05",
+    "version": version_num,
+    "source_file": "/captures/raw/sc01_sh05.c3d",
+    "technology": "marker",
+    "notes": "Re-solved after marker swap fix on frame 1205",
+})</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Question Bank: Automation & Reduced Processing Time</h2>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "Give me an example of tooling you'd build to reduce processing time."</div>
+      <p><strong>Your Answer:</strong></p>
+      <p><strong>Context:</strong> The biggest time sink in mocap post-production is manual bone naming fixes. After Vicon's solver outputs joints, they use Vicon's naming convention. The game team uses a different naming convention. Someone manually renames every joint — 50+ joints per take, thousands of takes per year.</p>
+      <p><strong>Architecture:</strong> A config-driven batch renaming tool. A JSON file maps Vicon joint names to game skeleton names. A Python script reads the FBX, renames all joints in a single pass, validates the result, and writes the output. CLI-first for batch processing, with a Maya/MotionBuilder UI wrapper for one-off fixes.</p>
+      <p><strong>Implementation:</strong> Python with the FBX SDK for direct FBX manipulation, or Maya's <code>cmds.rename()</code> for in-scene renaming. The JSON config makes it client-portable — different game teams have different skeleton templates, so you just swap the config file.</p>
+      <p><strong>Metric:</strong> Manual renaming takes 10-15 minutes per take. With the tool, it takes 2 seconds. Across 5,000 takes per year, that's <strong>~1,000 hours of artist time recovered.</strong></p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How would you validate that a processed mocap file is correct before delivery?"</div>
+      <p><strong>Your Answer:</strong></p>
+      <p><strong>Architecture:</strong> A validation pipeline with pluggable checkers. Each checker tests one thing and returns pass/fail with a reason. The validation runner executes all checkers and generates a report.</p>
+    </div>
+
+    <div class="code-block">
+      <h3>Python: Pluggable Validation Pipeline</h3>
+      <pre><code class="language-python">"""
+Validation Pipeline — Pluggable checkers that verify mocap data quality.
+"""
+import re
+import os
+
+class ValidationResult:
+    def __init__(self, checker_name, passed, message=""):
+        self.checker_name = checker_name
+        self.passed = passed
+        self.message = message
+    
+    def __repr__(self):
+        status = "✅" if self.passed else "❌"
+        return f"{status} [{self.checker_name}] {self.message}"
+
+
+# === Individual Checkers ===
+
+def check_naming(filepath, profile):
+    """Verify filename matches client naming convention."""
+    basename = os.path.basename(filepath)
+    pattern = profile.naming_pattern
+    
+    if re.match(pattern, os.path.splitext(basename)[0]):
+        return ValidationResult("naming", True, f"Matches pattern: {pattern}")
+    return ValidationResult("naming", False, 
+        f"'{basename}' does not match pattern: {pattern}")
+
+def check_skeleton_completeness(scene_joints, profile):
+    """Verify all required joints exist."""
+    required = set(profile.required_joints)
+    present = set(scene_joints)
+    missing = required - present
+    
+    if not missing:
+        return ValidationResult("skeleton", True, 
+            f"All {len(required)} required joints present")
+    return ValidationResult("skeleton", False, 
+        f"Missing joints: {missing}")
+
+def check_frame_range(frame_count, profile):
+    """Verify frame count is within acceptable range."""
+    min_f = profile.get("validation", "min_frame_count", default=10)
+    max_f = profile.get("validation", "max_frame_count", default=50000)
+    
+    if min_f <= frame_count <= max_f:
+        return ValidationResult("frame_range", True, 
+            f"Frame count {frame_count} is within [{min_f}, {max_f}]")
+    return ValidationResult("frame_range", False, 
+        f"Frame count {frame_count} outside range [{min_f}, {max_f}]")
+
+def check_root_at_origin(root_position, tolerance=5.0):
+    """Verify root joint is near world origin at frame 0."""
+    import math
+    dist = math.sqrt(sum(c**2 for c in root_position))
+    
+    if dist < tolerance:
+        return ValidationResult("root_origin", True, 
+            f"Root is {dist:.2f}cm from origin (tolerance: {tolerance}cm)")
+    return ValidationResult("root_origin", False, 
+        f"Root is {dist:.2f}cm from origin (tolerance: {tolerance}cm)")
+
+def check_file_integrity(filepath):
+    """Verify the file is a valid FBX (not truncated/corrupt)."""
+    # Quick check: FBX files start with "Kaydara FBX Binary" or
+    # ";" (ASCII FBX comment) in the first bytes
+    with open(filepath, 'rb') as f:
+        header = f.read(20)
+    
+    if b"Kaydara" in header or header[:1] == b";":
+        return ValidationResult("integrity", True, "Valid FBX header")
+    return ValidationResult("integrity", False, "Invalid FBX header — file may be corrupt")
+
+
+# === Runner ===
+def validate_all(filepath, scene_joints, frame_count, root_position, profile):
+    """Run all validators and return results."""
+    results = [
+        check_naming(filepath, profile),
+        check_skeleton_completeness(scene_joints, profile),
+        check_frame_range(frame_count, profile),
+        check_root_at_origin(root_position),
+        check_file_integrity(filepath),
+    ]
+    
+    for r in results:
+        print(r)
+    
+    passed = all(r.passed for r in results)
+    print(f"\n{'✅ ALL PASSED' if passed else '❌ VALIDATION FAILED'}")
+    return results</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Question Bank: System Design & Architecture</h2>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How would you design a pipeline that works for 15 different clients without maintaining 15 codebases?"</div>
+      <p><strong>Your Answer:</strong> (This is Lesson 10, condensed into an interview answer.)</p>
+      <p><strong>Architecture:</strong> One pipeline engine, many configuration profiles. Each client gets a JSON config file specifying their skeleton template, naming pattern, export format, and delivery destination. The core code reads the config and acts generically. The pipeline uses three patterns: Config Registry for client profiles, Adapter + Factory for format-specific export and delivery, and a Plugin Architecture for genuinely unique client requirements that can't be expressed as config.</p>
+      <p><strong>Litmus test:</strong> "If I can grep my pipeline source code and find the word 'FIFA' or any specific client name, I have a design flaw. Client names belong only in config files."</p>
+      <p><strong>Metric:</strong> Adding a new client goes from "weeks of custom development" to "create a JSON file and test."</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How do you ensure zero downtime during a pipeline deployment?"</div>
+      <p><strong>Your Answer:</strong> (This is Lesson 11, condensed.)</p>
+      <p><strong>Architecture:</strong> Symlink-based deployment. The live pipeline path <code>/pipeline/current</code> is a symlink. Deploy the new version to its own directory, run smoke tests, then atomically swap the symlink. Rollback is one command: re-point the symlink to the previous version. For higher confidence, use canary deployment — route 10% of captures through the new version, monitor error rates for 24 hours, then roll out to 100%.</p>
+      <p><strong>Defense layers:</strong> Retry with exponential backoff for transient failures. Circuit breaker to stop hammering dead services. Graceful degradation — if the NAS dies, capture data queues to local SSD and auto-flushes when NAS recovers. Health monitor daemon checking every critical system every 30 seconds via heartbeat. Slack alerts with severity classification.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "How would you unify marker-based and markerless capture into a single pipeline?"</div>
+      <p><strong>Your Answer:</strong> (This is Lesson 12, condensed.)</p>
+      <p><strong>Key insight:</strong> The input and solving are completely different, but the output is identical — joint rotations per frame on a skeleton. That convergence point is where unification happens.</p>
+      <p><strong>Architecture:</strong> Strategy Pattern. Define a universal internal format (<code>CaptureResult</code>) as the convergence point. Technology-specific code (ingest, cleanup) sits above. Universal code (retarget, validate, export, deliver) sits below. The pipeline reads the technology type from config and assembles the right strategies.</p>
+      <p><strong>Roadmap:</strong> Phased over 2-3 years — foundation, parallel testing, validation parity, canary production on low-risk content, then full unification. Never ship unproven technology to hero performances.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Question Bank: Problem Solving & Debugging</h2>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "You get a report that 30% of mocap takes from yesterday have broken hand poses. How do you investigate?"</div>
+      <p><strong>Your Answer:</strong></p>
+      <ol>
+        <li><strong>Triage:</strong> Pull the error logs for yesterday's batch. Filter for hand-related validation failures. Are they all from the same capture session? Same actor? Same marker set?</li>
+        <li><strong>Isolate:</strong> Look at the raw .c3d data for a failing take. Are the hand markers present? Are they swapped? The most common cause of broken hand poses is marker occlusion during fast hand movements — grabbing, catching, pointing.</li>
+        <li><strong>Root cause:</strong> Check if the solver filled the gap with interpolation that went wrong. If so, the fix is to improve the gap-filling algorithm with spline interpolation instead of linear. If the markers were physically missing (fell off), the fix is a process change: better marker adhesion, or a camera arrangement that reduces hand occlusion.</li>
+        <li><strong>Systemic fix:</strong> Add a hand-specific validation checker that detects impossible finger angles (hyperextension, interpenetration) and flags them before delivery. This prevents the 30% error from ever reaching the game team.</li>
+        <li><strong>Metric:</strong> "We went from 30% failure rate to &lt;2% after adding the finger angle validator."</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">Q: "The pipeline is running 3x slower than last week. How do you diagnose it?"</div>
+      <p><strong>Your Answer:</strong></p>
+      <ol>
+        <li><strong>Check the dashboard:</strong> Look at processing time per take over the last 7 days. Is the slowdown gradual or sudden? Gradual suggests resource exhaustion (disk filling up, memory leak). Sudden suggests a change (software update, config change, new vendor data).</li>
+        <li><strong>Check recent changes:</strong> What was deployed last week? Was there a Maya update? A new Python library? A config change? <code>git log --since="7 days ago"</code> on the pipeline repo.</li>
+        <li><strong>Profile:</strong> Run Python's <code>cProfile</code> on a single take. Where is the time being spent? Is it I/O (disk/network), CPU (solving), or waiting (dependencies)?</li>
+        <li><strong>Check I/O:</strong> Is the NAS slow? Run <code>dd</code> or <code>iperf</code> to benchmark network throughput. Is another team flooding the NAS with large file copies?</li>
+        <li><strong>Check the farm:</strong> Are Deadline render nodes healthy? Are they queueing because other jobs are hogging capacity?</li>
+        <li><strong>Fix:</strong> The specific fix depends on the root cause, but the diagnostic methodology is what matters. Show the interviewer you have a systematic approach: metrics → recent changes → profiling → resource checks.</li>
+      </ol>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. The "Tell Me About Your Pipeline Experience" Answer</h2>
+    <p>This is the open-ended question you should prepare for most carefully. Here's a structured answer that honestly addresses your experience level while showing depth:</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">Your Prepared Response</div>
+      <p><em>"My production pipeline experience is growing — I'm honest about that. What I bring is a strong foundation in the engineering patterns that make pipelines work: I understand the Adapter Pattern for isolating vendor lock-in, the Strategy Pattern for unifying marker and markerless workflows under a common interface, config-driven architecture so adding a new client means writing a JSON file not a fork of the codebase, and defensive patterns like circuit breakers and graceful degradation for zero-downtime resilience.</em></p>
+      <p><em>I've studied EA's specific pipeline context — the vendor landscape with Vicon and DI4D, the manual post-production reality, the delivery layers from NAS to Perforce to cloud storage, and the long-term vision of universal code that services both marker and markerless capture.</em></p>
+      <p><em>What I bring that's immediately practical: I can build Python automation fast — batch renaming tools, validation pipelines, file watchers, Perforce integration. And I think in terms of measurable impact: how many artist-hours does this tool save? What's the error rate before and after automation?</em></p>
+      <p><em>Where I need your mentoring is in the production nuances — the edge cases that only surface when you're running 5,000 takes a year. I learn fast and I approach the problem space architecturally, which means I can absorb the domain specifics quickly because the structural foundation is there."</em></p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Technical Vocabulary Quick-Reference</h2>
+    <p>Drop these terms naturally in conversation to demonstrate fluency:</p>
+
+    <table>
+      <tr>
+        <th>Term</th>
+        <th>Context / Usage</th>
+      </tr>
+      <tr>
+        <td><strong>Convergence point</strong></td>
+        <td>"Both technologies converge at the CaptureResult format"</td>
+      </tr>
+      <tr>
+        <td><strong>Config-driven</strong></td>
+        <td>"Client specifics are config-driven, never hardcoded"</td>
+      </tr>
+      <tr>
+        <td><strong>Adapter / Factory</strong></td>
+        <td>"Vendor lock-in is isolated behind adapters"</td>
+      </tr>
+      <tr>
+        <td><strong>Circuit breaker</strong></td>
+        <td>"Circuit breakers prevent cascading failures"</td>
+      </tr>
+      <tr>
+        <td><strong>Graceful degradation</strong></td>
+        <td>"The stage never stops — we queue locally and flush on recovery"</td>
+      </tr>
+      <tr>
+        <td><strong>Sweeper / watcher</strong></td>
+        <td>"A file watcher daemon sweeps new captures into the pipeline"</td>
+      </tr>
+      <tr>
+        <td><strong>Canary deployment</strong></td>
+        <td>"Route 10% through the new version, monitor, then roll out"</td>
+      </tr>
+      <tr>
+        <td><strong>Sidecar metadata</strong></td>
+        <td>"Every FBX ships with a JSON sidecar for provenance tracking"</td>
+      </tr>
+      <tr>
+        <td><strong>Residual error</strong></td>
+        <td>"Solve quality is measured by residual error in millimeters"</td>
+      </tr>
+      <tr>
+        <td><strong>HumanIK</strong></td>
+        <td>"Retargeting goes through HumanIK or a custom solver"</td>
+      </tr>
+      <tr>
+        <td><strong>IaC</strong></td>
+        <td>"Infrastructure as Code — defining environments via configs/scripts"</td>
+      </tr>
+      <tr>
+        <td><strong>Data gravity</strong></td>
+        <td>"Processing moves to where the data lives, not vice versa"</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Structure every technical answer:</strong> Context → Architecture → Implementation → Tradeoff → Metric. This demonstrates both depth and strategic thinking.</li>
+      <li><strong>Always mention metrics.</strong> "Reduced from X hours to Y minutes" is infinitely more compelling than "made it faster."</li>
+      <li><strong>Config over code:</strong> This single principle answers half the interview questions. Client names in config, never in code.</li>
+      <li><strong>Name the patterns:</strong> Adapter, Strategy, Factory, Circuit Breaker. Knowing the names gives weight to your answers.</li>
+      <li><strong>Honesty + strategy:</strong> Acknowledge beginner production experience, but reframe it as "fresh architectural perspective with strong fundamentals."</li>
+      <li><strong>Demonstrate systematic thinking:</strong> For debugging questions, show a methodology: metrics → changes → profiling → resource checks. Don't guess.</li>
+      <li><strong>Everything connects:</strong> Each lesson in this module feeds into the interview. Vendors (L09) → Centralization (L10) → Resilience (L11) → Universal Code (L12) → all converge in your interview answers.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="12-universal-pipeline.html">
+        <span class="label">← Back to</span>
+        <span class="title">Universal Pipeline Vision</span>
+      </a>
+      <a href="../index.html">
+        <span class="label">← Return to</span>
+        <span class="title">Course Home</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
