@@ -172,7 +172,10 @@ function renderGraph() {
   h += '<div class="darrow-label">' + getDelAdapter(c) + '</div>';
   DELIVERIES.forEach(function(d) {
     var isActive = d.id === dm;
+    var isNasOffline = (d.id === "nas" && !S.nasEnabled);
     var cls = isActive ? "active-dest" : "inactive-dest";
+    if (isNasOffline && isActive) cls += " nas-offline";
+    
     var dest = "";
     if (d.id === "perforce") dest = c.delivery.depot_path || "";
     else if (d.id === "nas") dest = c.delivery.nas_path || "";
@@ -297,7 +300,7 @@ function renderInspector() {
         body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw);
       }
     } else if (S.packet) {
-      body.innerHTML = '<div class="inspector-label">CaptureResult — after ' + (STAGES[S.step] || 'idle') + '</div><div class="jtree">' + buildJsonTree(S.packet) + '</div>';
+      body.innerHTML = '<div class="inspector-label">CaptureResult — after ' + (STAGES[S.step] || 'idle') + '</div><div class="jtree">' + buildJsonTree(S.packet, 0, S.prevPacket || undefined) + '</div>';
     } else {
       body.innerHTML = '<div class="inspector-label">CaptureResult</div><pre>Click "▶ Start" to begin</pre>';
     }
@@ -337,7 +340,10 @@ function renderInspector() {
     var f = S.logs.filter(function(l) { return !stage || l.stage === stage; });
     body.innerHTML = '<div class="inspector-label">Logs' + (stage ? ' — ' + stage : '') + 
       ' <button class="btn-clear" onclick="clearLogs()" title="Clear all logs">Clear</button></div>' +
-      f.map(function(l) { return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> <span class="msg">' + l.msg + '</span></div>'; }).join("");
+      f.map(function(l) { 
+        var b = l.nodeLoc ? '<span class="l-badge lb-' + l.nodeLoc.toLowerCase() + '">' + l.nodeLoc + '</span>' : '';
+        return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> ' + b + '<span class="msg">' + l.msg + '</span></div>'; 
+      }).join("");
   }
 }
 
@@ -348,11 +354,30 @@ function clearLogs() {
 }
 
 // ── Console ──
-function log(level, msg, stage) {
+function log(level, msg, nodeLoc, stage) {
   var now = new Date();
   var time = '[' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0') + ']';
-  S.logs.push({time:time, level:level, msg:msg, stage:stage || STAGES[S.step] || null});
+  S.logs.push({time:time, level:level, msg:msg, nodeLoc:nodeLoc, stage:stage || STAGES[S.step] || null});
   var el = document.getElementById("console-log");
-  el.innerHTML += '<div class="log-entry ' + level + '"><span class="ts">' + time + '</span> <span class="msg">' + msg + '</span></div>';
+  var b = nodeLoc ? '<span class="l-badge lb-' + nodeLoc.toLowerCase() + '">' + nodeLoc + '</span>' : '';
+  el.innerHTML += '<div class="log-entry ' + level + '"><span class="ts">' + time + '</span> ' + b + '<span class="msg">' + msg + '</span></div>';
   el.scrollTop = el.scrollHeight;
+}
+
+function triggerHookPing(nodeId, hookName) {
+  var node = document.getElementById(nodeId);
+  if (!node) return;
+  var rect = node.getBoundingClientRect();
+  var ping = document.createElement("div");
+  ping.className = "hook-ping";
+  ping.textContent = "⚙️ " + hookName;
+  document.body.appendChild(ping);
+  
+  // Center above the node
+  var x = rect.left + rect.width / 2;
+  var y = rect.top;
+  ping.style.left = (x - ping.offsetWidth / 2) + "px";
+  ping.style.top = y + "px";
+  
+  setTimeout(function() { ping.remove(); }, 1200);
 }

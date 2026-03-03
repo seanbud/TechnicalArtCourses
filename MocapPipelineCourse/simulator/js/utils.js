@@ -69,7 +69,7 @@ function highlightPy(code) {
   return '<pre class="py">' + lineH + '</pre>';
 }
 
-function buildJsonTree(obj, depth) {
+function buildJsonTree(obj, depth, oldObj) {
   depth = depth || 0;
   if (obj === null) return '<span class="jnull">null</span>';
   if (typeof obj === 'boolean') return '<span class="jbool">' + obj + '</span>';
@@ -86,8 +86,16 @@ function buildJsonTree(obj, depth) {
   html += '<span class="jpreview" id="' + id + '_p" style="display:' + (expanded ? 'none' : 'inline') + '"> ' + len + ' ' + (isArr ? 'items' : 'keys') + ' ' + bC + '</span>';
   html += '<div id="' + id + '" class="' + (expanded ? '' : 'jcollapsed') + '" style="margin-left:' + (depth < 4 ? 16 : 0) + 'px">';
   entries.forEach(function(pair, i) {
-    if (!isArr) html += '<span class="jkey">"' + esc(String(pair[0])) + '"</span>: ';
-    html += buildJsonTree(pair[1], depth + 1);
+    var k = pair[0];
+    var v = pair[1];
+    var diffCls = "";
+    if (oldObj !== undefined) {
+      if (!(k in oldObj)) diffCls = "json-diff-add";
+      else if (JSON.stringify(oldObj[k]) !== JSON.stringify(v) && typeof v !== 'object') diffCls = "json-diff-mod";
+    }
+    
+    if (!isArr) html += '<span class="jkey ' + diffCls + '">"' + esc(String(k)) + '"</span>: ';
+    html += buildJsonTree(v, depth + 1, (oldObj && oldObj[k] !== undefined) ? oldObj[k] : undefined);
     if (i < len - 1) html += ',';
     html += '<br>';
   });
