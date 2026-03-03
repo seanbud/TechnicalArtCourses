@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'CapturePipelineCourse/simulator/**'
+      - '.github/workflows/deploy-simulator.yml'
   workflow_dispatch:
 
 permissions:
