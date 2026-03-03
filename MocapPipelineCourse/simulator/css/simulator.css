@@ -41,12 +41,13 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .btn-fail:hover{background:rgba(248,113,113,.22)}
 
 /* Pipeline graph — L→R horizontal flow */
-.pgraph{flex:1;display:grid;grid-template-columns:auto auto auto auto auto auto auto auto;grid-template-rows:auto auto auto;align-items:center;justify-items:center;row-gap:10px;column-gap:6px;padding:1rem;overflow:auto;align-content:center}
+.pgraph{flex:1;display:grid;grid-template-columns:auto auto auto auto auto auto auto;grid-template-rows:auto auto auto;align-items:center;justify-items:center;row-gap:10px;column-gap:6px;padding:1rem;overflow:auto;align-content:center}
 /* Row assignments: marker=row1, universal=row2, markerless=row3 */
 
-.tech-label{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:4px;justify-self:start}
+.tech-label{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:4px;width:fit-content;white-space:nowrap;z-index:2}
 .tech-label.marker-label{color:var(--accent-green);background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
 .tech-label.markerless-label{color:var(--accent-blue);background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2)}
+
 .dimmed{opacity:.28}.dimmed .snode{border-style:dashed}
 
 /* Stage nodes */
@@ -70,9 +71,11 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .pgraph:has(.parrow:hover) .arrow-tip{display:block}
 
 /* Convergence */
-.conv-cell{display:flex;flex-direction:column;align-items:center;grid-row:1/4;padding:0 4px}
-.conv-bar{width:2px;flex:1;background:var(--accent-blue);opacity:.3}
-.conv-label{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-blue);writing-mode:vertical-rl;padding:6px 0;white-space:nowrap}
+.conv-cell{position:relative;display:flex;align-items:center;justify-content:center;grid-row:1/4;min-width:140px;padding:0 4px}
+.conv-line-v{position:absolute;top:10%;bottom:10%;left:50%;width:1px;background:var(--accent-blue);opacity:.2}
+.conv-v-group{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;background:var(--bg-app);padding:14px 0;gap:6px}
+.conv-v-bar{width:1px;height:20px;background:var(--accent-blue);opacity:.5}
+.conv-label-v{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-blue);writing-mode:vertical-rl;white-space:nowrap;opacity:.8;padding:10px 0;transform:scale(-1)}
 
 /* Delivery column */
 .deliver-col{grid-row:1/4;display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:130px;justify-self:start;padding-left:8px}
