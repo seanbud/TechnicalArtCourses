@@ -17,6 +17,8 @@ A production-hardened course focused on high-fidelity motion capture pipelines, 
 ### Interactive Pipeline Simulator
 A web-based, interactive tool designed to visualize the complex data journey through the Studio Capture Pipeline. It maps the conceptual architecture from Module 6 into a live, traceable dashboard.
 
+[🚀 **View Live Demo**](https://seanbudning.github.io/UnityTechnicalArtCourse/)
+
 *   **Location:** `/MocapPipelineCourse/simulator/index.html`
 *   **Key Features:**
     *   **Visual Data Tracing**: Trace mock capture packets through Ingest, Clean, Retarget, and Export stages.
