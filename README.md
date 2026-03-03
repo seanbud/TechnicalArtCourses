@@ -17,7 +17,7 @@ A production-hardened course focused on high-fidelity motion capture pipelines, 
 ### Interactive Pipeline Simulator
 A web-based, interactive tool designed to visualize the complex data journey through the EA Capture Pipeline. It maps the conceptual architecture from Module 6 into a live, traceable dashboard.
 
-Click here to try the live demo : [🚀 ** Live Demo**](https://seanbudning.github.io/UnityTechnicalArtCourse/)
+Click here to try the [**Live Demo**](https://seanbudning.github.io/UnityTechnicalArtCourse/) in your browser.
 
 *   **Location:** `/CapturePipelineCourse/simulator/index.html`
 *   **Key Features:**
