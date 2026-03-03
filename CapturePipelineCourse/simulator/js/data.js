@@ -481,32 +481,32 @@ const STAGE_INFO = {
   ingest:{
     title:"Ingest Stage",
     desc:"The pipeline begins with a **Watchdog daemon** that monitors the stage output directories. When a new file is detected, it triggers the `PipelineRunner` to start a new take.<br><br>The runner looks up the technology type in the `Strategy Registry` to select the correct ingest logic—either `MarkerIngest` for Vicon .c3d data or `MarkerlessIngest` for Move.ai video. Regardless of the source hardware, the output is always a standardized `CaptureResult` object.",
-    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"
+    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"capture_pipeline/pipeline/runner.py"
   },
   cleanup:{
     title:"Cleanup Stage",
     desc:"Immediately following ingest, the runner invokes the technology-specific cleanup strategy. While gap-filling and temporal smoothing are automated, **post-production is highly manual** — especially for hero characters.<br><br>Artists must scrub through and perform **foot-locking** (contact keying), fix HumanIK retargeting artifacts (e.g., interpenetrating fingers, popping shoulders), and correct interpolation errors on occluded markers. Background characters often rely more on the auto-solves to save time.",
-    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"
+    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"capture_pipeline/pipeline/runner.py"
   },
   retarget:{
     title:"Retarget Stage",
     desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Metaverse rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Notice the **Visual Data Diffing** in the inspector—it highlights exactly which skeleton keys are being remapped in real-time.",
-    pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"pipeline/retarget.py"
+    pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"capture_pipeline/pipeline/retarget.py"
   },
   validate:{
     title:"Validation Stage",
     desc:"A suite of pluggable checkers is executed to ensure data integrity before delivery. The runner iterates through standard checks like naming conventions, skeleton joint counts, and frame ranges.<br><br>New validators can be added via the `PluginManager`. Watch for the **⚙️ Real-time Hook Pings** on the graph—these indicate when custom client logic is firing. Use the **Partitioned Logs** to see if a validation failure originated in the cloud or on the local capture node.",
-    pattern:"Plugin Architecture",lesson:"11-defensive-architecture.html",code:"pipeline/validation.py"
+    pattern:"Plugin Architecture",lesson:"11-defensive-architecture.html",code:"capture_pipeline/pipeline/validation.py"
   },
   export:{
     title:"Export Stage",
     desc:"The `ExportFactory` selects the appropriate adapter (FBX or glTF) based on the project's export configuration. <br><br>Before the file is written, `pre_export` hooks can trigger mesh decimation or LOD generation. Once written, a `post_export` hook typically generates a video turntable preview and records the file's MD5 hash into a sidecar metadata file for audit tracking.",
-    pattern:"Adapter + Factory",lesson:"10-pipeline-centralization.html",code:"adapters/fbx_export.py"
+    pattern:"Adapter + Factory",lesson:"10-pipeline-centralization.html",code:"capture_pipeline/adapters/fbx_export.py"
   },
   deliver:{
     title:"Delivery Stage",
     desc:"Final delivery is handled via adapters for Perforce, NAS (SMB), or S3. To ensure reliability, all delivery calls are protected by a **Circuit Breaker** and a retry decorator.<br><br>If a destination like the NAS goes offline, the circuit 'opens' and data is queued to the local SSD. Once the system detects the NAS is back (HALF_OPEN state), it automatically flushes the local queue to the server.",
-    pattern:"Circuit Breaker + Retry",lesson:"11-defensive-architecture.html",code:"adapters/nas_delivery.py"
+    pattern:"Circuit Breaker + Retry",lesson:"11-defensive-architecture.html",code:"capture_pipeline/adapters/nas_delivery.py"
   }
 };
 
