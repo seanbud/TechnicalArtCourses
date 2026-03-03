@@ -90,8 +90,8 @@ Utilities that operate outside the core automated flow.
         },
     }
 
-    def process(self, input_path, technology, client_id):
-        profile    = self.registry.get_profile(client_id)
+    def process(self, input_path, technology, client_id, registry, plugin_mgr):
+        profile    = registry.get_profile(client_id)
         strategies = self.STRATEGIES[technology]
 
         # ── DIVERGENT STAGES (Technology-Specific) ──
@@ -100,25 +100,27 @@ Utilities that operate outside the core automated flow.
         data = strategies["cleanup"]().cleanup(data)
 
         # ── CONVERGENCE POINT ──
-        # Both paths join here to use universal logic
+        # Plugins can inject custom remapping or facial logic here
+        plugin_mgr.run_hook("custom_retarget", data, profile)
+
         data = HumanIKRetarget().retarget(
             data, 
             profile.skeleton_template
         )
         
-        results = UniversalValidator(profile).validate(data)
+        results = UniversalValidator(profile, plugin_mgr).validate(data)
 
         # ── ADAPTERS (Client-Specific Export) ──
         # Factory Pattern: Resolve correct exporter
         adapter = get_export_adapter(profile)
-        adapter.export(data, output_path, profile)
+        
+        # Injects plugin_mgr for hook dispatching
+        adapter.export(data, output_path, profile, plugin_mgr)
 
         # ── DELIVERY ──
         # Final handoff to destination medium
-        get_delivery_adapter(profile).deliver(
-            output_path, 
-            profile
-        )`,
+        get_delivery_adapter(profile).deliver(output_path, profile)
+`,
 
 "capture_pipeline/pipeline/core.py":
 `class PipelineRunner:
@@ -141,7 +143,9 @@ Utilities that operate outside the core automated flow.
             self.pipeline.process,
             input_path, 
             technology, 
-            client_id
+            client_id,
+            self.registry,
+            self.plugin_mgr
         )
         
         log.info("Pipeline execution queued to Farm ✅")`,
@@ -197,11 +201,11 @@ Utilities that operate outside the core automated flow.
             check_naming,       # Matches client regex pattern
             check_skeleton,     # Verifies critical joint presence
             check_frame_range,  # Frame count health check
-            check_root_origin,  # Actor world-space origin check
-            check_world_space,  # Asserts Z-up/Y-up orientation
-            check_scale,        # Asserts meter/cm mapping
             check_integrity,    # FBX stream binary integrity
         ]
+
+        # Hook: Multi-node plugins can inject custom validation logic
+        self.plugin_mgr.run_hook("custom_validate", data, profile)
 
         # Iterative execution and reporting
         results = [
@@ -237,9 +241,12 @@ Utilities that operate outside the core automated flow.
 `class FBXExportAdapter(BaseExportAdapter):
     """Factory-spawned adapter for standard Maya/FBX output."""
 
-    def export(self, data, output_path, profile):
+    def export(self, data, output_path, profile, plugin_mgr):
         fbx_ver = profile.export["fbx_version"]
         
+        # Hook: Trigger pre-export optimizations (e.g. LOD gen)
+        plugin_mgr.run_hook("pre_export", data, profile)
+
         # Maya API / MEL Configuration
         mel.eval(f'FBXExportFileVersion -v "{fbx_ver}"')
         
@@ -247,30 +254,32 @@ Utilities that operate outside the core automated flow.
             mel.eval('FBXExportBakeComplexAnimation -v true')
         
         # Trigger native binary export
-        cmds.file(
-            output_path, 
-            force=True, 
-            type="FBX export"
-        )`,
+        cmds.file(output_path, force=True, type="FBX export")
+
+        # Hook: Trigger post-export automation (e.g. Turntables)
+        plugin_mgr.run_hook("post_export", output_path, profile)
+`,
 
 "capture_pipeline/adapters/gltf_export.py":
 `class GLTFExportAdapter(BaseExportAdapter):
     """Adapter for Real-time web/mobile delivery (glTF 2.0)."""
 
-    def export(self, data, output_path, profile):
+    def export(self, data, output_path, profile, plugin_mgr):
+        # Hook: Multi-platform optimizations
+        plugin_mgr.run_hook("pre_export", data, profile)
+
         # Intermediary format for conversion
         temp_fbx = output_path.replace('.gltf', '_temp.fbx')
         
         # Step 1: Maya FBX Export
-        FBXExportAdapter().export(data, temp_fbx, profile)
+        FBXExportAdapter().export(data, temp_fbx, profile, plugin_mgr)
         
         # Step 2: Open Source Converter
-        subprocess.run([
-            "FBX2glTF", 
-            "--input", temp_fbx,
-            "--output", output_path, 
-            "--binary"
-        ])`,
+        subprocess.run(["FBX2glTF", "--input", temp_fbx, "--output", output_path])
+
+        # Hook: Deployment packaging
+        plugin_mgr.run_hook("post_export", output_path, profile)
+`,
 
 "capture_pipeline/adapters/vicon_ingest.py":
 `class MarkerIngest(IngestStage):
@@ -314,6 +323,7 @@ Utilities that operate outside the core automated flow.
 `class PerforceDelivery(BaseDeliveryAdapter):
     """Production asset management delivery (Source Control)."""
 
+    @retry(max_attempts=3, delay=2.0)
     def deliver(self, output_path, profile):
         depot = profile.delivery["depot_path"]
         
@@ -353,6 +363,7 @@ Utilities that operate outside the core automated flow.
 `class S3Delivery(BaseDeliveryAdapter):
     """Cloud storage delivery for distributed workflows."""
 
+    @retry(max_attempts=5, delay=1.0)
     def deliver(self, output_path, profile):
         bucket = profile.delivery["s3_bucket"]
         key    = f"mocap/{os.path.basename(output_path)}"
@@ -479,12 +490,12 @@ const STAGE_INFO = {
   },
   retarget:{
     title:"Retarget Stage",
-    desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Metaverse rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Optional plugins can hook in for specialized offsets.",
+    desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Metaverse rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Notice the **Visual Data Diffing** in the inspector—it highlights exactly which skeleton keys are being remapped in real-time.",
     pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"pipeline/retarget.py"
   },
   validate:{
     title:"Validation Stage",
-    desc:"A suite of pluggable checkers is executed to ensure data integrity before delivery. The runner iterates through standard checks like naming conventions, skeleton joint counts, and frame ranges.<br><br>New validators can be added by registering functions with the `PluginManager`. If any check fails, the pipeline can be configured to halt immediately or flag the take for manual TA review in the dashboard.",
+    desc:"A suite of pluggable checkers is executed to ensure data integrity before delivery. The runner iterates through standard checks like naming conventions, skeleton joint counts, and frame ranges.<br><br>New validators can be added via the `PluginManager`. Watch for the **⚙️ Real-time Hook Pings** on the graph—these indicate when custom client logic is firing. Use the **Partitioned Logs** to see if a validation failure originated in the cloud or on the local capture node.",
     pattern:"Plugin Architecture",lesson:"11-defensive-architecture.html",code:"pipeline/validation.py"
   },
   export:{
@@ -500,11 +511,11 @@ const STAGE_INFO = {
 };
 
 const SF = {
-  ingest:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/README.md","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/README.md","capture_pipeline/adapters/moveai_ingest.py"]},
+  ingest:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/pipeline/plugin_manager.py","capture_pipeline/pipeline/client_registry.py","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/pipeline/plugin_manager.py","capture_pipeline/pipeline/client_registry.py","capture_pipeline/adapters/moveai_ingest.py"]},
   cleanup:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/moveai_ingest.py"]},
   retarget:{both:["capture_pipeline/pipeline/README.md","capture_pipeline/pipeline/retarget.py"]},validate:{both:["capture_pipeline/pipeline/validation.py"]},
   export:{fbx:["capture_pipeline/adapters/fbx_export.py"],gltf:["capture_pipeline/adapters/gltf_export.py"]},
-  deliver:{perforce:["capture_pipeline/adapters/p4_delivery.py","capture_pipeline/scripts/README.md","capture_pipeline/scripts/delivery_bot.py"],nas:["capture_pipeline/adapters/nas_delivery.py","capture_pipeline/scripts/delivery_bot.py"],s3:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"],sftp:["capture_pipeline/adapters/s3_delivery.py"]}
+  deliver:{perforce:["capture_pipeline/adapters/p4_delivery.py","capture_pipeline/scripts/delivery_bot.py"],nas:["capture_pipeline/adapters/nas_delivery.py","capture_pipeline/scripts/delivery_bot.py"],s3:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"],sftp:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"]}
 };
 
 const DELIVERIES = [
