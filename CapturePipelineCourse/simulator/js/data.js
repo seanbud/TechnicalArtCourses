@@ -21,22 +21,345 @@ const CL = {
 };
 
 const FC = {
-"pipeline/runner.py":"class UniversalPipeline:\n    STRATEGIES = {\n        \"marker\":     {\n            \"ingest\":  MarkerIngest,\n            \"cleanup\": MarkerCleanup\n        },\n        \"markerless\": {\n            \"ingest\":  MarkerlessIngest,\n            \"cleanup\": MarkerlessCleanup\n        },\n    }\n\n    def process(self, input_path, technology, client_id):\n        profile = self.registry.get_profile(client_id)\n        strategies = self.STRATEGIES[technology]\n\n        # ── Divergent stages (technology-specific) ──\n        data = strategies[\"ingest\"]().ingest(input_path)\n        data = strategies[\"cleanup\"]().cleanup(data)\n\n        # ── CONVERGENCE POINT ──\n        data = HumanIKRetarget().retarget(data, profile.skeleton_template)\n        results = UniversalValidator(profile).validate(data)\n\n        adapter = get_export_adapter(profile)  # Factory pattern\n        adapter.export(data, output_path, profile)\n        get_delivery_adapter(profile).deliver(output_path, profile)",
-"pipeline/core.py":"class PipelineRunner:\n    \"\"\"Entry point — orchestrates the full pipeline.\"\"\"\n\n    def __init__(self):\n        self.registry = ClientRegistry(\"/config/clients/\")\n        self.plugin_mgr = PluginManager(\"/plugins/\")\n        self.pipeline = UniversalPipeline()\n\n    def run(self, input_path, client_id, technology=\"marker\"):\n        log.info(f\"Starting pipeline for {client_id} ({technology})\")\n        profile = self.registry.get_profile(client_id)\n        self.plugin_mgr.load_plugins_for(client_id)\n        self.pipeline.process(input_path, technology, client_id)\n        log.info(\"Pipeline complete ✅\")",
-"pipeline/validation.py":"class UniversalValidator:\n    \"\"\"Runs pluggable validation checkers.\"\"\"\n\n    def validate(self, data, profile):\n        checkers = [\n            check_naming,       # filename matches client regex\n            check_skeleton,     # all required joints present\n            check_frame_range,  # frame count within bounds\n            check_root_origin,  # root near world origin\n            check_integrity,    # valid FBX header\n        ]\n        results = [checker(data, profile) for checker in checkers]\n        return results",
-"pipeline/retarget.py":"class HumanIKRetarget:\n    \"\"\"Maps source skeleton to target (client) skeleton.\"\"\"\n\n    def retarget(self, data, target_skeleton):\n        joint_map = load_joint_map(target_skeleton)\n        for src, tgt in joint_map.items():\n            data.joints[tgt] = data.joints.pop(src)\n        data.target_skeleton = target_skeleton\n        data.joints_remapped = True\n        return data",
-"adapters/fbx_export.py":"class FBXExportAdapter(BaseExportAdapter):\n    def export(self, data, output_path, profile):\n        fbx_ver = profile.export[\"fbx_version\"]\n        mel.eval(f'FBXExportFileVersion -v \"{fbx_ver}\"')\n        if profile.export.get(\"bake_animation\"):\n            mel.eval('FBXExportBakeComplexAnimation -v true')\n        cmds.file(output_path, force=True, type=\"FBX export\")",
-"adapters/gltf_export.py":"class GLTFExportAdapter(BaseExportAdapter):\n    def export(self, data, output_path, profile):\n        temp_fbx = output_path.replace('.gltf', '_temp.fbx')\n        FBXExportAdapter().export(data, temp_fbx, profile)\n        subprocess.run([\"FBX2glTF\", \"--input\", temp_fbx,\n                        \"--output\", output_path, \"--binary\"])",
-"adapters/vicon_ingest.py":"class MarkerIngest(IngestStage):\n    def ingest(self, input_path):\n        raw = vicon_sdk.read_c3d(input_path)\n        result = CaptureResult()\n        result.source_technology = \"marker\"\n        result.source_vendor = \"vicon\"\n        result.joints = raw.get_marker_positions()\n        result.frame_rate = raw.sample_rate   # 120fps\n        result.confidence = 1.0\n        return result",
-"adapters/moveai_ingest.py":"class MarkerlessIngest(IngestStage):\n    def ingest(self, input_path):\n        ml_data = moveai_sdk.process_video(input_path)\n        result = CaptureResult()\n        result.source_technology = \"markerless\"\n        result.source_vendor = \"moveai\"\n        result.joints = ml_data.joint_predictions\n        result.frame_rate = ml_data.fps   # 30fps\n        result.confidence = ml_data.avg_confidence\n        return result",
-"adapters/p4_delivery.py":"class PerforceDelivery(BaseDeliveryAdapter):\n    def deliver(self, output_path, profile):\n        depot = profile.delivery[\"depot_path\"]\n        p4 = P4(); p4.connect()\n        p4.run(\"add\", output_path)\n        p4.run(\"submit\", \"-d\", f\"Auto: {os.path.basename(output_path)}\")\n        notify_slack(profile.delivery[\"slack\"], output_path)",
-"adapters/nas_delivery.py":"class NASDelivery(BaseDeliveryAdapter):\n    @circuit_breaker(max_failures=3, reset_timeout=30)\n    @retry(max_attempts=3, delay=2.0, backoff=2.0)\n    def deliver(self, output_path, profile):\n        nas_path = profile.delivery[\"nas_path\"]\n        dest = os.path.join(nas_path, os.path.basename(output_path))\n        shutil.copy2(output_path, dest)\n        verify_md5(output_path, dest)\n        notify_slack(profile.delivery[\"slack\"], dest)",
-"adapters/s3_delivery.py":"class S3Delivery(BaseDeliveryAdapter):\n    def deliver(self, output_path, profile):\n        bucket = profile.delivery[\"s3_bucket\"]\n        key = f\"mocap/{os.path.basename(output_path)}\"\n        boto3.client(\"s3\").upload_file(output_path, bucket, key)\n        notify_slack(profile.delivery[\"slack\"], f\"s3://{bucket}/{key}\")",
-"plugins/metaverse_client.py":"def register():\n    return {\"client_id\": \"metaverse\", \"version\": \"1.0\"}\n\ndef pre_export(data, profile):\n    decimator.reduce_to_target(data, max_tris=5000)\n\ndef post_export(output_path, profile):\n    preview_gen.create_turntable(output_path)\n\ndef custom_validate(data, profile):\n    if len(data.joints) > 50:\n        return False, f\"Too many joints: {len(data.joints)}\"\n    return True, \"Joint count OK\"",
-"plugins/fc_custom.py":"def register():\n    return {\"client_id\": \"fc_sports\", \"version\": \"2.1\"}\n\ndef custom_retarget(data, profile):\n    facial_map = load_fc_facial_map()\n    data.blendshapes = map_facial_markers(data, facial_map)\n    return data",
-"scripts/batch_rename.py":"\"\"\"Config-driven batch bone renaming tool.\"\"\"\ndef batch_rename(fbx_path, joint_map_path):\n    with open(joint_map_path) as f:\n        mapping = json.load(f)\n    for src, tgt in mapping.items():\n        if cmds.objExists(src):\n            cmds.rename(src, tgt)\n    cmds.file(fbx_path, force=True, save=True)",
-"scripts/delivery_bot.py":"\"\"\"File watcher — sweeps into pipeline.\"\"\"\nclass DeliveryBot:\n    def __init__(self, watch_dir, pipeline):\n        self.observer = Observer()\n        self.observer.schedule(self, watch_dir, recursive=True)\n    def on_created(self, event):\n        if event.src_path.endswith('.c3d'):\n            self.pipeline.run(event.src_path)\n            slack.post(f\"Auto-processed: {event.src_path}\")",
-"scripts/health_monitor.py":"\"\"\"Health check — 30s heartbeat.\"\"\"\ndef check_all():\n    checks = {\"NAS\": ping_nas(), \"Perforce\": check_p4_connection(),\n              \"Farm\": check_deadline_status(), \"Disk\": check_disk_space() > 0.1}\n    for name, ok in checks.items():\n        if not ok:\n            alert_slack(f\"🚨 {name} is DOWN\", severity=\"critical\")"
+"pipeline/runner.py":
+`class UniversalPipeline:
+    """Orchestrates the convergent/divergent execution flow."""
+    
+    # Strategy Pattern: Define logic for different capture techs
+    STRATEGIES = {
+        "marker": {
+            "ingest":  MarkerIngest,
+            "cleanup": MarkerCleanup
+        },
+        "markerless": {
+            "ingest":  MarkerlessIngest,
+            "cleanup": MarkerlessCleanup
+        },
+    }
+
+    def process(self, input_path, technology, client_id):
+        profile    = self.registry.get_profile(client_id)
+        strategies = self.STRATEGIES[technology]
+
+        # ── DIVERGENT STAGES (Technology-Specific) ──
+        # Injecting technology-specific adapters
+        data = strategies["ingest"]().ingest(input_path)
+        data = strategies["cleanup"]().cleanup(data)
+
+        # ── CONVERGENCE POINT ──
+        # Both paths join here to use universal logic
+        data = HumanIKRetarget().retarget(
+            data, 
+            profile.skeleton_template
+        )
+        
+        results = UniversalValidator(profile).validate(data)
+
+        # ── ADAPTERS (Client-Specific Export) ──
+        # Factory Pattern: Resolve correct exporter
+        adapter = get_export_adapter(profile)
+        adapter.export(data, output_path, profile)
+
+        # ── DELIVERY ──
+        # Final handoff to destination medium
+        get_delivery_adapter(profile).deliver(
+            output_path, 
+            profile
+        )`,
+
+"pipeline/core.py":
+`class PipelineRunner:
+    """The master entry point for the entire capture system."""
+
+    def __init__(self):
+        self.registry   = ClientRegistry("/config/clients/")
+        self.plugin_mgr = PluginManager("/plugins/")
+        self.pipeline   = UniversalPipeline()
+
+    def run(self, input_path, client_id, technology="marker"):
+        log.info(f"Starting pipeline flow for {client_id} ({technology})")
+        
+        # Resolve client profile and load any logic overrides
+        profile = self.registry.get_profile(client_id)
+        self.plugin_mgr.load_plugins_for(client_id)
+        
+        # Execute core pipeline logic
+        self.pipeline.process(
+            input_path, 
+            technology, 
+            client_id
+        )
+        
+        log.info("Pipeline execution complete ✅")`,
+
+"pipeline/validation.py":
+`class UniversalValidator:
+    """Runs a series of pluggable readiness checks on capture data."""
+
+    def validate(self, data, profile):
+        # Dispatch table for automated quality gates
+        checkers = [
+            check_naming,       # Matches client regex pattern
+            check_skeleton,     # Verifies critical joint presence
+            check_frame_range,  # Frame count health check
+            check_root_origin,  # Actor world-space origin check
+            check_integrity,    # FBX stream binary integrity
+        ]
+
+        # Iterative execution and reporting
+        results = [
+            checker(data, profile) 
+            for checker in checkers
+        ]
+        
+        return results`,
+
+"pipeline/retarget.py":
+`class HumanIKRetarget:
+    """Standardizes source skeleton to the target client delivery spec."""
+
+    def retarget(self, data, target_skeleton):
+        joint_map = load_joint_map(target_skeleton)
+        
+        # Perform 1:1 joint redirection
+        for src, tgt in joint_map.items():
+            if src in data.joints:
+                data.joints[tgt] = data.joints.pop(src)
+        
+        # Update simulation state metadata
+        data.target_skeleton = target_skeleton
+        data.joints_remapped = True
+        
+        return data`,
+
+"adapters/fbx_export.py":
+`class FBXExportAdapter(BaseExportAdapter):
+    """Factory-spawned adapter for standard Maya/FBX output."""
+
+    def export(self, data, output_path, profile):
+        fbx_ver = profile.export["fbx_version"]
+        
+        # Maya API / MEL Configuration
+        mel.eval(f'FBXExportFileVersion -v "{fbx_ver}"')
+        
+        if profile.export.get("bake_animation"):
+            mel.eval('FBXExportBakeComplexAnimation -v true')
+        
+        # Trigger native binary export
+        cmds.file(
+            output_path, 
+            force=True, 
+            type="FBX export"
+        )`,
+
+"adapters/gltf_export.py":
+`class GLTFExportAdapter(BaseExportAdapter):
+    """Adapter for Real-time web/mobile delivery (glTF 2.0)."""
+
+    def export(self, data, output_path, profile):
+        # Intermediary format for conversion
+        temp_fbx = output_path.replace('.gltf', '_temp.fbx')
+        
+        # Step 1: Maya FBX Export
+        FBXExportAdapter().export(data, temp_fbx, profile)
+        
+        # Step 2: Open Source Converter
+        subprocess.run([
+            "FBX2glTF", 
+            "--input", temp_fbx,
+            "--output", output_path, 
+            "--binary"
+        ])`,
+
+"adapters/vicon_ingest.py":
+`class MarkerIngest(IngestStage):
+    """Ingest strategy for Vicon Shogun / Vicon Blade data."""
+
+    def ingest(self, input_path):
+        # Native Vicon C3D Stream
+        raw = vicon_sdk.read_c3d(input_path)
+        
+        result = CaptureResult()
+        result.source_technology = "marker"
+        result.source_vendor     = "vicon"
+        
+        # Spatial Marker extraction
+        result.joints     = raw.get_marker_positions()
+        result.frame_rate = raw.sample_rate  # (120Hz)
+        result.confidence = 1.0
+        
+        return result`,
+
+"adapters/moveai_ingest.py":
+`class MarkerlessIngest(IngestStage):
+    """Ingest strategy for AI-driven Markerless video capture."""
+
+    def ingest(self, input_path):
+        # High-performance ML Inference
+        ml_data = moveai_sdk.process_video(input_path)
+        
+        result = CaptureResult()
+        result.source_technology = "markerless"
+        result.source_vendor     = "moveai"
+        
+        # Extract AI joint predictions
+        result.joints     = ml_data.joint_predictions
+        result.frame_rate = ml_data.fps  # (30Hz)
+        result.confidence = ml_data.avg_confidence
+        
+        return result`,
+
+"adapters/p4_delivery.py":
+`class PerforceDelivery(BaseDeliveryAdapter):
+    """Production asset management delivery (Source Control)."""
+
+    def deliver(self, output_path, profile):
+        depot = profile.delivery["depot_path"]
+        
+        p4 = P4()
+        p4.connect()
+        
+        # Source Control Operations
+        p4.run("add", output_path)
+        p4.run(
+            "submit", 
+            "-d", 
+            f"Auto: Pipeline v2.1 ({os.path.basename(output_path)})"
+        )
+        
+        notify_slack(profile.delivery["slack"], output_path)`,
+
+"adapters/nas_delivery.py":
+`class NASDelivery(BaseDeliveryAdapter):
+    """High-speed local network storage delivery (SMB)."""
+
+    @circuit_breaker(max_failures=3, reset_timeout=30)
+    @retry(max_attempts=3, delay=1.0)
+    def deliver(self, output_path, profile):
+        nas_path = profile.delivery["nas_path"]
+        dest     = os.path.join(nas_path, os.path.basename(output_path))
+        
+        # Native Copy + Checksum
+        shutil.copy2(output_path, dest)
+        verify_md5(output_path, dest)
+        
+        notify_slack(profile.delivery["slack"], dest)`,
+
+"adapters/s3_delivery.py":
+`class S3Delivery(BaseDeliveryAdapter):
+    """Cloud storage delivery for distributed workflows."""
+
+    def deliver(self, output_path, profile):
+        bucket = profile.delivery["s3_bucket"]
+        key    = f"mocap/{os.path.basename(output_path)}"
+        
+        # AWS S3 API Upload
+        boto3.client("s3").upload_file(
+            output_path, 
+            bucket, 
+            key
+        )
+        
+        notify_slack(
+            profile.delivery["slack"], 
+            f"s3://{bucket}/{key}"
+        )`,
+
+"plugins/metaverse_client.py":
+`def register():
+    """Client-specific plugin manifest."""
+    return {
+        "client_id": "metaverse", 
+        "version":   "1.0"
+    }
+
+def pre_export(data, profile):
+    # Optimize for real-time shaders
+    decimator.reduce_to_target(
+        data, 
+        max_tris=5000
+    )
+
+def post_export(output_path, profile):
+    # Auto-generate character deck thumbnail
+    preview_gen.create_turntable(output_path)
+
+def custom_validate(data, profile):
+    # Specific Metaverse Constraint
+    if len(data.joints) > 50:
+        return False, f"LOD Error: {len(data.joints)} joints"
+    return True, "Success"`,
+
+"plugins/fc_custom.py":
+`def register():
+    """Client-specific plugin manifest (FC Sports)."""
+    return {
+        "client_id": "fc_sports", 
+        "version":   "2.1"
+    }
+
+def custom_retarget(data, profile):
+    # Specialized sports facial rig injection
+    facial_map = load_fc_facial_map()
+    data.blendshapes = map_facial_markers(
+        data, 
+        facial_map
+    )
+    return data`,
+
+"scripts/batch_rename.py":
+`"""
+Core Utility Script:
+Batches nomenclature remapping across FBX hierarchies.
+"""
+def batch_rename(fbx_path, joint_map_path):
+    with open(joint_map_path) as f:
+        mapping = json.load(f)
+
+    for src, tgt in mapping.items():
+        if cmds.objExists(src):
+            cmds.rename(src, tgt)
+
+    cmds.file(fbx_path, force=True, save=True)`,
+
+"scripts/delivery_bot.py":
+`"""
+Background Execution Daemon:
+Triggered on capture server filesystem events.
+"""
+class DeliveryBot:
+    def __init__(self, watch_dir, pipeline):
+        self.observer = Observer()
+        self.observer.schedule(self, watch_dir, recursive=True)
+
+    def on_created(self, event):
+        if event.src_path.endswith('.c3d'):
+            # Automated ingestion pipeline
+            self.pipeline.run(
+                event.src_path, 
+                technology="marker"
+            )
+            slack.post(f"Watcher: processing {event.src_path}")`,
+
+"scripts/health_monitor.py":
+`"""
+Infrastructure Heartbeat Watchdog:
+Monitors critical capture pipeline services.
+"""
+def check_all():
+    checks = {
+        "NAS":      ping_nas(), 
+        "Perforce": check_p4_connection(),
+        "Farm":     check_deadline_status(), 
+        "Disk":     check_disk_space() > 0.1
+    }
+    
+    for name, ok in checks.items():
+        if not ok:
+            alert_slack(
+                f"🚨 CRITICAL: {name} is OFFLINE", 
+                severity="critical"
+            )`
 };
 
 const STAGE_INFO = {

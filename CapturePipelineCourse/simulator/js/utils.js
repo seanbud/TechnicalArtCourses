@@ -7,14 +7,58 @@ function esc(s) {
 }
 
 function highlightPy(code) {
-  let h = esc(code);
-  h = h.replace(/(#.*)$/gm, '<span class="cmt">$1</span>');
-  h = h.replace(/("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\')/g, '<span class="str">$1</span>');
+  // Tokenizer approach: extract strings & comments as atomic tokens first,
+  // then apply keyword highlighting only to remaining code fragments.
+  // This prevents the double-wrapping bug with docstrings.
+  var tokens = [];
+  var src = code;
+  var out = '';
+  var i = 0;
+  while (i < src.length) {
+    // Triple-quoted strings (""" or ''')
+    if (src.slice(i, i+3) === '"""' || src.slice(i, i+3) === "'''") {
+      var q3 = src.slice(i, i+3);
+      var end = src.indexOf(q3, i+3);
+      if (end === -1) end = src.length - 3;
+      var tok = src.slice(i, end+3);
+      var ph = '\x00T' + tokens.length + '\x00';
+      tokens.push('<span class="str">' + esc(tok) + '</span>');
+      out += ph; i = end + 3;
+    }
+    // f-strings or regular strings
+    else if ((src[i] === '"' || src[i] === "'") || (src[i] === 'f' && i+1 < src.length && (src[i+1] === '"' || src[i+1] === "'"))) {
+      var si = (src[i] === 'f') ? i + 1 : i;
+      var qc = src[si];
+      var j = si + 1;
+      while (j < src.length && src[j] !== qc && src[j] !== '\n') { if (src[j] === '\\') j++; j++; }
+      if (j < src.length) j++; // include closing quote
+      var tok = src.slice(i, j);
+      var ph = '\x00T' + tokens.length + '\x00';
+      tokens.push('<span class="str">' + esc(tok) + '</span>');
+      out += ph; i = j;
+    }
+    // Comments
+    else if (src[i] === '#') {
+      var nl = src.indexOf('\n', i);
+      if (nl === -1) nl = src.length;
+      var tok = src.slice(i, nl);
+      var ph = '\x00T' + tokens.length + '\x00';
+      tokens.push('<span class="cmt">' + esc(tok) + '</span>');
+      out += ph; i = nl;
+    }
+    else { out += src[i]; i++; }
+  }
+  // Escape only the remaining code (not the token placeholders)
+  var h = esc(out);
+  // Apply keyword and decorator highlighting to code-only segments
   h = h.replace(/(@\w+)/g, '<span class="dec">$1</span>');
-  h = h.replace(/(f?"[^"]*"|f?'[^']*')/g, '<span class="str">$1</span>');
   h = h.replace(/\b(class|def|import|from|return|if|else|elif|for|in|with|as|try|except|raise|True|False|None|and|or|not|is|pass|lambda)\b/g, '<span class="kw">$1</span>');
   h = h.replace(/\b(self)\b/g, '<span class="self">$1</span>');
   h = h.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+  // Restore tokens back into the highlighted code
+  for (var t = 0; t < tokens.length; t++) {
+    h = h.replace('\x00T' + t + '\x00', tokens[t]);
+  }
   return '<pre class="py">' + h + '</pre>';
 }
 
