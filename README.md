@@ -19,6 +19,9 @@ A web-based, interactive tool designed to visualize the complex data journey thr
 
 Click here to try the [**Live Demo**](https://seanbud.github.io/TechnicalArtCourses/) in your browser.
 
+<img width="556" height="301" alt="pipeline-simulator-screenshot" src="https://github.com/user-attachments/assets/e94ed12a-801d-4630-b460-f63e9e0dcd97" />
+
+
 *   **Location:** `/CapturePipelineCourse/simulator/index.html`
 *   **Key Features:**
     *   **Visual Data Tracing**: Trace mock capture packets through Ingest, Clean, Retarget, and Export stages.
