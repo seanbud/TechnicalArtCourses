@@ -411,12 +411,12 @@ const STAGE_INFO = {
   },
   cleanup:{
     title:"Cleanup Stage",
-    desc:"Immediately following ingest, the runner invokes the technology-specific cleanup strategy. Current implementations handle different data cleaning needs in-place.<br><br>For markers, it automates gap-filling and swap-fixing via cubic interpolation. For markerless, it applies temporal smoothing and jitter filters to the neural network's output. After this stage, the data is clean, normalized, and ready for universal processing.",
+    desc:"Immediately following ingest, the runner invokes the technology-specific cleanup strategy. While gap-filling and temporal smoothing are automated, **post-production is highly manual** — especially for hero characters.<br><br>Artists must scrub through and perform **foot-locking** (contact keying), fix HumanIK retargeting artifacts (e.g., interpenetrating fingers, popping shoulders), and correct interpolation errors on occluded markers. Background characters often rely more on the auto-solves to save time.",
     pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"
   },
   retarget:{
     title:"Retarget Stage",
-    desc:"This is the first universal stage. The runner calls `RetargetStage.process()` using the client's JSON configuration to load the correct skeleton template.<br><br>Standard `HumanIK` logic handles joint remapping, while optional pipeline plugins can hook into this process to apply client-specific offsets (e.g., custom shoulder bone orientations for specific game rigs).",
+    desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Metaverse rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Optional plugins can hook in for specialized offsets.",
     pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"pipeline/retarget.py"
   },
   validate:{
@@ -455,10 +455,10 @@ const DELIVERIES = [
 const FILE_LOC = {
   ingest:   {marker:{path:"/captures/raw/{TAKE}.c3d",    storage:"📡 Capture Stage (Local)"},
              markerless:{path:"/captures/video/{TAKE}.mp4",storage:"📡 Capture Stage (Local)"}},
-  cleanup:  {any:{path:"/pipeline/working/{TAKE}_cleaned.c3d",  storage:"💻 Processing Node (Local SSD)"}},
-  retarget: {any:{path:"/pipeline/working/{TAKE}_retargeted.ma",storage:"💻 Processing Node (Local SSD)"}},
-  validate: {any:{path:"/pipeline/working/{TAKE}_validated.ma", storage:"💻 Processing Node (Local SSD)"}},
-  export:   {any:{path:"/output/{CLIENT}/{TAKE}_v001.{FMT}",   storage:"💻 Processing Node (Local SSD)"}},
+  cleanup:  {any:{path:"/pipeline/working/{TAKE}_cleaned.c3d",  storage:"☁️ Cloud Farm (Auto) / 💻 Artist Machine (Manual)"}},
+  retarget: {any:{path:"/pipeline/working/{TAKE}_retargeted.ma",storage:"☁️ Cloud Compute Farm"}},
+  validate: {any:{path:"/pipeline/working/{TAKE}_validated.ma", storage:"☁️ Cloud Compute Farm"}},
+  export:   {any:{path:"/output/{CLIENT}/{TAKE}_v001.{FMT}",   storage:"☁️ Cloud Compute Farm"}},
   deliver:  {perforce:{path:"//depot/{CLIENT}/mocap/{TAKE}_v001.{FMT}",storage:"🗄️ Perforce Server"},
              nas:{path:"\\\\nas02\\{CLIENT}\\mocap\\{TAKE}_v001.{FMT}",storage:"🗄️ NAS (SMB Share)"},
              s3:{path:"s3://{BUCKET}/mocap/{TAKE}_v001.{FMT}",storage:"☁️ AWS S3"},
