@@ -41,7 +41,7 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .btn-fail:hover{background:rgba(248,113,113,.22)}
 
 /* Pipeline graph — L→R horizontal flow */
-.pgraph{flex:1;display:grid;grid-template-columns:auto auto auto auto auto auto auto;grid-template-rows:auto auto auto;align-items:center;justify-items:center;row-gap:10px;column-gap:6px;padding:1rem;overflow:auto;align-content:center}
+.pgraph{flex:1;display:grid;grid-template-columns:auto auto auto auto auto auto auto;grid-template-rows:auto auto auto;align-items:center;justify-items:center;row-gap:10px;column-gap:2px;padding:1rem;overflow:auto;align-content:center}
 /* Row assignments: marker=row1, universal=row2, markerless=row3 */
 
 .tech-label{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:4px;width:fit-content;white-space:nowrap;z-index:2}
@@ -57,6 +57,9 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .snode.completed{border-color:var(--accent-green);opacity:.6}
 .snode.completed .sbadge{display:flex}
 .snode.failed{border-color:var(--accent-red);box-shadow:0 0 16px rgba(248,113,113,.15)}
+.snode.first-conv{margin-left:-35px}
+.snode.last-cleanup{margin-right:-35px}
+
 .sname{font-weight:600;font-size:.76rem;text-transform:uppercase;letter-spacing:.02em}
 .ssub{font-size:.6rem;color:var(--text-muted);margin-top:1px}
 .sbadge{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;font-size:9px;display:none;align-items:center;justify-content:center;font-weight:700;background:var(--accent-green);color:#000}
@@ -65,13 +68,14 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .sinfo:hover{color:var(--accent-blue);background:rgba(96,165,250,.15)}
 
 /* Arrows */
-.parrow{color:var(--text-muted);font-size:1rem;position:relative;white-space:nowrap}
+.parrow{color:var(--text-muted);font-size:1rem;position:relative;white-space:nowrap;min-width:30px;text-align:center}
 .parrow.active-arrow{color:var(--accent-green)}
+.parrow.tight-arrow{min-width:15px}
 .parrow .arrow-tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.66);border:none;border-radius:6px;padding:3px 8px;font-size:.6rem;white-space:nowrap;color:var(--text-secondary);pointer-events:none;z-index:50}
 .pgraph:has(.parrow:hover) .arrow-tip{display:block}
 
 /* Convergence */
-.conv-cell{position:relative;display:flex;align-items:center;justify-content:center;grid-row:1/4;min-width:140px;padding:0 4px}
+.conv-cell{position:relative;display:flex;align-items:center;justify-content:center;grid-row:1/4;min-width:30px;padding:0}
 .conv-line-v{position:absolute;top:10%;bottom:10%;left:50%;width:1px;background:var(--accent-blue);opacity:.2}
 .conv-v-group{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;background:var(--bg-app);padding:14px 0;gap:6px}
 .conv-v-bar{width:1px;height:20px;background:var(--accent-blue);opacity:.5}

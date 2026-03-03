@@ -79,16 +79,16 @@ function renderGraph() {
        '<div class="tech-label marker-label">⚡ MARKER</div>' +
        mkNode("ingest", "Ingest", "Vicon .c3d", isMk) + '</div>';
   h += '<div style="grid-row:1;grid-column:2" class="parrow ' + (S.step >= 1 && isMk ? 'active-arrow' : '') + ' ' + (isMk ? '' : 'dimmed') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
-  h += '<div style="grid-row:1;grid-column:3" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("cleanup", "Cleanup", "Swap Fix / Gap Fill", isMk) + '</div>';
-  h += '<div style="grid-row:1;grid-column:4;align-self:center" class="parrow ' + (isMk ? '' : 'dimmed') + '">→</div>';
+  h += '<div style="grid-row:1;grid-column:3" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("cleanup", "Cleanup", "Swap Fix / Gap Fill", isMk, "", "last-cleanup") + '</div>';
+  h += '<div style="grid-row:1;grid-column:4;align-self:center" class="parrow tight-arrow ' + (isMk ? '' : 'dimmed') + '">→</div>';
 
   // ROW 3 — Markerless path
   h += '<div style="grid-row:3;grid-column:1;position:relative;display:flex;align-items:center;justify-content:center" class="' + (isMk ? 'dimmed' : '') + '">' +
        '<div class="tech-label markerless-label">📷 MARKERLESS</div>' +
        mkNode("ingest", "Ingest", "Move.ai Video", !isMk, "ml-") + '</div>';
-  h += '<div style="grid-row:3;grid-column:2" class="parrow ' + (S.step >= 1 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
-  h += '<div style="grid-row:3;grid-column:3" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("cleanup", "Cleanup", "ML Jitter Filter", !isMk, "ml-") + '</div>';
-  h += '<div style="grid-row:3;grid-column:4;align-self:center" class="parrow ' + (isMk ? 'dimmed' : '') + '">→</div>';
+  h += '<div style="grid-row:3;grid-column:2" class="parrow ' + (S.step >= 1 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→<span class="arrow-tip">Raw CaptureResult</span></span></div>';
+  h += '<div style="grid-row:3;grid-column:3" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("cleanup", "Cleanup", "ML Jitter Filter", !isMk, "ml-", "last-cleanup") + '</div>';
+  h += '<div style="grid-row:3;grid-column:4;align-self:center" class="parrow tight-arrow ' + (isMk ? 'dimmed' : '') + '">→</div>';
 
   // COLUMN 5 — Convergence (Spans 3 rows)
   h += '<div class="conv-cell" style="grid-row:1/4;grid-column:5">';
@@ -102,8 +102,8 @@ function renderGraph() {
 
   // ROW 2 — Universal stages
   h += '<div style="grid-row:2;grid-column:6;display:flex;align-items:center;gap:6px">';
-  h += '<span class="parrow ' + (S.step >= 2 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Remapped joints</span></span>';
-  h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true);
+  h += '<span class="parrow tight-arrow ' + (S.step >= 2 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Remapped joints</span></span>';
+  h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true, "", "first-conv");
   h += '<span class="parrow ' + (S.step >= 3 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Validated data</span></span>';
   h += mkNodeValidate(c);
   h += '<span class="parrow ' + (S.step >= 4 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + c.export.format.toUpperCase() + ' file</span></span>';
