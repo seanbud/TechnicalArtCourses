@@ -59,7 +59,14 @@ function highlightPy(code) {
   for (var t = 0; t < tokens.length; t++) {
     h = h.replace('\x00T' + t + '\x00', tokens[t]);
   }
-  return '<pre class="py">' + h + '</pre>';
+  
+  // Split into lines and add line numbers
+  var lines = h.split('\n');
+  var lineH = lines.map(function(line, idx) {
+    return '<span class="ln">' + (idx + 1) + '</span>' + line;
+  }).join('\n');
+
+  return '<pre class="py">' + lineH + '</pre>';
 }
 
 function buildJsonTree(obj, depth) {
