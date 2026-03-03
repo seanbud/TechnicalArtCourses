@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Simulator | EA Capture Prep</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+:root{--bg-app:#1a1f2e;--bg-panel:#212738;--bg-card:#2a3149;--bg-hover:#323a54;--bg-active:#2d3548;--bg-input:#1e2436;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;--accent-green:#34d399;--accent-blue:#60a5fa;--accent-orange:#fbbf24;--accent-red:#f87171;--accent-purple:#a78bfa;--border:#334155;--syn-keyword:#c084fc;--syn-string:#86efac;--syn-comment:#64748b;--syn-number:#fbbf24;--syn-fn:#60a5fa}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;font-size:14px;background:var(--bg-app);color:var(--text-primary);overflow:hidden;height:100vh}
+code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
+.app{display:grid;grid-template-columns:260px 1fr 320px;grid-template-rows:48px 1fr 160px;grid-template-areas:"nav nav nav" "files pipeline inspector" "console console console";height:100vh}
+/* NAV */
+.nav{grid-area:nav;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:1rem}
+.nav a{color:var(--accent-green);text-decoration:none;font-size:.85rem}
+.nav-title{font-weight:700;font-size:1rem;color:var(--text-primary);margin-left:.5rem}
+/* FILE EXPLORER */
+.files{grid-area:files;background:var(--bg-panel);border-right:1px solid var(--border);overflow-y:auto;padding:.5rem 0}
+.files-header{padding:8px 12px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+.tree-item{padding:4px 12px;cursor:pointer;font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;transition:background .15s;user-select:none}
+.tree-item:hover{background:var(--bg-hover)}
+.tree-item.active-file{background:var(--bg-active);color:var(--text-primary)}
+.tree-item.selected{background:var(--bg-active);color:var(--accent-green)}
+.tree-chevron{width:14px;text-align:center;font-size:10px;color:var(--text-muted);transition:transform .15s;flex-shrink:0}
+.tree-chevron.open{transform:rotate(90deg)}
+.tree-chevron.hidden{visibility:hidden}
+/* PIPELINE */
+.pipeline{grid-area:pipeline;background:var(--bg-app);padding:1rem;display:flex;flex-direction:column;gap:.75rem;overflow:hidden}
+.control-bar{display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;background:var(--bg-panel);border-radius:8px;border:1px solid var(--border);flex-wrap:wrap}
+.control-bar label{font-size:.75rem;color:var(--text-muted);margin-right:2px}
+.control-bar select{appearance:none;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:5px 24px 5px 8px;font-size:.8rem;font-family:'Inter',sans-serif;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.btn{padding:5px 12px;border-radius:6px;font-size:.8rem;font-weight:500;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);cursor:pointer;transition:background .15s}
+.btn:hover{background:var(--bg-hover)}
+.btn-send{background:var(--accent-green);color:#000;border-color:var(--accent-green);font-weight:600}
+.btn-send:hover{background:#2ec489}
+.btn-send:disabled{opacity:.4;cursor:not-allowed}
+.btn-fail{background:rgba(248,113,113,.12);color:var(--accent-red);border-color:var(--accent-red)}
+.btn-fail:hover{background:rgba(248,113,113,.22)}
+.speed-group{display:flex;gap:2px}
+.speed-btn{padding:4px 8px;font-size:.7rem;border-radius:4px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-muted);cursor:pointer}
+.speed-btn.active{background:var(--accent-blue);color:#000;border-color:var(--accent-blue)}
+.stage-area{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.stage-row{display:flex;gap:1rem;align-items:center;justify-content:center;position:relative}
+.stage-arrow{color:var(--text-muted);font-size:1.2rem}
+.stage-arrow.active-arrow{color:var(--accent-green)}
+.stage-node{background:var(--bg-card);border:2px solid var(--border);border-radius:10px;padding:.7rem 1.1rem;min-width:120px;text-align:center;cursor:pointer;transition:border-color .3s,box-shadow .3s,background .2s;position:relative}
+.stage-node:hover{border-color:var(--text-secondary);background:var(--bg-hover)}
+.stage-node.active{border-color:var(--accent-green);box-shadow:0 0 20px rgba(52,211,153,.15)}
+.stage-node.completed{border-color:var(--accent-green);opacity:.65}
+.stage-node.failed{border-color:var(--accent-red);box-shadow:0 0 20px rgba(248,113,113,.15)}
+.stage-name{font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-primary)}
+.stage-sub{font-size:.65rem;color:var(--text-muted);margin-top:2px}
+.stage-badge{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.badge-done{background:var(--accent-green);color:#000}
+.badge-fail{background:var(--accent-red);color:#fff}
+.convergence{display:flex;align-items:center;gap:.75rem;width:90%;margin:.6rem 0}
+.convergence::before,.convergence::after{content:'';flex:1;border-top:2px dashed var(--accent-blue);opacity:.35}
+.convergence span{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent-blue);white-space:nowrap}
+.cb-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:6px;vertical-align:middle;transition:background .3s}
+.cb-closed{background:var(--accent-green)}.cb-open{background:var(--accent-red)}.cb-half{background:var(--accent-orange)}
+.data-packet{background:var(--bg-card);border:2px solid var(--accent-green);border-radius:6px;padding:3px 10px;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--accent-green);cursor:pointer;position:absolute;z-index:10;white-space:nowrap;transition:opacity .3s;display:none}
+.data-packet:hover{background:var(--bg-hover);box-shadow:0 0 12px rgba(52,211,153,.2)}
+.data-packet.visible{display:block}
+.validators{display:flex;gap:4px;margin-top:6px}
+.vcheck{width:14px;height:14px;border-radius:3px;font-size:8px;display:flex;align-items:center;justify-content:center;background:var(--bg-input);color:var(--text-muted);transition:background .3s,color .3s}
+.vcheck.pass{background:var(--accent-green);color:#000}.vcheck.fail{background:var(--accent-red);color:#fff}
+/* INSPECTOR */
+.inspector{grid-area:inspector;background:var(--bg-panel);border-left:1px solid var(--border);display:flex;flex-direction:column}
+.inspector-tabs{display:flex;border-bottom:1px solid var(--border)}
+.inspector-tab{flex:1;padding:8px 2px;text-align:center;font-size:.68rem;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.inspector-tab.active{color:var(--accent-green);border-bottom-color:var(--accent-green)}
+.inspector-content{flex:1;overflow-y:auto;padding:.75rem}
+.inspector-content pre{background:var(--bg-app);border-radius:6px;padding:.75rem;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow-x:auto}
+.inspector-label{font-size:.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem}
+.hook-item{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.8rem;color:var(--text-secondary)}
+.hook-item .hook-status{width:16px;text-align:center}
+.hook-done{color:var(--accent-green)}.hook-pending{color:var(--text-muted)}
+.adapter-card{background:var(--bg-card);border-radius:8px;padding:.75rem;margin-bottom:.75rem;border:1px solid var(--border)}
+.adapter-card h4{font-size:.85rem;color:var(--accent-green);margin-bottom:4px}
+.adapter-card p{font-size:.75rem;color:var(--text-secondary);margin:2px 0}
+.field-new{border-left:3px solid var(--accent-green);padding-left:8px;margin-left:-11px}
+/* CONSOLE */
+.console{grid-area:console;background:var(--bg-app);border-top:1px solid var(--border);overflow-y:auto;padding:.5rem 1rem;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7}
+.log-entry{color:var(--text-secondary)}
+.log-entry .ts{color:var(--text-muted)}
+.log-entry.info .msg{color:var(--accent-blue)}
+.log-entry.success .msg{color:var(--accent-green)}
+.log-entry.warn .msg{color:var(--accent-orange)}
+.log-entry.error .msg{color:var(--accent-red)}
+.log-entry.plugin .msg{color:var(--accent-purple)}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative}
+.modal h3{font-size:1rem;margin-bottom:2px}.modal .modal-sub{font-size:.8rem;color:var(--text-muted);margin-bottom:1rem}
+.modal pre{background:var(--bg-app);border-radius:6px;padding:1rem;font-size:11px;line-height:1.5;white-space:pre-wrap}
+.modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-secondary);font-size:1.4rem;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- NAV -->
+  <nav class="nav">
+    <a href="../index.html">← Course Home</a>
+    <span class="nav-title">Pipeline Simulator</span>
+  </nav>
+
+  <!-- FILE EXPLORER -->
+  <div class="files">
+    <div class="files-header">Project Explorer</div>
+    <div id="file-tree"></div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="pipeline">
+    <div class="control-bar">
+      <label>Client:</label>
+      <select id="client-select">
+        <option value="fc_sports">FC (FIFA)</option>
+        <option value="madden">Madden</option>
+        <option value="battlefield">Battlefield</option>
+        <option value="metaverse">Metaverse</option>
+        <option value="vendor_a">Vendor A</option>
+      </select>
+      <label>Tech:</label>
+      <select id="tech-select">
+        <option value="marker">⚡ Marker</option>
+        <option value="markerless">📷 Markerless</option>
+      </select>
+      <button class="btn btn-send" id="btn-send" onclick="startSim()">▶ Send Capture</button>
+      <div class="speed-group">
+        <button class="speed-btn active" onclick="setSpeed(1,this)">1x</button>
+        <button class="speed-btn" onclick="setSpeed(2,this)">2x</button>
+        <button class="speed-btn" onclick="setSpeed(4,this)">4x</button>
+      </div>
+      <button class="btn btn-fail" id="btn-fail" onclick="toggleFailure()">💥 Inject NAS Failure</button>
+    </div>
+    <div class="stage-area" id="stage-area">
+      <!-- Row 1: Divergent -->
+      <div class="stage-row" id="row-divergent">
+        <div class="stage-node" id="node-ingest" onclick="clickStage('ingest')">
+          <div class="stage-name">Ingest</div>
+          <div class="stage-sub" id="ingest-sub">Vicon .c3d</div>
+        </div>
+        <div class="stage-arrow" id="arrow-1">→</div>
+        <div class="stage-node" id="node-cleanup" onclick="clickStage('cleanup')">
+          <div class="stage-name">Cleanup</div>
+          <div class="stage-sub" id="cleanup-sub">Marker Swap Fix</div>
+        </div>
+      </div>
+      <!-- Convergence Line -->
+      <div class="convergence"><span>▼ Convergence Point — CaptureResult ▼</span></div>
+      <!-- Row 2: Universal -->
+      <div class="stage-row" id="row-universal">
+        <div class="stage-node" id="node-retarget" onclick="clickStage('retarget')">
+          <div class="stage-name">Retarget</div>
+          <div class="stage-sub">HumanIK</div>
+        </div>
+        <div class="stage-arrow" id="arrow-2">→</div>
+        <div class="stage-node" id="node-validate" onclick="clickStage('validate')">
+          <div class="stage-name">Validate</div>
+          <div class="stage-sub">5 Checkers</div>
+          <div class="validators" id="validators">
+            <div class="vcheck" title="naming">N</div>
+            <div class="vcheck" title="skeleton">S</div>
+            <div class="vcheck" title="frames">F</div>
+            <div class="vcheck" title="root">R</div>
+            <div class="vcheck" title="integrity">I</div>
+          </div>
+        </div>
+        <div class="stage-arrow" id="arrow-3">→</div>
+        <div class="stage-node" id="node-export" onclick="clickStage('export')">
+          <div class="stage-name">Export</div>
+          <div class="stage-sub" id="export-sub">FBX 2020</div>
+        </div>
+      </div>
+      <!-- Row 3: Deliver -->
+      <div class="stage-row">
+        <div class="stage-node" id="node-deliver" onclick="clickStage('deliver')">
+          <div class="stage-name">Deliver <span class="cb-dot cb-closed" id="cb-dot"></span></div>
+          <div class="stage-sub" id="deliver-sub">Perforce</div>
+        </div>
+      </div>
+      <!-- Data packet -->
+      <div class="data-packet" id="data-packet" onclick="openModal()">📦 FC_..._sh05</div>
+    </div>
+  </div>
+
+  <!-- INSPECTOR -->
+  <div class="inspector">
+    <div class="inspector-tabs">
+      <div class="inspector-tab active" onclick="switchTab('data',this)">Data</div>
+      <div class="inspector-tab" onclick="switchTab('config',this)">Config</div>
+      <div class="inspector-tab" onclick="switchTab('adapter',this)">Adapter</div>
+      <div class="inspector-tab" onclick="switchTab('hooks',this)">Hooks</div>
+      <div class="inspector-tab" onclick="switchTab('logs',this)">Logs</div>
+    </div>
+    <div class="inspector-content" id="inspector-body">
+      <div class="inspector-label">CaptureResult</div>
+      <pre id="inspector-pre">{ "status": "idle", "message": "Click 'Send Capture' to begin" }</pre>
+    </div>
+  </div>
+
+  <!-- CONSOLE -->
+  <div class="console" id="console-log"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <h3 id="modal-title">Data Packet</h3>
+    <div class="modal-sub" id="modal-sub">After stage: idle</div>
+    <pre id="modal-json">{}</pre>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// MOCK DATA
+// ════════════════════════════════════════════════════
+
+const FILE_TREE = [
+  { name:"pipeline", type:"folder", children:[
+    { name:"core.py", type:"file" },
+    { name:"runner.py", type:"file" },
+    { name:"retarget.py", type:"file" },
+    { name:"validation.py", type:"file" }
+  ]},
+  { name:"config", type:"folder", children:[
+    { name:"clients", type:"folder", children:[
+      { name:"fc.json", type:"file" },
+      { name:"madden.json", type:"file" },
+      { name:"battlefield.json", type:"file" },
+      { name:"metaverse.json", type:"file" },
+      { name:"vendor_a.json", type:"file" }
+    ]},
+    { name:"pipeline_settings.json", type:"file" }
+  ]},
+  { name:"adapters", type:"folder", children:[
+    { name:"vicon_ingest.py", type:"file" },
+    { name:"moveai_ingest.py", type:"file" },
+    { name:"fbx_export.py", type:"file" },
+    { name:"gltf_export.py", type:"file" },
+    { name:"p4_delivery.py", type:"file" },
+    { name:"nas_delivery.py", type:"file" },
+    { name:"s3_delivery.py", type:"file" }
+  ]},
+  { name:"plugins", type:"folder", children:[
+    { name:"metaverse_client.py", type:"file" },
+    { name:"fc_custom.py", type:"file" }
+  ]},
+  { name:"scripts", type:"folder", children:[
+    { name:"batch_rename.py", type:"file" },
+    { name:"delivery_bot.py", type:"file" },
+    { name:"health_monitor.py", type:"file" }
+  ]}
+];
+
+const CLIENTS = {
+  fc_sports: { id:"fc_sports", display:"FC (FIFA) Team",
+    skeleton:{ template:"EA_Sports_v3", root:"Hips", required:["Hips","Spine","Spine1","Spine2","Head","L_Shoulder","L_Arm","L_ForeArm","L_Hand","R_Shoulder","R_Arm","R_ForeArm","R_Hand","L_UpLeg","L_Leg","L_Foot","R_UpLeg","R_Leg","R_Foot"] },
+    naming:{ pattern:"^FC_\\\\d{8}_sc\\\\d+_sh\\\\d+_v\\\\d{3}$", example:"FC_20260228_sc01_sh05_v001" },
+    export:{ format:"fbx", fbx_version:"FBX202000", up_axis:"y", units:"cm" },
+    delivery:{ method:"perforce", depot_path:"//depot/fc/mocap/", slack:"#fc-mocap-delivery" },
+    validation:{ max_frames:50000, min_frames:10, max_residual:1.5 },
+    plugin:"fc_custom"
+  },
+  madden: { id:"madden", display:"Madden Team",
+    skeleton:{ template:"Madden_v2", root:"Hips", required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"] },
+    naming:{ pattern:"^MN_[a-zA-Z]+_take\\\\d{2}$", example:"MN_shotName_take03" },
+    export:{ format:"fbx", fbx_version:"FBX202000", up_axis:"y", units:"cm" },
+    delivery:{ method:"nas", nas_path:"\\\\\\\\nas02\\\\madden\\\\mocap\\\\", slack:"#madden-anim" },
+    validation:{ max_frames:30000, min_frames:10, max_residual:2.0 },
+    plugin:null
+  },
+  battlefield: { id:"battlefield", display:"Battlefield",
+    skeleton:{ template:"Frostbite_Generic", root:"Root", required:["Root","Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"] },
+    naming:{ pattern:"^BF_[a-zA-Z0-9]+_[a-zA-Z]+$", example:"BF_actor01_sprint" },
+    export:{ format:"fbx", fbx_version:"FBX201900", up_axis:"y", units:"cm" },
+    delivery:{ method:"perforce", depot_path:"//depot/bf/anim/raw/", slack:"#bf-pipeline" },
+    validation:{ max_frames:100000, min_frames:5, max_residual:1.0 },
+    plugin:null
+  },
+  metaverse: { id:"metaverse", display:"Metaverse Partner",
+    skeleton:{ template:"MetaHuman_compat", root:"Hips", required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"] },
+    naming:{ pattern:"^MV_[a-zA-Z0-9]+_[a-z]+$", example:"MV_avatar01_walk" },
+    export:{ format:"gltf", up_axis:"y", units:"m" },
+    delivery:{ method:"s3", s3_bucket:"ea-metaverse-delivery", slack:"#metaverse-drops" },
+    validation:{ max_frames:10000, min_frames:10, max_joint_count:50, max_residual:5.0 },
+    plugin:"metaverse_client"
+  },
+  vendor_a: { id:"vendor_a", display:"External Vendor A",
+    skeleton:{ template:"Vendor_Custom", root:"root", required:["root","hips","spine","chest","head","l_arm","l_hand","r_arm","r_hand","l_thigh","l_foot","r_thigh","r_foot"] },
+    naming:{ pattern:"^VEND_\\\\d{6}_take\\\\d+$", example:"VEND_260228_take5" },
+    export:{ format:"fbx", fbx_version:"FBX202000", up_axis:"z", units:"m" },
+    delivery:{ method:"sftp", sftp_host:"sftp.vendor-a.com", slack:"#vendor-drops" },
+    validation:{ max_frames:50000, min_frames:10, max_residual:2.0 },
+    plugin:null
+  }
+};
+
+const FILE_CONTENTS = {
+  "pipeline/runner.py": `class UniversalPipeline:
+    STRATEGIES = {
+        "marker":     {"ingest": MarkerIngest,     "cleanup": MarkerCleanup},
+        "markerless": {"ingest": MarkerlessIngest,  "cleanup": MarkerlessCleanup},
+    }
+    
+    def process(self, input_path, technology, client_id):
+        profile = self.registry.get_profile(client_id)
+        strategies = self.STRATEGIES[technology]
+        
+        # ── Divergent stages (technology-specific) ──
+        data = strategies["ingest"]().ingest(input_path)
+        data = strategies["cleanup"]().cleanup(data)
+        
+        # ── CONVERGENCE POINT ──
+        # Everything below is identical for marker + markerless
+        data = HumanIKRetarget().retarget(data, profile.skeleton_template)
+        results = UniversalValidator(profile).validate(data)
+        
+        adapter = get_export_adapter(profile)  # Factory pattern
+        adapter.export(data, output_path, profile)
+        
+        get_delivery_adapter(profile).deliver(output_path, profile)`,
+
+  "pipeline/core.py": `class PipelineRunner:
+    """Entry point — orchestrates the full pipeline."""
+    
+    def __init__(self):
+        self.registry = ClientRegistry("/config/clients/")
+        self.plugin_mgr = PluginManager("/plugins/")
+        self.pipeline = UniversalPipeline()
+    
+    def run(self, input_path, client_id, technology="marker"):
+        log.info(f"Starting pipeline for {client_id} ({technology})")
+        profile = self.registry.get_profile(client_id)
+        self.plugin_mgr.load_plugins_for(client_id)
+        self.pipeline.process(input_path, technology, client_id)
+        log.info("Pipeline complete ✅")`,
+
+  "pipeline/validation.py": `class UniversalValidator:
+    """Runs pluggable validation checkers."""
+    
+    def validate(self, data, profile):
+        checkers = [
+            check_naming,        # filename matches client regex
+            check_skeleton,      # all required joints present
+            check_frame_range,   # frame count within bounds
+            check_root_origin,   # root near world origin
+            check_integrity,     # valid FBX header
+        ]
+        # Checkers run in parallel (embarrassingly parallel)
+        results = [checker(data, profile) for checker in checkers]
+        return results`,
+
+  "pipeline/retarget.py": `class HumanIKRetarget:
+    """Maps source skeleton to target (client) skeleton."""
+    
+    def retarget(self, data, target_skeleton):
+        joint_map = load_joint_map(target_skeleton)
+        for src_joint, tgt_joint in joint_map.items():
+            data.joints[tgt_joint] = data.joints.pop(src_joint)
+        data.target_skeleton = target_skeleton
+        data.joints_remapped = True
+        return data`,
+
+  "adapters/fbx_export.py": `class FBXExportAdapter(BaseExportAdapter):
+    def export(self, data, output_path, profile):
+        fbx_ver = profile.export["fbx_version"]
+        mel.eval(f'FBXExportFileVersion -v "{fbx_ver}"')
+        if profile.export.get("bake_animation"):
+            mel.eval('FBXExportBakeComplexAnimation -v true')
+        cmds.file(output_path, force=True, type="FBX export")`,
+
+  "adapters/gltf_export.py": `class GLTFExportAdapter(BaseExportAdapter):
+    def export(self, data, output_path, profile):
+        temp_fbx = output_path.replace('.gltf', '_temp.fbx')
+        FBXExportAdapter().export(data, temp_fbx, profile)
+        subprocess.run(["FBX2glTF", "--input", temp_fbx,
+                        "--output", output_path, "--binary"])`,
+
+  "adapters/vicon_ingest.py": `class MarkerIngest(IngestStage):
+    def ingest(self, input_path):
+        raw = vicon_sdk.read_c3d(input_path)
+        result = CaptureResult()
+        result.source_technology = "marker"
+        result.source_vendor = "vicon"
+        result.joints = raw.get_marker_positions()
+        result.frame_rate = raw.sample_rate  # typically 120fps
+        result.confidence = 1.0  # markers are binary: present or not
+        return result`,
+
+  "adapters/moveai_ingest.py": `class MarkerlessIngest(IngestStage):
+    def ingest(self, input_path):
+        ml_data = moveai_sdk.process_video(input_path)
+        result = CaptureResult()
+        result.source_technology = "markerless"
+        result.source_vendor = "moveai"
+        result.joints = ml_data.joint_predictions
+        result.frame_rate = ml_data.fps  # typically 30fps
+        result.confidence = ml_data.avg_confidence  # ~0.87
+        return result`,
+
+  "adapters/p4_delivery.py": `class PerforceDelivery(BaseDeliveryAdapter):
+    def deliver(self, output_path, profile):
+        depot = profile.delivery["depot_path"]
+        p4 = P4()
+        p4.connect()
+        p4.run("add", output_path)
+        p4.run("submit", "-d", f"Auto-deliver: {os.path.basename(output_path)}")
+        notify_slack(profile.delivery["slack"], output_path)`,
+
+  "adapters/nas_delivery.py": `class NASDelivery(BaseDeliveryAdapter):
+    @circuit_breaker(max_failures=3, reset_timeout=30)
+    @retry(max_attempts=3, delay=2.0, backoff=2.0)
+    def deliver(self, output_path, profile):
+        nas_path = profile.delivery["nas_path"]
+        dest = os.path.join(nas_path, os.path.basename(output_path))
+        shutil.copy2(output_path, dest)
+        verify_md5(output_path, dest)
+        notify_slack(profile.delivery["slack"], dest)`,
+
+  "adapters/s3_delivery.py": `class S3Delivery(BaseDeliveryAdapter):
+    def deliver(self, output_path, profile):
+        bucket = profile.delivery["s3_bucket"]
+        key = f"mocap/{os.path.basename(output_path)}"
+        boto3.client("s3").upload_file(output_path, bucket, key)
+        notify_slack(profile.delivery["slack"], f"s3://{bucket}/{key}")`,
+
+  "plugins/metaverse_client.py": `def register():
+    return {"client_id": "metaverse", "version": "1.0"}
+
+def pre_export(data, profile):
+    # LOD decimation for real-time avatars
+    decimator.reduce_to_target(data, max_tris=5000)
+
+def post_export(output_path, profile):
+    preview_gen.create_turntable(output_path)
+
+def custom_validate(data, profile):
+    if len(data.joints) > 50:
+        return False, f"Too many joints: {len(data.joints)}"
+    return True, "Joint count OK"`,
+
+  "plugins/fc_custom.py": `def register():
+    return {"client_id": "fc_sports", "version": "2.1"}
+
+def custom_retarget(data, profile):
+    # FC-specific facial retarget using custom blendshapes
+    facial_map = load_fc_facial_map()
+    data.blendshapes = map_facial_markers(data, facial_map)
+    return data`,
+
+  "scripts/batch_rename.py": `"""Config-driven batch bone renaming tool."""
+def batch_rename(fbx_path, joint_map_path):
+    with open(joint_map_path) as f:
+        mapping = json.load(f)
+    
+    for src_name, tgt_name in mapping.items():
+        if cmds.objExists(src_name):
+            cmds.rename(src_name, tgt_name)
+    
+    cmds.file(fbx_path, force=True, save=True)
+    # 2 seconds vs 10-15 minutes manual`,
+
+  "scripts/delivery_bot.py": `"""File watcher daemon — sweeps new captures into pipeline."""
+class DeliveryBot:
+    def __init__(self, watch_dir, pipeline):
+        self.observer = Observer()
+        self.observer.schedule(self, watch_dir, recursive=True)
+    
+    def on_created(self, event):
+        if event.src_path.endswith('.c3d'):
+            self.pipeline.run(event.src_path)
+            slack.post(f"Auto-processed: {event.src_path}")`,
+
+  "scripts/health_monitor.py": `"""Health check daemon — 30-second heartbeat."""
+def check_all():
+    checks = {
+        "NAS": ping_nas(),
+        "Perforce": check_p4_connection(),
+        "Farm": check_deadline_status(),
+        "Disk": check_disk_space() > 0.1,  # 10% free
+    }
+    for name, ok in checks.items():
+        if not ok:
+            alert_slack(f"🚨 {name} is DOWN", severity="critical")`
+};
+
+const STAGE_FILES = {
+  ingest:   { marker:["pipeline/core.py","adapters/vicon_ingest.py"], markerless:["pipeline/core.py","adapters/moveai_ingest.py"] },
+  cleanup:  { marker:["pipeline/core.py","adapters/vicon_ingest.py"], markerless:["pipeline/core.py","adapters/moveai_ingest.py"] },
+  retarget: { both:["pipeline/retarget.py"] },
+  validate: { both:["pipeline/validation.py"] },
+  export:   { fbx:["adapters/fbx_export.py"], gltf:["adapters/gltf_export.py"] },
+  deliver:  { perforce:["adapters/p4_delivery.py","scripts/delivery_bot.py"], nas:["adapters/nas_delivery.py","scripts/delivery_bot.py"], s3:["adapters/s3_delivery.py","scripts/delivery_bot.py"], sftp:["adapters/s3_delivery.py"] }
+};
+
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+
+let S = {
+  client: "fc_sports", tech: "marker", speed: 1,
+  running: false, currentStage: null, stagesDone: [],
+  failureArmed: false, cbState: "CLOSED", retries: 0, queueCount: 0,
+  selectedFile: null, activeFiles: [], inspectorTab: "data",
+  packet: null, logs: [], hooksDone: []
+};
+
+const STAGES = ["ingest","cleanup","retarget","validate","export","deliver"];
+
+// ════════════════════════════════════════════════════
+// FILE TREE RENDERER
+// ════════════════════════════════════════════════════
+
+const expandedDirs = new Set(["pipeline","config","config/clients","adapters","plugins","scripts"]);
+
+function renderTree() {
+  document.getElementById("file-tree").innerHTML = buildTreeHTML(FILE_TREE, "");
+}
+
+function buildTreeHTML(items, prefix) {
+  let html = "";
+  for (const item of items) {
+    const path = prefix ? prefix + "/" + item.name : item.name;
+    const depth = path.split("/").length - 1;
+    const pad = `padding-left:${12 + depth*16}px`;
+    if (item.type === "folder") {
+      const open = expandedDirs.has(path);
+      const chev = open ? "▾" : "▸";
+      html += `<div class="tree-item" style="${pad}" onclick="toggleDir('${path}',event)">
+        <span class="tree-chevron ${open?'open':''}">${chev}</span>
+        <span>${item.name}/</span></div>`;
+      if (open && item.children) html += buildTreeHTML(item.children, path);
+    } else {
+      const isActive = S.activeFiles.includes(path);
+      const isSel = S.selectedFile === path;
+      const cls = isSel ? "selected" : (isActive ? "active-file" : "");
+      html += `<div class="tree-item ${cls}" style="${pad}" onclick="selectFile('${path}')">
+        <span class="tree-chevron hidden">·</span>
+        <span>${item.name}</span></div>`;
+    }
+  }
+  return html;
+}
+
+function toggleDir(path, e) {
+  e && e.stopPropagation();
+  expandedDirs.has(path) ? expandedDirs.delete(path) : expandedDirs.add(path);
+  renderTree();
+}
+
+function selectFile(path) {
+  S.selectedFile = path;
+  S.inspectorTab = "data";
+  renderTree();
+  renderInspector();
+}
+
+// ════════════════════════════════════════════════════
+// INSPECTOR
+// ════════════════════════════════════════════════════
+
+function switchTab(tab, el) {
+  S.inspectorTab = tab;
+  document.querySelectorAll(".inspector-tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  renderInspector();
+}
+
+function renderInspector() {
+  const body = document.getElementById("inspector-body");
+  const tab = S.inspectorTab;
+  const client = CLIENTS[S.client];
+
+  if (tab === "data") {
+    if (S.selectedFile && FILE_CONTENTS[S.selectedFile]) {
+      body.innerHTML = `<div class="inspector-label">File: ${S.selectedFile}</div>
+        <pre>${escapeHtml(FILE_CONTENTS[S.selectedFile])}</pre>`;
+    } else if (S.packet) {
+      body.innerHTML = `<div class="inspector-label">CaptureResult — after ${S.currentStage || 'idle'}</div>
+        <pre>${JSON.stringify(S.packet, null, 2)}</pre>`;
+    } else {
+      body.innerHTML = `<div class="inspector-label">CaptureResult</div>
+        <pre>{ "status": "idle", "message": "Click 'Send Capture' to begin" }</pre>`;
+    }
+  } else if (tab === "config") {
+    body.innerHTML = `<div class="inspector-label">${client.display} — Config</div>
+      <pre>${JSON.stringify(client, null, 2)}</pre>`;
+  } else if (tab === "adapter") {
+    const exp = client.export.format === "gltf" ? "GLTFExportAdapter" : "FBXExportAdapter";
+    const del = {perforce:"PerforceDelivery",nas:"NASDelivery",s3:"S3Delivery",sftp:"SFTPDelivery"}[client.delivery.method] || "Unknown";
+    let cbHtml = "";
+    if (S.currentStage === "deliver") {
+      const cls = {CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"}[S.cbState];
+      cbHtml = `<p>Circuit Breaker: <span class="cb-dot ${cls}" style="display:inline-block"></span> ${S.cbState}</p>
+        <p>Retries: ${S.retries} | Queued: ${S.queueCount}</p>`;
+    }
+    body.innerHTML = `<div class="inspector-label">Active Adapters</div>
+      <div class="adapter-card"><h4>Export: ${exp}</h4>
+        <p>Pattern: Adapter + Factory</p>
+        <p>Format: ${client.export.format.toUpperCase()} ${client.export.fbx_version||''}</p></div>
+      <div class="adapter-card"><h4>Delivery: ${del}</h4>
+        <p>Destination: ${client.delivery.depot_path||client.delivery.nas_path||client.delivery.s3_bucket||client.delivery.sftp_host||''}</p>
+        <p>Notification: ${client.delivery.slack}</p>${cbHtml}</div>`;
+  } else if (tab === "hooks") {
+    if (!client.plugin) {
+      body.innerHTML = `<div class="inspector-label">Plugin Hooks</div>
+        <p style="color:var(--text-muted);font-size:.85rem">No plugin registered for ${client.id}</p>`;
+    } else {
+      const hooks = ["register","pre_export","post_export","custom_validate"];
+      if (client.plugin === "fc_custom") hooks.splice(1, 3, "custom_retarget");
+      let html = `<div class="inspector-label">Plugin: ${client.plugin}.py</div>`;
+      for (const h of hooks) {
+        const done = S.hooksDone.includes(h);
+        html += `<div class="hook-item"><span class="hook-status ${done?'hook-done':'hook-pending'}">${done?'✓':'○'}</span> ${h}()</div>`;
+      }
+      body.innerHTML = html;
+    }
+  } else if (tab === "logs") {
+    const filtered = S.logs.filter(l => !S.currentStage || l.stage === S.currentStage);
+    body.innerHTML = `<div class="inspector-label">Stage Logs${S.currentStage ? ' — '+S.currentStage : ''}</div>` +
+      filtered.map(l => `<div class="log-entry ${l.level}"><span class="ts">${l.time}</span> <span class="msg">${l.msg}</span></div>`).join("");
+  }
+}
+
+// ════════════════════════════════════════════════════
+// CONSOLE LOGGING
+// ════════════════════════════════════════════════════
+
+function log(level, msg, stage) {
+  const now = new Date();
+  const time = `[${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}]`;
+  const entry = { time, level, msg, stage: stage || S.currentStage };
+  S.logs.push(entry);
+  const el = document.getElementById("console-log");
+  el.innerHTML += `<div class="log-entry ${level}"><span class="ts">${time}</span> <span class="msg">${msg}</span></div>`;
+  el.scrollTop = el.scrollHeight;
+  if (S.inspectorTab === "logs") renderInspector();
+}
+
+// ════════════════════════════════════════════════════
+// STAGE GRAPH UPDATES
+// ════════════════════════════════════════════════════
+
+function resetStageNodes() {
+  STAGES.forEach(s => {
+    const el = document.getElementById("node-" + s);
+    el.className = "stage-node";
+    const badge = el.querySelector(".stage-badge");
+    if (badge) badge.remove();
+  });
+  document.querySelectorAll(".stage-arrow").forEach(a => a.classList.remove("active-arrow"));
+  document.querySelectorAll(".vcheck").forEach(v => { v.className = "vcheck"; });
+  document.getElementById("cb-dot").className = "cb-dot cb-closed";
+  S.cbState = "CLOSED";
+}
+
+function activateStageNode(stage) {
+  const el = document.getElementById("node-" + stage);
+  el.classList.add("active");
+}
+
+function completeStageNode(stage) {
+  const el = document.getElementById("node-" + stage);
+  el.classList.remove("active");
+  el.classList.add("completed");
+  el.insertAdjacentHTML("beforeend", '<span class="stage-badge badge-done">✓</span>');
+}
+
+function failStageNode(stage) {
+  const el = document.getElementById("node-" + stage);
+  el.classList.add("failed");
+}
+
+function clickStage(stage) {
+  S.currentStage = stage;
+  const client = CLIENTS[S.client];
+  // Update active files
+  if (stage === "ingest" || stage === "cleanup") {
+    S.activeFiles = STAGE_FILES[stage][S.tech] || [];
+  } else if (stage === "retarget" || stage === "validate") {
+    S.activeFiles = STAGE_FILES[stage].both || [];
+    if (stage === "validate" && client.plugin) S.activeFiles = [...S.activeFiles, "plugins/"+client.plugin+".py"];
+  } else if (stage === "export") {
+    S.activeFiles = STAGE_FILES[stage][client.export.format] || [];
+    if (client.plugin) S.activeFiles = [...S.activeFiles, "plugins/"+client.plugin+".py"];
+  } else if (stage === "deliver") {
+    S.activeFiles = STAGE_FILES[stage][client.delivery.method] || [];
+  }
+  S.selectedFile = null;
+  renderTree();
+  // Auto-switch inspector tab
+  if (stage === "retarget") S.inspectorTab = "config";
+  else if (stage === "export" || stage === "deliver") S.inspectorTab = "adapter";
+  else if (stage === "validate" && client.plugin) S.inspectorTab = "hooks";
+  else S.inspectorTab = "data";
+  document.querySelectorAll(".inspector-tab").forEach(t => {
+    t.classList.toggle("active", t.textContent.toLowerCase().startsWith(S.inspectorTab.slice(0,3)));
+  });
+  renderInspector();
+}
+
+// ════════════════════════════════════════════════════
+// CONTROLS
+// ════════════════════════════════════════════════════
+
+function setSpeed(s, el) {
+  S.speed = s;
+  document.querySelectorAll(".speed-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+}
+
+function toggleFailure() {
+  const btn = document.getElementById("btn-fail");
+  if (!S.failureArmed) {
+    S.failureArmed = true;
+    btn.textContent = "🔧 Recover NAS";
+    btn.classList.remove("btn-fail");
+    btn.classList.add("btn");
+    btn.style.borderColor = "var(--accent-orange)";
+    btn.style.color = "var(--accent-orange)";
+    log("warn", "NAS failure ARMED — will trigger at delivery stage");
+  } else {
+    S.failureArmed = false;
+    S.cbState = "CLOSED";
+    document.getElementById("cb-dot").className = "cb-dot cb-closed";
+    btn.textContent = "💥 Inject NAS Failure";
+    btn.classList.add("btn-fail");
+    btn.style.borderColor = "";
+    btn.style.color = "";
+    log("success", "NAS manually recovered — circuit breaker reset to CLOSED");
+    if (S.inspectorTab === "adapter") renderInspector();
+  }
+}
+
+// Update subtitles when client/tech changes
+document.getElementById("client-select").addEventListener("change", e => {
+  S.client = e.target.value;
+  updateLabels();
+  log("info", `ClientRegistry: loaded profile for ${CLIENTS[S.client].display}`);
+  if (S.inspectorTab === "config") renderInspector();
+});
+
+document.getElementById("tech-select").addEventListener("change", e => {
+  S.tech = e.target.value;
+  updateLabels();
+  log("info", `StrategyRegistry: swapped to ${S.tech} strategies`);
+});
+
+function updateLabels() {
+  const c = CLIENTS[S.client];
+  document.getElementById("ingest-sub").textContent = S.tech==="marker" ? "Vicon .c3d" : "Move.ai Video";
+  document.getElementById("cleanup-sub").textContent = S.tech==="marker" ? "Marker Swap Fix" : "ML Jitter Filter";
+  document.getElementById("export-sub").textContent = c.export.format.toUpperCase() + " " + (c.export.fbx_version||'');
+  document.getElementById("deliver-sub").textContent = c.delivery.method.charAt(0).toUpperCase() + c.delivery.method.slice(1);
+}
+
+// ════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ════════════════════════════════════════════════════
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms / S.speed)); }
+
+async function startSim() {
+  if (S.running) return;
+  S.running = true;
+  S.stagesDone = [];
+  S.hooksDone = [];
+  S.retries = 0;
+  S.queueCount = 0;
+  S.cbState = "CLOSED";
+  S.packet = null;
+  const btn = document.getElementById("btn-send");
+  btn.disabled = true;
+  btn.textContent = "⏳ Running...";
+  resetStageNodes();
+
+  const client = CLIENTS[S.client];
+  const dp = document.getElementById("data-packet");
+  const takeName = client.naming.example;
+  dp.textContent = "📦 " + takeName;
+  dp.classList.add("visible");
+
+  log("info", `PipelineRunner: starting for ${client.display} (${S.tech})`);
+  if (client.plugin) log("plugin", `PluginManager: loaded ${client.plugin}.py`, "ingest");
+  if (client.plugin) S.hooksDone.push("register");
+
+  // ── INGEST ──
+  S.currentStage = "ingest";
+  clickStage("ingest");
+  activateStageNode("ingest");
+  positionPacket("node-ingest");
+  S.packet = {
+    take_name: takeName,
+    frame_rate: S.tech==="marker" ? 120.0 : 30.0,
+    frame_count: S.tech==="marker" ? 3450 : 862,
+    source_technology: S.tech,
+    source_vendor: S.tech==="marker" ? "vicon" : "moveai",
+    source_file: S.tech==="marker" ? `/captures/raw/${takeName}.c3d` : `/captures/video/${takeName}.mp4`,
+    confidence: S.tech==="marker" ? 1.0 : 0.87,
+    joints: S.tech==="marker" ? "{ 54 joints loaded }" : "{ 32 joints loaded }",
+    metadata: { session: "2026-02-28", actor: "Actor_A" }
+  };
+  log("info", `${S.tech==="marker"?"MarkerIngest":"MarkerlessIngest"}: reading ${S.packet.source_file}`, "ingest");
+  renderInspector();
+  await delay(1500);
+  completeStageNode("ingest");
+
+  // ── CLEANUP ──
+  S.currentStage = "cleanup";
+  clickStage("cleanup");
+  activateStageNode("cleanup");
+  positionPacket("node-cleanup");
+  document.getElementById("arrow-1").classList.add("active-arrow");
+  S.packet.cleanup_applied = S.tech==="marker"
+    ? ["marker_swap_fix (3 swaps)","occlusion_gap_fill (12 gaps)","butterworth_filter (6Hz)"]
+    : ["temporal_smooth (gaussian σ=2)","bone_length_stabilize","contact_estimation","confidence_filter"];
+  log("info", `${S.tech==="marker"?"MarkerCleanup":"MarkerlessCleanup"}: ${S.packet.cleanup_applied[0]}`, "cleanup");
+  renderInspector();
+  await delay(1500);
+  completeStageNode("cleanup");
+
+  // ── RETARGET ──
+  S.currentStage = "retarget";
+  clickStage("retarget");
+  activateStageNode("retarget");
+  positionPacket("node-retarget");
+  document.getElementById("arrow-2").classList.add("active-arrow");
+  S.packet.target_skeleton = client.skeleton.template;
+  S.packet.joints_remapped = true;
+  S.packet.joints = `{ ${client.skeleton.required.length} joints (target) }`;
+  log("info", `HumanIKRetarget: mapping to ${client.skeleton.template}`, "retarget");
+  if (client.plugin === "fc_custom") {
+    S.hooksDone.push("custom_retarget");
+    log("plugin", "Hook: fc_custom.custom_retarget() — facial blendshapes mapped", "retarget");
+  }
+  renderInspector();
+  await delay(1500);
+  completeStageNode("retarget");
+
+  // ── VALIDATE ──
+  S.currentStage = "validate";
+  clickStage("validate");
+  activateStageNode("validate");
+  positionPacket("node-validate");
+  const checks = ["naming","skeleton","frames","root","integrity"];
+  const vchecks = document.querySelectorAll(".vcheck");
+  S.packet.validation_results = [];
+  for (let i = 0; i < checks.length; i++) {
+    await delay(300);
+    vchecks[i].classList.add("pass");
+    vchecks[i].textContent = "✓";
+    S.packet.validation_results.push({ checker: checks[i], passed: true });
+    log("success", `Checker [${checks[i]}]: ✓ PASS`, "validate");
+  }
+  if (client.plugin === "metaverse_client") {
+    S.hooksDone.push("custom_validate");
+    log("plugin", "Hook: metaverse_client.custom_validate() — joint count OK", "validate");
+  }
+  renderInspector();
+  await delay(500);
+  completeStageNode("validate");
+
+  // ── EXPORT ──
+  S.currentStage = "export";
+  clickStage("export");
+  activateStageNode("export");
+  positionPacket("node-export");
+  document.getElementById("arrow-3").classList.add("active-arrow");
+  const adapter = client.export.format === "gltf" ? "GLTFExportAdapter" : "FBXExportAdapter";
+  if (client.plugin === "metaverse_client") {
+    S.hooksDone.push("pre_export");
+    log("plugin", "Hook: metaverse_client.pre_export() — LOD decimation to 5k tris", "export");
+    await delay(400);
+  }
+  S.packet.output_path = `/output/${client.id}/${takeName}_v001.${client.export.format}`;
+  S.packet.adapter_used = adapter;
+  S.packet.output_format = client.export.format;
+  log("info", `Factory: selected ${adapter} for '${client.export.format}'`, "export");
+  renderInspector();
+  await delay(1200);
+  if (client.plugin === "metaverse_client") {
+    S.hooksDone.push("post_export");
+    log("plugin", "Hook: metaverse_client.post_export() — turntable preview generated", "export");
+  }
+  completeStageNode("export");
+
+  // ── DELIVER ──
+  S.currentStage = "deliver";
+  clickStage("deliver");
+  activateStageNode("deliver");
+  positionPacket("node-deliver");
+
+  if (S.failureArmed && (client.delivery.method === "nas" || true)) {
+    // NAS failure scenario
+    const cbDot = document.getElementById("cb-dot");
+    for (let r = 1; r <= 3; r++) {
+      S.retries = r;
+      log("error", `NASDelivery: IOError — connection refused (attempt ${r}/3)`, "deliver");
+      renderInspector();
+      await delay(1000);
+    }
+    S.cbState = "OPEN";
+    cbDot.className = "cb-dot cb-open";
+    log("error", "CircuitBreaker [NAS]: OPEN after 3 failures — all requests fail-fast", "deliver");
+    failStageNode("deliver");
+    S.queueCount = 1;
+    log("warn", "ResilientStorage: queued to /tmp/capture_queue/ (1 file)", "deliver");
+    renderInspector();
+    await delay(2000);
+
+    S.cbState = "HALF_OPEN";
+    cbDot.className = "cb-dot cb-half";
+    log("warn", "CircuitBreaker [NAS]: HALF_OPEN — testing 1 request...", "deliver");
+    renderInspector();
+    await delay(1500);
+
+    // Wait for manual recover or auto-recover
+    if (S.failureArmed) {
+      log("warn", "Waiting for NAS recovery... click '🔧 Recover NAS' to restore", "deliver");
+      // Auto-recover after 3 seconds for demo purposes
+      await delay(3000);
+      if (S.failureArmed) toggleFailure();
+    }
+
+    S.cbState = "CLOSED";
+    cbDot.className = "cb-dot cb-closed";
+    document.getElementById("node-deliver").classList.remove("failed");
+    document.getElementById("node-deliver").classList.add("active");
+    log("success", "CircuitBreaker [NAS]: CLOSED — connection restored", "deliver");
+    log("info", "Flushing 1 queued file to NAS...", "deliver");
+    S.queueCount = 0;
+    renderInspector();
+    await delay(800);
+  }
+
+  // Normal delivery
+  const dest = client.delivery.depot_path || client.delivery.nas_path || `s3://${client.delivery.s3_bucket}/` || client.delivery.sftp_host;
+  S.packet.delivery_method = client.delivery.method;
+  S.packet.delivery_destination = dest + takeName + "_v001." + client.export.format;
+  S.packet.delivery_timestamp = new Date().toISOString();
+  S.packet.notification_sent = client.delivery.slack;
+  const delAdapter = {perforce:"PerforceDelivery",nas:"NASDelivery",s3:"S3Delivery",sftp:"SFTPDelivery"}[client.delivery.method];
+  log("success", `${delAdapter}: delivered to ${dest}`, "deliver");
+  log("info", `Slack notification → ${client.delivery.slack}`, "deliver");
+  renderInspector();
+  await delay(800);
+  completeStageNode("deliver");
+
+  // ── DONE ──
+  log("success", `✅ Pipeline complete: ${S.packet.output_path}`);
+  S.running = false;
+  S.currentStage = null;
+  btn.disabled = false;
+  btn.textContent = "▶ Send Capture";
+  renderInspector();
+}
+
+function positionPacket(nodeId) {
+  const dp = document.getElementById("data-packet");
+  const node = document.getElementById(nodeId);
+  const area = document.getElementById("stage-area");
+  const nodeRect = node.getBoundingClientRect();
+  const areaRect = area.getBoundingClientRect();
+  dp.style.left = (nodeRect.left - areaRect.left + nodeRect.width / 2 - dp.offsetWidth / 2) + "px";
+  dp.style.top = (nodeRect.top - areaRect.top - 28) + "px";
+}
+
+// ════════════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════════════
+
+function openModal() {
+  if (!S.packet) return;
+  document.getElementById("modal-title").textContent = `Data Packet — ${S.packet.take_name}`;
+  document.getElementById("modal-sub").textContent = `After stage: ${S.currentStage || 'complete'}`;
+  document.getElementById("modal-json").textContent = JSON.stringify(S.packet, null, 2);
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById("modal-overlay")) return;
+  document.getElementById("modal-overlay").classList.remove("open");
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+
+renderTree();
+updateLabels();
+log("info", "Pipeline Simulator initialized");
+log("info", `ClientRegistry: loaded ${Object.keys(CLIENTS).length} client profiles`);
+log("info", `PluginManager: discovered 2 plugins (metaverse_client.py, fc_custom.py)`);
+</script>
+</body>
+</html>
