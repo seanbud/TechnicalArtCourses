@@ -75,6 +75,13 @@ function pingFile(term) {
   }
 }
 
+function inspectPacket() {
+  S.selectedFile = null;
+  S.inspectorTab = "data";
+  setActiveTab("data");
+  renderInspector();
+}
+
 function closeModal(e) {
   if (e && e.target !== document.getElementById("modal-overlay")) return;
   document.getElementById("modal-overlay").classList.remove("open");

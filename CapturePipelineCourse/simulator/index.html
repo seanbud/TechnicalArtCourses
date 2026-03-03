@@ -46,7 +46,7 @@
     </div>
     <div class="pgraph" id="pgraph"></div>
     <div style="text-align:center;padding:4px 0">
-      <div class="data-packet" id="data-packet" onclick="openModal('packet')" style="display:none">📦</div>
+      <div class="data-packet" id="data-packet" onclick="inspectPacket()" style="display:none">📦</div>
       <div class="file-loc" id="file-loc"></div>
     </div>
   </div>
@@ -65,6 +65,10 @@
   </div>
 
   <!-- CONSOLE -->
+  <div class="console-header">
+    <span>System Console</span>
+    <button class="btn-clear" onclick="clearLogs()">Clear</button>
+  </div>
   <div class="console" id="console-log"></div>
 </div>
 
