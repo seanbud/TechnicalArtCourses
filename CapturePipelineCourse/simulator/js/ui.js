@@ -38,6 +38,7 @@ function toggleDir(p, e) {
 
 function selectFile(p) {
   S.selectedFile = p;
+  var app = document.querySelector(".app");
   if (p.startsWith("config/clients/")) {
     var id = p.split("/").pop().replace(".json","");
     if (id === "fc") id = "fc_sports";
@@ -48,9 +49,15 @@ function selectFile(p) {
       setActiveTab("config");
       renderGraph();
     }
+    app.style.setProperty("--inspector-w", "360px");
+  } else if (p.endsWith(".py")) {
+    S.inspectorTab = "data";
+    setActiveTab("data");
+    app.style.setProperty("--inspector-w", "600px");
   } else {
     S.inspectorTab = "data";
     setActiveTab("data");
+    app.style.setProperty("--inspector-w", "360px");
   }
   renderTree();
   renderInspector();
