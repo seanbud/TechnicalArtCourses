@@ -10,7 +10,7 @@ A comprehensive set of lessons and notes focused on real-time rendering, shaders
 *   **Main Index:** `/UnityTechnicalArtCourse/index.html`
 
 ### 2. Technical Art & Capture Pipelines
-A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems. Includes an **Interactive Pipeline Simulator** to visualize data flow.
+A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems.
 *   **Location:** `/CapturePipelineCourse`
 *   **Main Index:** `/CapturePipelineCourse/index.html`
 
