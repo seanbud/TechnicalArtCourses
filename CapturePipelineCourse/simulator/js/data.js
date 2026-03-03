@@ -363,12 +363,36 @@ def check_all():
 };
 
 const STAGE_INFO = {
-  ingest:{title:"Ingest Stage",desc:"Reads raw capture data from the source hardware. Marker-based uses Vicon SDK to read .c3d files; markerless uses Move.ai to process video. This is the DIVERGENT part — each technology has its own IngestStage implementation via the Strategy Pattern.",pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"},
-  cleanup:{title:"Cleanup Stage",desc:"Technology-specific post-processing. Marker path fixes marker swaps and fills occlusion gaps. Markerless applies temporal smoothing and bone length stabilization. Still DIVERGENT — different strategies for different tech.",pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"},
-  retarget:{title:"Retarget Stage",desc:"Maps source skeleton joints onto the client's target skeleton using HumanIK. This is the FIRST universal stage — identical for both technologies. The convergence point: both pipelines produce the same CaptureResult format.",pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"pipeline/retarget.py"},
-  validate:{title:"Validation Stage",desc:"Runs 5 pluggable checkers in parallel: naming convention, skeleton integrity, frame range, root origin, and file integrity. Plugins can add custom validators like the metaverse joint count check.",pattern:"Plugin Architecture",lesson:"11-defensive-architecture.html",code:"pipeline/validation.py"},
-  export:{title:"Export Stage",desc:"The Factory Pattern selects the correct export adapter based on the client config (FBX, glTF). Plugin hooks fire here — pre_export for LOD decimation, post_export for preview generation.",pattern:"Adapter + Factory",lesson:"10-pipeline-centralization.html",code:"adapters/fbx_export.py"},
-  deliver:{title:"Delivery Stage",desc:"Delivers the exported file to the client's destination. Protected by Circuit Breaker pattern and retry decorator. If NAS goes down, data queues to local SSD and auto-flushes on recovery.",pattern:"Circuit Breaker + Retry",lesson:"11-defensive-architecture.html",code:"adapters/nas_delivery.py"}
+  ingest:{
+    title:"Ingest Stage",
+    desc:"The pipeline begins with a **Watchdog daemon** that monitors the stage output directories. When a new file is detected, it triggers the `PipelineRunner` to start a new take.<br><br>The runner looks up the technology type in the `Strategy Registry` to select the correct ingest logic—either `MarkerIngest` for Vicon .c3d data or `MarkerlessIngest` for Move.ai video. Regardless of the source hardware, the output is always a standardized `CaptureResult` object.",
+    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"
+  },
+  cleanup:{
+    title:"Cleanup Stage",
+    desc:"Immediately following ingest, the runner invokes the technology-specific cleanup strategy. Current implementations handle different data cleaning needs in-place.<br><br>For markers, it automates gap-filling and swap-fixing via cubic interpolation. For markerless, it applies temporal smoothing and jitter filters to the neural network's output. After this stage, the data is clean, normalized, and ready for universal processing.",
+    pattern:"Strategy Pattern",lesson:"09-real-ea-pipeline.html",code:"pipeline/runner.py"
+  },
+  retarget:{
+    title:"Retarget Stage",
+    desc:"This is the first universal stage. The runner calls `RetargetStage.process()` using the client's JSON configuration to load the correct skeleton template.<br><br>Standard `HumanIK` logic handles joint remapping, while optional pipeline plugins can hook into this process to apply client-specific offsets (e.g., custom shoulder bone orientations for specific game rigs).",
+    pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"pipeline/retarget.py"
+  },
+  validate:{
+    title:"Validation Stage",
+    desc:"A suite of pluggable checkers is executed to ensure data integrity before delivery. The runner iterates through standard checks like naming conventions, skeleton joint counts, and frame ranges.<br><br>New validators can be added by registering functions with the `PluginManager`. If any check fails, the pipeline can be configured to halt immediately or flag the take for manual TA review in the dashboard.",
+    pattern:"Plugin Architecture",lesson:"11-defensive-architecture.html",code:"pipeline/validation.py"
+  },
+  export:{
+    title:"Export Stage",
+    desc:"The `ExportFactory` selects the appropriate adapter (FBX or glTF) based on the project's export configuration. <br><br>Before the file is written, `pre_export` hooks can trigger mesh decimation or LOD generation. Once written, a `post_export` hook typically generates a video turntable preview and records the file's MD5 hash into a sidecar metadata file for audit tracking.",
+    pattern:"Adapter + Factory",lesson:"10-pipeline-centralization.html",code:"adapters/fbx_export.py"
+  },
+  deliver:{
+    title:"Delivery Stage",
+    desc:"Final delivery is handled via adapters for Perforce, NAS (SMB), or S3. To ensure reliability, all delivery calls are protected by a **Circuit Breaker** and a retry decorator.<br><br>If a destination like the NAS goes offline, the circuit 'opens' and data is queued to the local SSD. Once the system detects the NAS is back (HALF_OPEN state), it automatically flushes the local queue to the server.",
+    pattern:"Circuit Breaker + Retry",lesson:"11-defensive-architecture.html",code:"adapters/nas_delivery.py"
+  }
 };
 
 const SF = {
