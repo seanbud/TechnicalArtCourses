@@ -96,7 +96,12 @@ function startSim() {
   var dp = document.getElementById("data-packet");
   dp.textContent = "📦 " + c.naming.example; dp.style.display = "inline-block";
   log("info", "PipelineRunner: starting for " + c.display + " (" + S.tech + ")");
-  if (c.plugin) { log("plugin", "PluginManager: loaded " + c.plugin + ".py"); S.hooksDone.push("register"); }
+  if (c.plugin) { 
+    setTimeout(function() {
+      log("plugin", "PluginManager: loaded " + c.plugin + ".py"); 
+      S.hooksDone.push("register");
+    }, 300);
+  }
   advanceStep();
   if (S.autoPlay) scheduleAutoNext();
 }
@@ -127,18 +132,25 @@ async function advanceStep() {
       joints: S.tech === "marker" ? "{ 54 joints }" : "{ 32 joints }",
       metadata: { session: "2026-02-28", actor: "Actor_A" }
     };
+    await new Promise(function(r) { setTimeout(r, 400); });
     log("info", (S.tech === "marker" ? "MarkerIngest" : "MarkerlessIngest") + ": reading " + S.packet.source_file);
   } else if (stage === "cleanup") {
     S.packet.cleanup_applied = S.tech === "marker"
       ? ["marker_swap_fix (3)", "gap_fill (12)", "butterworth (6Hz)"]
       : ["temporal_smooth", "bone_stabilize", "contact_est", "conf_filter"];
+    await new Promise(function(r) { setTimeout(r, 600); });
     log("info", (S.tech === "marker" ? "MarkerCleanup" : "MarkerlessCleanup") + ": " + S.packet.cleanup_applied[0]);
   } else if (stage === "retarget") {
     S.packet.target_skeleton = c.skeleton.template;
     S.packet.joints_remapped = true;
     S.packet.joints = "{ " + c.skeleton.required.length + " joints (target) }";
+    await new Promise(function(r) { setTimeout(r, 500); });
     log("info", "HumanIKRetarget: → " + c.skeleton.template);
-    if (c.plugin === "fc_custom") { S.hooksDone.push("custom_retarget"); log("plugin", "Hook: fc_custom.custom_retarget()"); }
+    if (c.plugin === "fc_custom") { 
+      await new Promise(function(r) { setTimeout(r, 300); });
+      S.hooksDone.push("custom_retarget"); 
+      log("plugin", "Hook: fc_custom.custom_retarget()"); 
+    }
   } else if (stage === "validate") {
     S.valIdx = -1; S.packet.validation_results = [];
     var checks = ["naming","skeleton","frames","root","integrity"];
@@ -149,14 +161,27 @@ async function advanceStep() {
       log("success", "Checker [" + checks[i] + "]: ✓ PASS");
       renderGraph();
     }
-    if (c.plugin === "metaverse_client") { S.hooksDone.push("custom_validate"); log("plugin", "Hook: custom_validate() — OK"); }
+    if (c.plugin === "metaverse_client") { 
+      await new Promise(function(r) { setTimeout(r, 200); });
+      S.hooksDone.push("custom_validate"); 
+      log("plugin", "Hook: custom_validate() — OK"); 
+    }
   } else if (stage === "export") {
-    if (c.plugin === "metaverse_client") { S.hooksDone.push("pre_export"); log("plugin", "Hook: pre_export() — LOD 5k tris"); }
+    if (c.plugin === "metaverse_client") { 
+      await new Promise(function(r) { setTimeout(r, 250); });
+      S.hooksDone.push("pre_export"); 
+      log("plugin", "Hook: pre_export() — LOD 5k tris"); 
+    }
     S.packet.output_path = "/output/" + c.id + "/" + c.naming.example + "_v001." + c.export.format;
     S.packet.adapter_used = getExpAdapter(c);
     S.packet.output_format = c.export.format;
+    await new Promise(function(r) { setTimeout(r, 450); });
     log("info", "Factory: " + getExpAdapter(c) + " → '" + c.export.format + "'");
-    if (c.plugin === "metaverse_client") { S.hooksDone.push("post_export"); log("plugin", "Hook: post_export() — turntable"); }
+    if (c.plugin === "metaverse_client") { 
+      await new Promise(function(r) { setTimeout(r, 300); });
+      S.hooksDone.push("post_export"); 
+      log("plugin", "Hook: post_export() — turntable"); 
+    }
   } else if (stage === "deliver") {
     if (S.failureArmed) {
       for (var r = 1; r <= 3; r++) {
@@ -182,7 +207,9 @@ async function advanceStep() {
     S.packet.md5_hash = "e4d909c290d0fb1ca068ffaddf22cbd" + Math.floor(Math.random() * 9);
     S.packet.delivery_timestamp = new Date().toISOString();
     S.packet.notification_sent = c.delivery.slack;
+    await new Promise(function(r) { setTimeout(r, 700); });
     log("success", getDelAdapter(c) + ": delivered (MD5 verified)");
+    await new Promise(function(r) { setTimeout(r, 200); });
     log("info", "Slack → " + c.delivery.slack);
   }
   renderGraph(); renderInspector();

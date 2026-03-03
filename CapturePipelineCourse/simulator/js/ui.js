@@ -182,7 +182,7 @@ function renderFileLocation() {
     .replace("{FMT}", c.export.format)
     .replace("{BUCKET}", c.delivery.s3_bucket || "")
     .replace("{HOST}", c.delivery.sftp_host || "");
-  el.innerHTML = '📁 <span style="color:var(--text-secondary)">' + path + '</span>  ·  <span class="storage">' + loc.storage + '</span>';
+  el.innerHTML = '📁 <span style="color:var(--text-secondary)">' + path + '</span>  ·  <span class="storage storage-link" onclick="openModal(\'storage\', \'' + loc.storage_id + '\')">' + loc.storage + '</span>';
 }
 
 // ── Inspector ──

@@ -83,14 +83,15 @@ const FC = {
         profile = self.registry.get_profile(client_id)
         self.plugin_mgr.load_plugins_for(client_id)
         
-        # Execute core pipeline logic
-        self.pipeline.process(
+        # Submits core pipeline job to cloud compute farm
+        cloud_farm.submit_job(
+            self.pipeline.process,
             input_path, 
             technology, 
             client_id
         )
         
-        log.info("Pipeline execution complete ✅")`,
+        log.info("Pipeline execution queued to Farm ✅")`,
 "pipeline/plugin_manager.py":
 `class PluginManager:
     """Discovers and dispatches client-specific logic overrides."""
@@ -144,6 +145,8 @@ const FC = {
             check_skeleton,     # Verifies critical joint presence
             check_frame_range,  # Frame count health check
             check_root_origin,  # Actor world-space origin check
+            check_world_space,  # Asserts Z-up/Y-up orientation
+            check_scale,        # Asserts meter/cm mapping
             check_integrity,    # FBX stream binary integrity
         ]
 
@@ -159,10 +162,14 @@ const FC = {
 `class HumanIKRetarget:
     """Standardizes source skeleton to the target client delivery spec."""
 
-    def retarget(self, data, target_skeleton):
+    def retarget(self, data, target_skeleton, scale_factor, up_axis):
         joint_map = load_joint_map(target_skeleton)
         
-        # Perform 1:1 joint redirection
+        # Step 1: Normalize Scene Scale & Space constraints first
+        normalize_space(data, up_axis, scale_factor)
+        
+        # Step 2: Perform 1:1 joint redirection
+        # e.g., mapping a heavy 200-joint solve down to a 40-joint rig
         for src, tgt in joint_map.items():
             if src in data.joints:
                 data.joints[tgt] = data.joints.pop(src)
@@ -280,9 +287,12 @@ const FC = {
         nas_path = profile.delivery["nas_path"]
         dest     = os.path.join(nas_path, os.path.basename(output_path))
         
-        # Native Copy + Checksum
+        # Native Copy + Cryptographic Hash Check
         shutil.copy2(output_path, dest)
-        verify_md5(output_path, dest)
+        md5_hash = verify_md5(dest)
+        
+        # Store hash in packet manifest
+        profile.packet.md5_hash = md5_hash
         
         notify_slack(profile.delivery["slack"], dest)`,
 
@@ -453,14 +463,46 @@ const DELIVERIES = [
 
 // File location per stage — path + storage medium
 const FILE_LOC = {
-  ingest:   {marker:{path:"/captures/raw/{TAKE}.c3d",    storage:"📡 Capture Stage (Local)"},
-             markerless:{path:"/captures/video/{TAKE}.mp4",storage:"📡 Capture Stage (Local)"}},
-  cleanup:  {any:{path:"/pipeline/working/{TAKE}_cleaned.c3d",  storage:"☁️ Cloud Farm (Auto) / 💻 Artist Machine (Manual)"}},
-  retarget: {any:{path:"/pipeline/working/{TAKE}_retargeted.ma",storage:"☁️ Cloud Compute Farm"}},
-  validate: {any:{path:"/pipeline/working/{TAKE}_validated.ma", storage:"☁️ Cloud Compute Farm"}},
-  export:   {any:{path:"/output/{CLIENT}/{TAKE}_v001.{FMT}",   storage:"☁️ Cloud Compute Farm"}},
-  deliver:  {perforce:{path:"//depot/{CLIENT}/mocap/{TAKE}_v001.{FMT}",storage:"🗄️ Perforce Server"},
-             nas:{path:"\\\\nas02\\{CLIENT}\\mocap\\{TAKE}_v001.{FMT}",storage:"🗄️ NAS (SMB Share)"},
-             s3:{path:"s3://{BUCKET}/mocap/{TAKE}_v001.{FMT}",storage:"☁️ AWS S3"},
-             sftp:{path:"{HOST}:/{TAKE}_v001.{FMT}",storage:"🔐 External SFTP"}}
+  ingest:   {marker:{path:"/captures/raw/{TAKE}.c3d",    storage:"📡 Capture Stage (Local)", storage_id:"capture_local"},
+             markerless:{path:"/captures/video/{TAKE}.mp4",storage:"📡 Capture Stage (Local)", storage_id:"capture_local"}},
+  cleanup:  {any:{path:"/pipeline/working/{TAKE}_cleaned.c3d",  storage:"☁️ Cloud Farm (Auto) / 💻 Artist Machine (Manual)", storage_id:"artist_machine_manual"}},
+  retarget: {any:{path:"/pipeline/working/{TAKE}_retargeted.ma",storage:"☁️ Cloud Compute Farm", storage_id:"cloud_farm"}},
+  validate: {any:{path:"/pipeline/working/{TAKE}_validated.ma", storage:"☁️ Cloud Compute Farm", storage_id:"cloud_farm"}},
+  export:   {any:{path:"/output/{CLIENT}/{TAKE}_v001.{FMT}",   storage:"☁️ Cloud Compute Farm", storage_id:"cloud_farm"}},
+  deliver:  {perforce:{path:"//depot/{CLIENT}/mocap/{TAKE}_v001.{FMT}",storage:"🗄️ Perforce Server", storage_id:"perforce"},
+             nas:{path:"\\\\nas02\\{CLIENT}\\mocap\\{TAKE}_v001.{FMT}",storage:"🗄️ NAS (SMB Share)", storage_id:"nas"},
+             s3:{path:"s3://{BUCKET}/mocap/{TAKE}_v001.{FMT}",storage:"☁️ AWS S3", storage_id:"s3"},
+             sftp:{path:"{HOST}:/{TAKE}_v001.{FMT}",storage:"🔐 External SFTP", storage_id:"sftp"}}
 };
+
+const STORAGE_INFO = {
+  capture_local: {
+    title: "Capture Volume (Local)",
+    desc: "Data initially hits the local solid-state drives attached directly to the Vicon or Move.ai capture servers on the volume floor. This is fast, uncompressed raw data.<br><br>A `Watchdog daemon` monitors this folder and automatically triggers the pipeline runner when a recording finishes."
+  },
+  cloud_farm: {
+    title: "Cloud Compute Farm",
+    desc: "Heavy automated processing (solves, retargeting, GLTF generation) is offloaded to a scalable cloud farm (like AWS EC2 nodes managed by `Deadline`).<br><br>This prevents the pipeline from locking up local workstations or capturing servers, allowing the volume to keep shooting while data processes in parallel."
+  },
+  artist_machine_manual: {
+    title: "Artist Workstation (Manual)",
+    desc: "For the manual portion of the cleanup stage (e.g., hero character foot-locking and HumanIK artifact repair), the data is pulled down to a Technical Animator's local workstation running MotionBuilder or Maya.<br><br>Automated tools handle the bulk processing in the cloud, but human artistic judgement requires local interactive performance."
+  },
+  perforce: {
+    title: "Perforce Source Control",
+    desc: "The final deliverable is submitted via `P4Python` to an internal Perforce depot. This provides a strict version history, audit trails, and exclusive locking to prevent game developers from overwriting each other's work."
+  },
+  nas: {
+    title: "NAS (Network Attached Storage)",
+    desc: "A dedicated hardware file server on the local network (accessed via SMB). This provides massive, fast staging storage that appears as a mapped network drive (e.g., `N:`) on artist machines, bypassing the overhead of full source control for intermediate assets."
+  },
+  s3: {
+    title: "AWS S3 Cloud Storage",
+    desc: "For external partners (like Metaverse clients) or long-term cold storage, data is pushed to an Amazon S3 bucket via the `boto3` API. This provides globally accessible, infinitely scalable object storage."
+  },
+  sftp: {
+    title: "External SFTP",
+    desc: "A secure file drop for external vendors who require direct file system access without integrating into EA's internal network or cloud architecture."
+  }
+};
+

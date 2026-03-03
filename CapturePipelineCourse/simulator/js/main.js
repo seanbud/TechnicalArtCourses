@@ -20,17 +20,14 @@ document.getElementById("sel-tech").addEventListener("change", function(e) {
 });
 
 // ── Modal ──
-function openModal(type, arg) {
+function openModal(type, key) {
   var ov = document.getElementById("modal-overlay");
   var title = document.getElementById("modal-title");
   var sub = document.getElementById("modal-sub");
   var body = document.getElementById("modal-body");
-  if (type === "packet" && S.packet) {
-    title.textContent = "Data Packet — " + S.packet.take_name;
-    sub.textContent = "After stage: " + (STAGES[S.step] || "complete");
-    body.innerHTML = '<div class="jtree">' + buildJsonTree(S.packet) + '</div>';
-  } else if (type === "info" && STAGE_INFO[arg]) {
-    var info = STAGE_INFO[arg];
+  
+  if (type === "info" && STAGE_INFO[key]) {
+    var info = STAGE_INFO[key];
     title.textContent = info.title;
     sub.textContent = "Pattern: " + info.pattern;
     
@@ -41,13 +38,31 @@ function openModal(type, arg) {
     body.innerHTML = '<div class="modal-section"><p>' + d + '</p></div>' +
       '<div class="modal-section"><h4>Source Code</h4>' + highlightPy(FC[info.code] || "") + '</div>' +
       '<a class="modal-link" href="../lessons/' + info.lesson + '" target="_blank">📖 Open Lesson →</a>';
+  } else if (type === "storage" && STORAGE_INFO[key]) {
+    var sInfo = STORAGE_INFO[key];
+    title.textContent = "Storage Logistics";
+    sub.innerHTML = '<span class="sbadge" style="position:static;display:inline-flex;margin-right:6px">🗄️</span> ' + sInfo.title;
+    
+    // Process markdown-ish bold and code
+    var sd = sInfo.desc.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    sd = sd.replace(/\`(.*?)\`/g, '<code class="modal-code" onclick="pingFile(\'$1\')">$1</code>');
+    
+    body.innerHTML = '<div class="modal-section"><p>' + sd + '</p></div>';
+  } else if (type === "packet" && S.packet) { 
+    title.textContent = "Data Packet — " + S.packet.take_name;
+    sub.textContent = "After stage: " + (STAGES[S.step] || "complete");
+    body.innerHTML = '<div class="jtree">' + buildJsonTree(S.packet) + '</div>';
   }
+
   ov.classList.add("open");
 }
 
-function pingFile(term) {
+function pingFile(term, checkOnly) {
   var map = {
     "Watchdog daemon": "scripts/delivery_bot.py",
+    "Deadline": "pipeline/core.py",
+    "P4Python": "adapters/p4_delivery.py",
+    "boto3": "adapters/s3_delivery.py",
     "PipelineRunner": "pipeline/runner.py",
     "Strategy Registry": "pipeline/runner.py",
     "MarkerIngest": "adapters/vicon_ingest.py",

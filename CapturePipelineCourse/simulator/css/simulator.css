@@ -150,6 +150,9 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 .modal-section h4{font-size:.85rem;color:var(--accent-blue);margin-bottom:4px}
 .modal-section p{font-size:.8rem;color:var(--text-secondary);line-height:1.5}
 .modal-code{color:var(--accent-blue);cursor:pointer;background:rgba(96,165,250,.1);padding:0 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:600}
+.storage{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--accent-blue);font-weight:600}
+.storage-link{cursor:pointer;border-bottom:1px dashed var(--accent-blue);padding-bottom:1px;transition:all 0.2s}
+.storage-link:hover{color:#fff;border-bottom-style:solid;background:rgba(96,165,250,.1)}
 .modal-code:hover{background:rgba(96,165,250,.2);text-decoration:underline}
 .modal-link{color:var(--accent-green);text-decoration:none;font-size:.8rem}
 
