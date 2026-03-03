@@ -5,11 +5,14 @@
 const STAGES = ["ingest","cleanup","retarget","validate","export","deliver"];
 
 const TREE = [
-  {n:"pipeline",t:"d",c:[{n:"core.py",t:"f"},{n:"runner.py",t:"f"},{n:"retarget.py",t:"f"},{n:"validation.py",t:"f"},{n:"plugin_manager.py",t:"f"},{n:"client_registry.py",t:"f"}]},
-  {n:"config",t:"d",c:[{n:"clients",t:"d",c:[{n:"fc.json",t:"f"},{n:"madden.json",t:"f"},{n:"battlefield.json",t:"f"},{n:"metaverse.json",t:"f"},{n:"vendor_a.json",t:"f"}]},{n:"pipeline_settings.json",t:"f"}]},
-  {n:"adapters",t:"d",c:[{n:"vicon_ingest.py",t:"f"},{n:"moveai_ingest.py",t:"f"},{n:"fbx_export.py",t:"f"},{n:"gltf_export.py",t:"f"},{n:"p4_delivery.py",t:"f"},{n:"nas_delivery.py",t:"f"},{n:"s3_delivery.py",t:"f"}]},
-  {n:"plugins",t:"d",c:[{n:"metaverse_client.py",t:"f"},{n:"fc_custom.py",t:"f"}]},
-  {n:"scripts",t:"d",c:[{n:"batch_rename.py",t:"f"},{n:"delivery_bot.py",t:"f"},{n:"health_monitor.py",t:"f"}]}
+  {n:"capture_pipeline",t:"d",c:[
+    {n:"README.md",t:"f"},
+    {n:"pipeline",t:"d",c:[{n:"README.md",t:"f"},{n:"core.py",t:"f"},{n:"runner.py",t:"f"},{n:"retarget.py",t:"f"},{n:"validation.py",t:"f"},{n:"plugin_manager.py",t:"f"},{n:"client_registry.py",t:"f"}]},
+    {n:"config",t:"d",c:[{n:"clients",t:"d",c:[{n:"fc.json",t:"f"},{n:"madden.json",t:"f"},{n:"battlefield.json",t:"f"},{n:"metaverse.json",t:"f"},{n:"vendor_a.json",t:"f"}]},{n:"pipeline_settings.json",t:"f"}]},
+    {n:"adapters",t:"d",c:[{n:"README.md",t:"f"},{n:"vicon_ingest.py",t:"f"},{n:"moveai_ingest.py",t:"f"},{n:"fbx_export.py",t:"f"},{n:"gltf_export.py",t:"f"},{n:"p4_delivery.py",t:"f"},{n:"nas_delivery.py",t:"f"},{n:"s3_delivery.py",t:"f"}]},
+    {n:"plugins",t:"d",c:[{n:"README.md",t:"f"},{n:"metaverse_client.py",t:"f"},{n:"fc_custom.py",t:"f"}]},
+    {n:"scripts",t:"d",c:[{n:"README.md",t:"f"},{n:"batch_rename.py",t:"f"},{n:"delivery_bot.py",t:"f"},{n:"health_monitor.py",t:"f"}]}
+  ]}
 ];
 
 const CL = {
@@ -21,7 +24,57 @@ const CL = {
 };
 
 const FC = {
-"pipeline/runner.py":
+"capture_pipeline/README.md":
+`# EA Universal Capture Pipeline
+
+This repository contains the centralized capture pipeline for all EA studio partners. 
+
+## Architecture Deployment Map
+Because this is a central service, the code here does not run on a single machine. It is distributed across the studio infrastructure:
+
+*   **/adapters**: Some of these (like ingest) run locally on the capture servers, right on the volume floor. Others (like delivery) run on the cloud farm.
+*   **/pipeline**: Packaged as a Docker container and deployed to the AWS Cloud Compute farm managed by Deadline.
+*   **/plugins**: Stored in a central Perforce depot, hot-loaded by the pipeline runner on the cloud nodes.
+*   **/scripts**: Various standalone scripts running locally on artist workstations or on dedicated watchdog servers.`,
+
+"capture_pipeline/pipeline/README.md":
+`# Core Pipeline Orchestrator
+
+**Deployment Location:** ☁️ AWS Cloud Compute Farm (EC2 Instances) via Deadline
+
+The scripts in this directory form the "brain" of the universal pipeline. They abstract away the technology and vendor specifics. 
+
+Because retargeting (HumanIK) and export (FBX) are computationally heavy, this core module is containerized (Docker) and deployed to a scalable cloud farm. It is never run directly on a capture stage PC.`,
+
+"capture_pipeline/adapters/README.md":
+`# Interface Adapters
+
+**Deployment Location:** Hybrid (Local Capture Stages & Cloud Farm)
+
+Adapters bridge the gap between our universal pipeline code and specific external systems.
+
+*   **Ingest Adapters**: Installed directly on the local capture servers (e.g., the Vicon Shogun master PC) to watch for dropping files and format them for the cloud.
+*   **Delivery Adapters**: Executed by the core pipeline on the cloud farm, responsible for pushing the final data to destinations like Perforce edges or S3 buckets.`,
+
+"capture_pipeline/plugins/README.md":
+`# Client-Specific Overrides
+
+**Deployment Location:** Central Perforce Depot (Hot-loaded)
+
+When the Universal Pipeline (` + "`" + `runner.py` + "`" + `) cannot handle a vendor's edge-case via JSON configuration alone, custom Python logic is placed here.
+
+These are stored centrally and hot-loaded by the ` + "`" + `PluginManager` + "`" + ` at runtime on the Cloud Farm.`,
+
+"capture_pipeline/scripts/README.md":
+`# Standalone Tooling
+
+**Deployment Location:** Mixed (Artist Workstations & Background Daemons)
+
+Utilities that operate outside the core automated flow.
+*   **Daemons** (` + "`" + `delivery_bot.py` + "`" + `, ` + "`" + `health_monitor.py` + "`" + `): Run on dedicated 24/7 internal Unix servers.
+*   **Artist Tools** (` + "`" + `batch_rename.py` + "`" + `): Distributed to TA workstations via Perforce and run interactively in MotionBuilder or Maya.`,
+
+"capture_pipeline/pipeline/runner.py":
 `class UniversalPipeline:
     """Orchestrates the convergent/divergent execution flow."""
     
@@ -67,7 +120,7 @@ const FC = {
             profile
         )`,
 
-"pipeline/core.py":
+"capture_pipeline/pipeline/core.py":
 `class PipelineRunner:
     """The master entry point for the entire capture system."""
 
@@ -92,7 +145,7 @@ const FC = {
         )
         
         log.info("Pipeline execution queued to Farm ✅")`,
-"pipeline/plugin_manager.py":
+"capture_pipeline/pipeline/plugin_manager.py":
 `class PluginManager:
     """Discovers and dispatches client-specific logic overrides."""
     def __init__(self, plugin_dir):
@@ -115,7 +168,7 @@ const FC = {
                 return getattr(module, hook_name)(*args, **kwargs)
         return None`,
 
-"pipeline/client_registry.py":
+"capture_pipeline/pipeline/client_registry.py":
 `class ClientRegistry:
     """Registry for project-specific skeleton and delivery configs."""
     def __init__(self, config_dir):
@@ -134,7 +187,7 @@ const FC = {
             raise KeyError(f"No profile found for client: {client_id}")
         return self.profiles[client_id]`,
 
-"pipeline/validation.py":
+"capture_pipeline/pipeline/validation.py":
 `class UniversalValidator:
     """Runs a series of pluggable readiness checks on capture data."""
 
@@ -158,7 +211,7 @@ const FC = {
         
         return results`,
 
-"pipeline/retarget.py":
+"capture_pipeline/pipeline/retarget.py":
 `class HumanIKRetarget:
     """Standardizes source skeleton to the target client delivery spec."""
 
@@ -180,7 +233,7 @@ const FC = {
         
         return data`,
 
-"adapters/fbx_export.py":
+"capture_pipeline/adapters/fbx_export.py":
 `class FBXExportAdapter(BaseExportAdapter):
     """Factory-spawned adapter for standard Maya/FBX output."""
 
@@ -200,7 +253,7 @@ const FC = {
             type="FBX export"
         )`,
 
-"adapters/gltf_export.py":
+"capture_pipeline/adapters/gltf_export.py":
 `class GLTFExportAdapter(BaseExportAdapter):
     """Adapter for Real-time web/mobile delivery (glTF 2.0)."""
 
@@ -219,7 +272,7 @@ const FC = {
             "--binary"
         ])`,
 
-"adapters/vicon_ingest.py":
+"capture_pipeline/adapters/vicon_ingest.py":
 `class MarkerIngest(IngestStage):
     """Ingest strategy for Vicon Shogun / Vicon Blade data."""
 
@@ -238,7 +291,7 @@ const FC = {
         
         return result`,
 
-"adapters/moveai_ingest.py":
+"capture_pipeline/adapters/moveai_ingest.py":
 `class MarkerlessIngest(IngestStage):
     """Ingest strategy for AI-driven Markerless video capture."""
 
@@ -257,7 +310,7 @@ const FC = {
         
         return result`,
 
-"adapters/p4_delivery.py":
+"capture_pipeline/adapters/p4_delivery.py":
 `class PerforceDelivery(BaseDeliveryAdapter):
     """Production asset management delivery (Source Control)."""
 
@@ -277,7 +330,7 @@ const FC = {
         
         notify_slack(profile.delivery["slack"], output_path)`,
 
-"adapters/nas_delivery.py":
+"capture_pipeline/adapters/nas_delivery.py":
 `class NASDelivery(BaseDeliveryAdapter):
     """High-speed local network storage delivery (SMB)."""
 
@@ -296,7 +349,7 @@ const FC = {
         
         notify_slack(profile.delivery["slack"], dest)`,
 
-"adapters/s3_delivery.py":
+"capture_pipeline/adapters/s3_delivery.py":
 `class S3Delivery(BaseDeliveryAdapter):
     """Cloud storage delivery for distributed workflows."""
 
@@ -316,7 +369,7 @@ const FC = {
             f"s3://{bucket}/{key}"
         )`,
 
-"plugins/metaverse_client.py":
+"capture_pipeline/plugins/metaverse_client.py":
 `def register():
     """Client-specific plugin manifest."""
     return {
@@ -341,7 +394,7 @@ def custom_validate(data, profile):
         return False, f"LOD Error: {len(data.joints)} joints"
     return True, "Success"`,
 
-"plugins/fc_custom.py":
+"capture_pipeline/plugins/fc_custom.py":
 `def register():
     """Client-specific plugin manifest (FC Sports)."""
     return {
@@ -358,7 +411,7 @@ def custom_retarget(data, profile):
     )
     return data`,
 
-"scripts/batch_rename.py":
+"capture_pipeline/scripts/batch_rename.py":
 `"""
 Core Utility Script:
 Batches nomenclature remapping across FBX hierarchies.
@@ -373,7 +426,7 @@ def batch_rename(fbx_path, joint_map_path):
 
     cmds.file(fbx_path, force=True, save=True)`,
 
-"scripts/delivery_bot.py":
+"capture_pipeline/scripts/delivery_bot.py":
 `"""
 Background Execution Daemon:
 Triggered on capture server filesystem events.
@@ -392,7 +445,7 @@ class DeliveryBot:
             )
             slack.post(f"Watcher: processing {event.src_path}")`,
 
-"scripts/health_monitor.py":
+"capture_pipeline/scripts/health_monitor.py":
 `"""
 Infrastructure Heartbeat Watchdog:
 Monitors critical capture pipeline services.
@@ -447,11 +500,11 @@ const STAGE_INFO = {
 };
 
 const SF = {
-  ingest:{marker:["pipeline/core.py","adapters/vicon_ingest.py"],markerless:["pipeline/core.py","adapters/moveai_ingest.py"]},
-  cleanup:{marker:["pipeline/core.py","adapters/vicon_ingest.py"],markerless:["pipeline/core.py","adapters/moveai_ingest.py"]},
-  retarget:{both:["pipeline/retarget.py"]},validate:{both:["pipeline/validation.py"]},
-  export:{fbx:["adapters/fbx_export.py"],gltf:["adapters/gltf_export.py"]},
-  deliver:{perforce:["adapters/p4_delivery.py","scripts/delivery_bot.py"],nas:["adapters/nas_delivery.py","scripts/delivery_bot.py"],s3:["adapters/s3_delivery.py","scripts/delivery_bot.py"],sftp:["adapters/s3_delivery.py"]}
+  ingest:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/README.md","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/README.md","capture_pipeline/adapters/moveai_ingest.py"]},
+  cleanup:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/moveai_ingest.py"]},
+  retarget:{both:["capture_pipeline/pipeline/README.md","capture_pipeline/pipeline/retarget.py"]},validate:{both:["capture_pipeline/pipeline/validation.py"]},
+  export:{fbx:["capture_pipeline/adapters/fbx_export.py"],gltf:["capture_pipeline/adapters/gltf_export.py"]},
+  deliver:{perforce:["capture_pipeline/adapters/p4_delivery.py","capture_pipeline/scripts/README.md","capture_pipeline/scripts/delivery_bot.py"],nas:["capture_pipeline/adapters/nas_delivery.py","capture_pipeline/scripts/delivery_bot.py"],s3:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"],sftp:["capture_pipeline/adapters/s3_delivery.py"]}
 };
 
 const DELIVERIES = [

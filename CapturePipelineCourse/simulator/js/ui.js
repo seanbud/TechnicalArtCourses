@@ -3,7 +3,33 @@
 // ═══════════════════════════════════════════
 
 // ── File tree ──
-var expandedDirs = new Set(["pipeline","config","config/clients","adapters","plugins","scripts"]);
+var expandedDirs = new Set(["capture_pipeline", "capture_pipeline/pipeline","capture_pipeline/config","capture_pipeline/config/clients","capture_pipeline/adapters","capture_pipeline/plugins","capture_pipeline/scripts"]);
+
+// Helper to find a node in TREE by its full path
+function findNodeByPath(items, path) {
+  var parts = path.split("/");
+  var current = items;
+  for (var i = 0; i < parts.length; i++) {
+    var found = current.find(function(item) { return item.n === parts[i]; });
+    if (!found) return null;
+    if (i === parts.length - 1) return found;
+    current = found.c || [];
+  }
+  return null;
+}
+
+// Recursive helper to get all directory paths under a node
+function getAllDirPaths(node, currentPath, results) {
+  if (node.t === "d" && node.c) {
+    node.c.forEach(function(child) {
+      if (child.t === "d") {
+        var childPath = currentPath + "/" + child.n;
+        results.push(childPath);
+        getAllDirPaths(child, childPath, results);
+      }
+    });
+  }
+}
 
 function renderTree() {
   document.getElementById("file-tree").innerHTML = buildTree(TREE, "");
@@ -16,13 +42,23 @@ function buildTree(items, prefix) {
     var path = prefix ? prefix + "/" + item.n : item.n;
     var depth = path.split("/").length - 1;
     var pad = "padding-left:" + (12 + depth * 16) + "px";
+    
     if (item.t === "d") {
       var open = expandedDirs.has(path);
+      // Check if this directory has a README.md child for the (i) icon
+      var hasReadme = item.c && item.c.some(child => child.n === "README.md");
+      var infoIcon = hasReadme ? '<span class="dir-info" title="View Directory Architecture" onclick="event.stopPropagation();selectFile(\'' + path + '/README.md\')">ⓘ</span>' : "";
+      
       html += '<div class="tree-item" style="' + pad + '" onclick="toggleDir(\'' + path + '\',event)">' +
-        '<span class="tree-chevron">' + (open ? '▾' : '▸') + '</span><span>' + item.n + '/</span></div>';
+        '<span class="tree-chevron">' + (open ? '▾' : '▸') + '</span><span>' + item.n + '/</span>' + infoIcon + '</div>';
       if (open && item.c) html += buildTree(item.c, path);
     } else {
-      var cls = S.selectedFile === path ? "selected" : (S.activeFiles.includes(path) ? "active-file" : "");
+      // Hide README.md from the file list
+      if (item.n === "README.md") continue;
+      
+      var cls = S.selectedFile === path ? "selected" : "";
+      if (S.activeFiles.some(f => path.endsWith(f))) cls += " active-file";
+      
       html += '<div class="tree-item ' + cls + '" style="' + pad + '" onclick="selectFile(\'' + path + '\')">' +
         '<span class="tree-chevron hidden">·</span><span>' + item.n + '</span></div>';
     }
@@ -32,14 +68,34 @@ function buildTree(items, prefix) {
 
 function toggleDir(p, e) {
   if (e) e.stopPropagation();
-  expandedDirs.has(p) ? expandedDirs.delete(p) : expandedDirs.add(p);
+  var isExpanding = !expandedDirs.has(p);
+  
+  if (e && e.shiftKey) {
+    var node = findNodeByPath(TREE, p);
+    if (node) {
+      if (isExpanding) {
+        expandedDirs.add(p);
+        var subDirs = [];
+        getAllDirPaths(node, p, subDirs);
+        subDirs.forEach(function(d) { expandedDirs.add(d); });
+      } else {
+        expandedDirs.delete(p);
+        // Collapse all children: remove any path that starts with "p/"
+        expandedDirs.forEach(function(d) {
+          if (d.startsWith(p + "/")) expandedDirs.delete(d);
+        });
+      }
+    }
+  } else {
+    isExpanding ? expandedDirs.add(p) : expandedDirs.delete(p);
+  }
   renderTree();
 }
 
 function selectFile(p) {
   S.selectedFile = p;
   var app = document.querySelector(".app");
-  if (p.startsWith("config/clients/")) {
+  if (p.includes("config/clients/")) {
     var id = p.split("/").pop().replace(".json","");
     if (id === "fc") id = "fc_sports";
     if (CL[id]) {
@@ -50,7 +106,7 @@ function selectFile(p) {
       renderGraph();
     }
     app.style.setProperty("--inspector-w", "360px");
-  } else if (p === "config/pipeline_settings.json") {
+  } else if (p.includes("config/pipeline_settings.json")) {
     S.inspectorTab = "config";
     setActiveTab("config");
     app.style.setProperty("--inspector-w", "360px");
@@ -203,7 +259,7 @@ function renderInspector() {
   var c = CL[S.client];
   var t = S.inspectorTab;
   if (t === "data") {
-    if (S.selectedFile === "config/pipeline_settings.json") {
+    if (S.selectedFile && S.selectedFile.includes("config/pipeline_settings.json")) {
       var config = {
         active_client: S.client,
         technology: S.tech,
@@ -217,7 +273,29 @@ function renderInspector() {
       body.innerHTML = '<div class="inspector-label">File: config/pipeline_settings.json (Live)</div>' +
                        '<div class="jtree">' + buildJsonTree(config) + '</div>';
     } else if (S.selectedFile && FC[S.selectedFile]) {
-      body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(FC[S.selectedFile]);
+      var raw = FC[S.selectedFile];
+      if (S.selectedFile.endsWith(".json")) {
+        var obj = null;
+        try { obj = JSON.parse(raw); } catch(e){}
+        if (obj) body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div><div class="jtree">' + buildJsonTree(obj) + '</div>';
+        else body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw);
+      } else if (S.selectedFile.endsWith(".md")) {
+        // Basic markdown parser for READMEs
+        var mdHTML = raw
+          .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+          .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+          .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+          .replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>')
+          .replace(/\*(.*?)\*/gim, '<i>$1</i>')
+          .replace(/^\* (.*$)/gim, '<ul><li>$1</li></ul>')
+          .replace(/<\/ul>\n<ul>/gim, '')
+          .replace(/`(.*?)`/gim, '<code class="md-code">$1</code>')
+          .replace(/\n\n/g, '</p><p>');
+        
+        body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div><div class="md-view" style="padding:10px"><p>' + mdHTML + '</p></div>';
+      } else {
+        body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw);
+      }
     } else if (S.packet) {
       body.innerHTML = '<div class="inspector-label">CaptureResult — after ' + (STAGES[S.step] || 'idle') + '</div><div class="jtree">' + buildJsonTree(S.packet) + '</div>';
     } else {
