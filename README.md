@@ -14,11 +14,7 @@ A production-hardened course focused on high-fidelity motion capture pipelines, 
 *   **Location:** `/MocapPipelineCourse`
 *   **Main Index:** `/MocapPipelineCourse/index.html`
 
-### 3. Course Template
-A standardized template for creating new technical art courses.
-*   **Location:** `/CourseTemplate`
-
-### 4. Interactive Pipeline Simulator
+### Interactive Pipeline Simulator
 A web-based, interactive tool designed to visualize the complex data journey through the Studio Capture Pipeline. It maps the conceptual architecture from Module 6 into a live, traceable dashboard.
 
 *   **Location:** `/MocapPipelineCourse/simulator/index.html`
@@ -29,6 +25,10 @@ A web-based, interactive tool designed to visualize the complex data journey thr
 
 ![Pipeline Simulator Demo](https://via.placeholder.com/800x450?text=Pipeline+Simulator+Demo+Video/Screenshot)
 *Place demo video or screenshot here*
+
+### Course Template
+A standardized template for creating new technical art courses.
+*   **Location:** `/CourseTemplate`
 
 ---
 
