@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'MocapPipelineCourse/simulator/**'
+      - '.github/workflows/deploy-simulator.yml'
   workflow_dispatch:
 
 permissions:
