@@ -1,0 +1,38 @@
+name: Deploy Simulator to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CapturePipelineCourse/simulator/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare deploy directory
+        run: |
+          mkdir deploy
+          cp -r CapturePipelineCourse/simulator/* deploy/
+          # Remove .DS_Store files
+          find deploy -name '.DS_Store' -delete
+          # Remove .agent build-spec directories
+          find deploy -name '.agent' -type d -exec rm -rf {} +
+
+      - name: Strip back-link for deployed version
+        run: sed -i 's|<a href="../index.html">← Course</a>||' deploy/index.html
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
+          publish_branch: gh-pages
+          force_orphan: true
