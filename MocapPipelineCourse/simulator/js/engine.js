@@ -35,7 +35,10 @@ function toggleFailure() {
   }
 }
 
-function clickStage(stage) {
+function clickStage(stage, preserveSelection) {
+  // Sticky packet logic: if we are viewing the packet, preserve that state
+  var wasInspectingPacket = (S.inspectorTab === "data" && S.selectedFile === null && S.packet !== null);
+
   var idx = STAGES.indexOf(stage);
   var c = CL[S.client];
   if (stage === "ingest" || stage === "cleanup") S.activeFiles = SF[stage][S.tech] || [];
@@ -49,12 +52,19 @@ function clickStage(stage) {
     S.activeFiles = SF[stage][c.delivery.method] || [];
   }
   
+  // Set default selection
   if (S.activeFiles.length > 0) S.selectedFile = S.activeFiles[0];
   else S.selectedFile = null;
   
   if (stage === "export" || stage === "deliver") S.inspectorTab = "adapter";
   else if (stage === "validate" && c.plugin) S.inspectorTab = "hooks";
   else S.inspectorTab = "data";
+
+  // Override defaults if sticky selection is requested and active
+  if (preserveSelection && wasInspectingPacket) {
+    S.selectedFile = null;
+    S.inspectorTab = "data";
+  }
   
   setActiveTab(S.inspectorTab);
   renderTree(); renderInspector();
@@ -122,9 +132,6 @@ function startSim() {
 }
 
 async function advanceStep() {
-  // Sticky packet logic: if we are viewing the packet, preserve that state
-  var wasInspectingPacket = (S.inspectorTab === "data" && S.selectedFile === null && S.packet !== null);
-
   if (S.packet) S.prevPacket = JSON.parse(JSON.stringify(S.packet));
   else S.prevPacket = null;
   S.step++;
@@ -137,13 +144,9 @@ async function advanceStep() {
   }
   var stage = STAGES[S.step];
   var c = CL[S.client];
-  clickStage(stage);
-
-  if (wasInspectingPacket) {
-    S.selectedFile = null;
-    S.inspectorTab = "data";
-    setActiveTab("data");
-  }
+  
+  // Advance the stage visuals and code selection, preserving packet view if currently active
+  clickStage(stage, true);
 
   if (stage === "ingest") {
     var take = c.naming.example;

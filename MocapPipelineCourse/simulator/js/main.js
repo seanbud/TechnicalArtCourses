@@ -127,6 +127,6 @@ function closeModal(e) {
 renderTree();
 renderGraph();
 renderInspector();
-log("info", "Pipeline Simulator v2.1 initialized");
-log("info", "ClientRegistry: " + Object.keys(CL).length + " profiles loaded");
-log("info", "PluginManager: 2 plugins discovered");
+log("info", "Pipeline Simulator v2.1 initialized", "System");
+log("info", "ClientRegistry: " + Object.keys(CL).length + " profiles loaded", "System");
+log("info", "PluginManager: 2 plugins discovered", "System");
