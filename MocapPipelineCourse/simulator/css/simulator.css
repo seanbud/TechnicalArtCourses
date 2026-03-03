@@ -124,6 +124,16 @@ code,pre{font-family:'JetBrains Mono',monospace;font-size:12px}
 /* JSON tree */
 .jtree{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6}
 .jtree .jkey{color:var(--syn-key)}.jtree .jstr{color:var(--syn-val-str)}.jtree .jnum{color:var(--syn-val-num)}.jtree .jbool{color:var(--syn-val-bool)}.jtree .jnull{color:var(--syn-val-null)}.jtree .jbrace{color:var(--syn-brace)}
+
+.md-view{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:0.8rem;color:var(--text-primary);line-height:1.5}
+.md-view h1{font-size:1.1rem;color:var(--accent-blue);margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:4px}
+.md-view h2{font-size:0.95rem;color:var(--text-primary);margin-top:16px;margin-bottom:8px}
+.md-view p{margin-bottom:10px;color:var(--text-secondary)}
+.md-view ul{margin-left:20px;margin-bottom:10px;color:var(--text-secondary)}
+.md-view li{margin-bottom:4px}
+.md-view .md-code{font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:rgba(255,255,255,0.1);padding:2px 4px;border-radius:3px;color:var(--accent-orange)}
+.dir-info{margin-left:6px;color:var(--text-muted);cursor:pointer;font-size:0.8rem;transition:color 0.2s}
+.dir-info:hover{color:var(--accent-blue)}
 .jtoggle{cursor:pointer;user-select:none;color:var(--text-muted);margin-right:2px}
 .jtoggle:hover{color:var(--text-primary)}
 .jcollapsed{display:none}
