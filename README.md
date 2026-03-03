@@ -10,13 +10,25 @@ A comprehensive set of lessons and notes focused on real-time rendering, shaders
 *   **Main Index:** `/UnityTechnicalArtCourse/index.html`
 
 ### 2. Technical Art & Capture Pipelines
-A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems.
+A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems. Includes an **Interactive Pipeline Simulator** to visualize data flow.
 *   **Location:** `/CapturePipelineCourse`
 *   **Main Index:** `/CapturePipelineCourse/index.html`
 
 ### 3. Course Template
 A standardized template for creating new technical art courses.
 *   **Location:** `/CourseTemplate`
+
+### 4. Interactive Pipeline Simulator
+A web-based, interactive tool designed to visualize the complex data journey through the EA Capture Pipeline. It maps the conceptual architecture from Module 6 into a live, traceable dashboard.
+
+*   **Location:** `/CapturePipelineCourse/simulator/index.html`
+*   **Key Features:**
+    *   **Visual Data Tracing**: Trace mock capture packets through Ingest, Clean, Retarget, and Export stages.
+    *   **Architecture Inspector**: Deep dive into client registries, export adapters, and plugin systems.
+    *   **Resilience Simulation**: High-level visualization of circuit breakers and defensive architecture.
+
+![Pipeline Simulator Demo](https://via.placeholder.com/800x450?text=Pipeline+Simulator+Demo+Video/Screenshot)
+*Place demo video or screenshot here*
 
 ---
 
