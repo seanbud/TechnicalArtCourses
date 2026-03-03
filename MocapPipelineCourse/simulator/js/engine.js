@@ -179,9 +179,10 @@ async function advanceStep() {
     }
     S.packet.delivery_method = c.delivery.method;
     S.packet.delivery_destination = getDest(c) + c.naming.example + "." + c.export.format;
+    S.packet.md5_hash = "e4d909c290d0fb1ca068ffaddf22cbd" + Math.floor(Math.random() * 9);
     S.packet.delivery_timestamp = new Date().toISOString();
     S.packet.notification_sent = c.delivery.slack;
-    log("success", getDelAdapter(c) + ": delivered to " + getDest(c));
+    log("success", getDelAdapter(c) + ": delivered (MD5 verified)");
     log("info", "Slack → " + c.delivery.slack);
   }
   renderGraph(); renderInspector();
