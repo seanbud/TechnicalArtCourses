@@ -71,27 +71,33 @@ function renderGraph() {
   var h = '';
 
   // ROW 1 — Marker path
-  h += '<div class="tech-label marker-label" style="grid-row:1;grid-column:1;align-self:end;margin-bottom:4px">⚡ MARKER</div>';
-  h += '<div style="grid-row:1;grid-column:2" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("ingest", "Ingest", "Vicon .c3d", isMk) + '</div>';
-  h += '<div style="grid-row:1;grid-column:3" class="parrow ' + (S.step >= 1 && isMk ? 'active-arrow' : '') + ' ' + (isMk ? '' : 'dimmed') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
-  h += '<div style="grid-row:1;grid-column:4" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("cleanup", "Cleanup", "Swap Fix / Gap Fill", isMk) + '</div>';
-  // Connector from marker cleanup to convergence
-  h += '<div style="grid-row:1;grid-column:5;align-self:end;padding-bottom:8px" class="parrow ' + (isMk ? '' : 'dimmed') + '">→</div>';
+  h += '<div style="grid-row:1;grid-column:1;position:relative;display:flex;align-items:center;justify-content:center" class="' + (isMk ? '' : 'dimmed') + '">' +
+       '<div class="tech-label marker-label">⚡ MARKER</div>' +
+       mkNode("ingest", "Ingest", "Vicon .c3d", isMk) + '</div>';
+  h += '<div style="grid-row:1;grid-column:2" class="parrow ' + (S.step >= 1 && isMk ? 'active-arrow' : '') + ' ' + (isMk ? '' : 'dimmed') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
+  h += '<div style="grid-row:1;grid-column:3" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("cleanup", "Cleanup", "Swap Fix / Gap Fill", isMk) + '</div>';
+  h += '<div style="grid-row:1;grid-column:4;align-self:center" class="parrow ' + (isMk ? '' : 'dimmed') + '">→</div>';
 
   // ROW 3 — Markerless path
-  h += '<div class="tech-label markerless-label" style="grid-row:3;grid-column:1;align-self:start;margin-top:4px">📷 MARKERLESS</div>';
-  h += '<div style="grid-row:3;grid-column:2" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("ingest", "Ingest", "Move.ai Video", !isMk, "ml-") + '</div>';
-  h += '<div style="grid-row:3;grid-column:3" class="parrow ' + (S.step >= 1 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
-  h += '<div style="grid-row:3;grid-column:4" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("cleanup", "Cleanup", "ML Jitter Filter", !isMk, "ml-") + '</div>';
-  h += '<div style="grid-row:3;grid-column:5;align-self:start;padding-top:8px" class="parrow ' + (isMk ? 'dimmed' : '') + '">→</div>';
+  h += '<div style="grid-row:3;grid-column:1;position:relative;display:flex;align-items:center;justify-content:center" class="' + (isMk ? 'dimmed' : '') + '">' +
+       '<div class="tech-label markerless-label">📷 MARKERLESS</div>' +
+       mkNode("ingest", "Ingest", "Move.ai Video", !isMk, "ml-") + '</div>';
+  h += '<div style="grid-row:3;grid-column:2" class="parrow ' + (S.step >= 1 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
+  h += '<div style="grid-row:3;grid-column:3" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("cleanup", "Cleanup", "ML Jitter Filter", !isMk, "ml-") + '</div>';
+  h += '<div style="grid-row:3;grid-column:4;align-self:center" class="parrow ' + (isMk ? 'dimmed' : '') + '">→</div>';
 
-  // COLUMN 6 — Convergence bar (spans all 3 rows)
-  h += '<div class="conv-cell" style="grid-row:1/4;grid-column:6">';
-  h += '<div class="conv-bar"></div><div class="conv-label">Convergence Point</div><div class="conv-bar"></div>';
+  // COLUMN 5 — Convergence (Spans 3 rows)
+  h += '<div class="conv-cell" style="grid-row:1/4;grid-column:5">';
+  h += '<div class="conv-line-v"></div>';
+  h += '<div class="conv-v-group">';
+  h +=   '<div class="conv-v-bar"></div>';
+  h +=   '<div class="conv-label-v">Convergence Point</div>';
+  h +=   '<div class="conv-v-bar"></div>';
+  h += '</div>';
   h += '</div>';
 
-  // ROW 2 — Universal stages (after convergence)
-  h += '<div style="grid-row:2;grid-column:7;display:flex;align-items:center;gap:6px">';
+  // ROW 2 — Universal stages
+  h += '<div style="grid-row:2;grid-column:6;display:flex;align-items:center;gap:6px">';
   h += '<span class="parrow ' + (S.step >= 2 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Remapped joints</span></span>';
   h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true);
   h += '<span class="parrow ' + (S.step >= 3 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Validated data</span></span>';
@@ -101,8 +107,8 @@ function renderGraph() {
   h += '<span class="parrow ' + (S.step >= 5 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + getDelAdapter(c) + '</span></span>';
   h += '</div>';
 
-  // COLUMN 8 — Delivery destinations
-  h += '<div class="deliver-col" style="grid-row:1/4;grid-column:8">';
+  // COLUMN 7 — Delivery destinations
+  h += '<div class="deliver-col" style="grid-row:1/4;grid-column:7">';
   h += '<div class="darrow-label">' + getDelAdapter(c) + '</div>';
   DELIVERIES.forEach(function(d) {
     var isActive = d.id === dm;
