@@ -33,11 +33,46 @@ function openModal(type, arg) {
     var info = STAGE_INFO[arg];
     title.textContent = info.title;
     sub.textContent = "Pattern: " + info.pattern;
-    body.innerHTML = '<div class="modal-section"><p>' + info.desc + '</p></div>' +
+    
+    // Process markdown-ish bold and code
+    var d = info.desc.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    d = d.replace(/\`(.*?)\`/g, '<code class="modal-code" onclick="pingFile(\'$1\')">$1</code>');
+    
+    body.innerHTML = '<div class="modal-section"><p>' + d + '</p></div>' +
       '<div class="modal-section"><h4>Source Code</h4>' + highlightPy(FC[info.code] || "") + '</div>' +
       '<a class="modal-link" href="../lessons/' + info.lesson + '" target="_blank">📖 Open Lesson →</a>';
   }
   ov.classList.add("open");
+}
+
+function pingFile(term) {
+  var map = {
+    "Watchdog daemon": "scripts/delivery_bot.py",
+    "PipelineRunner": "pipeline/runner.py",
+    "Strategy Registry": "pipeline/runner.py",
+    "MarkerIngest": "adapters/vicon_ingest.py",
+    "MarkerlessIngest": "adapters/moveai_ingest.py",
+    "RetargetStage": "pipeline/retarget.py",
+    "retarget stage.process": "pipeline/retarget.py",
+    "RetargetStage.process()": "pipeline/retarget.py",
+    "Client Registry": "pipeline/client_registry.py",
+    "HumanIK": "pipeline/retarget.py",
+    "PluginManager": "pipeline/plugin_manager.py",
+    "ValidationStage": "pipeline/validation.py",
+    "pre-export": "plugins/metaverse_client.py",
+    "post-export": "plugins/metaverse_client.py",
+    "pre_export": "plugins/metaverse_client.py",
+    "post_export": "plugins/metaverse_client.py",
+    "ExportFactory": "adapters/fbx_export.py",
+    "Circuit Breaker": "adapters/nas_delivery.py",
+    "CaptureResult": "adapters/vicon_ingest.py"
+  };
+  var path = map[term];
+  if (path) {
+    document.getElementById("modal-overlay").classList.remove("open");
+    selectFile(path);
+    log("info", "Pinging file for term: " + term);
+  }
 }
 
 function closeModal(e) {

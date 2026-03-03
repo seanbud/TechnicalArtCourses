@@ -5,7 +5,7 @@
 const STAGES = ["ingest","cleanup","retarget","validate","export","deliver"];
 
 const TREE = [
-  {n:"pipeline",t:"d",c:[{n:"core.py",t:"f"},{n:"runner.py",t:"f"},{n:"retarget.py",t:"f"},{n:"validation.py",t:"f"}]},
+  {n:"pipeline",t:"d",c:[{n:"core.py",t:"f"},{n:"runner.py",t:"f"},{n:"retarget.py",t:"f"},{n:"validation.py",t:"f"},{n:"plugin_manager.py",t:"f"},{n:"client_registry.py",t:"f"}]},
   {n:"config",t:"d",c:[{n:"clients",t:"d",c:[{n:"fc.json",t:"f"},{n:"madden.json",t:"f"},{n:"battlefield.json",t:"f"},{n:"metaverse.json",t:"f"},{n:"vendor_a.json",t:"f"}]},{n:"pipeline_settings.json",t:"f"}]},
   {n:"adapters",t:"d",c:[{n:"vicon_ingest.py",t:"f"},{n:"moveai_ingest.py",t:"f"},{n:"fbx_export.py",t:"f"},{n:"gltf_export.py",t:"f"},{n:"p4_delivery.py",t:"f"},{n:"nas_delivery.py",t:"f"},{n:"s3_delivery.py",t:"f"}]},
   {n:"plugins",t:"d",c:[{n:"metaverse_client.py",t:"f"},{n:"fc_custom.py",t:"f"}]},
@@ -91,6 +91,47 @@ const FC = {
         )
         
         log.info("Pipeline execution complete ✅")`,
+"pipeline/plugin_manager.py":
+`class PluginManager:
+    """Discovers and dispatches client-specific logic overrides."""
+    def __init__(self, plugin_dir):
+        self.plugin_dir = plugin_dir
+        self.active_plugins = {}
+
+    def load_plugins_for(self, client_id):
+        # Scan /plugins/ and call register()
+        for f in os.listdir(self.plugin_dir):
+            module = import_plugin(f)
+            manifest = module.register()
+            if manifest["client_id"] == client_id:
+                self.active_plugins[client_id] = module
+                log.info(f"PluginManager: loaded {f} v{manifest['version']}")
+
+    def run_hook(self, hook_name, *args, **kwargs):
+        # Dispatch to all active plugins (pre_export, custom_validate, etc)
+        for module in self.active_plugins.values():
+            if hasattr(module, hook_name):
+                return getattr(module, hook_name)(*args, **kwargs)
+        return None`,
+
+"pipeline/client_registry.py":
+`class ClientRegistry:
+    """Registry for project-specific skeleton and delivery configs."""
+    def __init__(self, config_dir):
+        self.profiles = {}
+        self._load_all(config_dir)
+
+    def _load_all(self, directory):
+        # Load all JSON profiles into memory
+        for f in os.listdir(directory):
+            with open(os.path.join(directory, f)) as data:
+                profile = json.load(data)
+                self.profiles[profile["id"]] = profile
+
+    def get_profile(self, client_id):
+        if client_id not in self.profiles:
+            raise KeyError(f"No profile found for client: {client_id}")
+        return self.profiles[client_id]`,
 
 "pipeline/validation.py":
 `class UniversalValidator:

@@ -50,6 +50,10 @@ function selectFile(p) {
       renderGraph();
     }
     app.style.setProperty("--inspector-w", "360px");
+  } else if (p === "config/pipeline_settings.json") {
+    S.inspectorTab = "config";
+    setActiveTab("config");
+    app.style.setProperty("--inspector-w", "360px");
   } else if (p.endsWith(".py")) {
     S.inspectorTab = "data";
     setActiveTab("data");
@@ -199,7 +203,20 @@ function renderInspector() {
   var c = CL[S.client];
   var t = S.inspectorTab;
   if (t === "data") {
-    if (S.selectedFile && FC[S.selectedFile]) {
+    if (S.selectedFile === "config/pipeline_settings.json") {
+      var config = {
+        active_client: S.client,
+        technology: S.tech,
+        strategies: {
+          ingest: S.tech === "marker" ? "MarkerIngest" : "MarkerlessIngest",
+          cleanup: S.tech === "marker" ? "MarkerCleanup" : "MarkerlessCleanup"
+        },
+        plugin: CL[S.client].plugin || "none",
+        delivery: CL[S.client].delivery.method
+      };
+      body.innerHTML = '<div class="inspector-label">File: config/pipeline_settings.json (Live)</div>' +
+                       '<div class="jtree">' + buildJsonTree(config) + '</div>';
+    } else if (S.selectedFile && FC[S.selectedFile]) {
       body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(FC[S.selectedFile]);
     } else if (S.packet) {
       body.innerHTML = '<div class="inspector-label">CaptureResult — after ' + (STAGES[S.step] || 'idle') + '</div><div class="jtree">' + buildJsonTree(S.packet) + '</div>';
