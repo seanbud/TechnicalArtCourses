@@ -257,9 +257,16 @@ function renderInspector() {
   } else if (t === "logs") {
     var stage = S.step >= 0 ? STAGES[S.step] : null;
     var f = S.logs.filter(function(l) { return !stage || l.stage === stage; });
-    body.innerHTML = '<div class="inspector-label">Logs' + (stage ? ' — ' + stage : '') + '</div>' +
+    body.innerHTML = '<div class="inspector-label">Logs' + (stage ? ' — ' + stage : '') + 
+      ' <button class="btn-clear" onclick="clearLogs()" title="Clear all logs">Clear</button></div>' +
       f.map(function(l) { return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> <span class="msg">' + l.msg + '</span></div>'; }).join("");
   }
+}
+
+function clearLogs() {
+  S.logs = [];
+  document.getElementById("console-log").innerHTML = "";
+  renderInspector();
 }
 
 // ── Console ──

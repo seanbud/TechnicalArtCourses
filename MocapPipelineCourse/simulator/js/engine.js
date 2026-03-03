@@ -23,12 +23,14 @@ function clickStage(stage) {
   } else if (stage === "deliver") {
     S.activeFiles = SF[stage][c.delivery.method] || [];
   }
+  
   if (S.activeFiles.length > 0) S.selectedFile = S.activeFiles[0];
   else S.selectedFile = null;
-  if (stage === "retarget") S.inspectorTab = "config";
-  else if (stage === "export" || stage === "deliver") S.inspectorTab = "adapter";
+  
+  if (stage === "export" || stage === "deliver") S.inspectorTab = "adapter";
   else if (stage === "validate" && c.plugin) S.inspectorTab = "hooks";
   else S.inspectorTab = "data";
+  
   setActiveTab(S.inspectorTab);
   renderTree(); renderInspector();
 }
@@ -36,7 +38,18 @@ function clickStage(stage) {
 function onNext() {
   if (S.step === -1) { startSim(); return; }
   if (S.step >= STAGES.length) return;
+  
+  // Sticky packet logic: if we are viewing the packet, preserve that state
+  var wasInspectingPacket = (S.inspectorTab === "data" && S.selectedFile === null && S.packet !== null);
+  
   advanceStep();
+  
+  if (wasInspectingPacket) {
+    S.selectedFile = null;
+    S.inspectorTab = "data";
+    setActiveTab("data");
+    renderInspector();
+  }
 }
 
 function onReset() {
