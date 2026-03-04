@@ -1,0 +1,259 @@
+/* ═══════════════════════════════════════════
+   Pipeline Simulator v2 — React Flow Edition
+   ═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #22263a;
+  --border: #2a2e3e;
+  --text: #e0e4ec;
+  --text2: #94a3b8;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --success: #22c55e;
+  --warn: #f59e0b;
+  --error: #ef4444;
+  --critical: #f43f5e;
+  --plugin: #a78bfa;
+  --inspector-w: 380px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 220px 1fr var(--inspector-w);
+  grid-template-rows: 40px 1fr auto;
+  height: 100vh;
+  gap: 1px;
+  background: var(--border);
+}
+
+.nav { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--bg2); font-size: 13px; }
+.nav-title { font-weight: 700; font-size: 14px; color: var(--accent2); }
+.nav-badge { background: var(--accent); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+
+/* ── Files ── */
+.files { grid-column: 1; grid-row: 2 / 4; overflow-y: auto; background: var(--bg2); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+.files-header { padding: 8px 12px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); border-bottom: 1px solid var(--border); }
+.ftree-root { padding: 4px 0; }
+.ftree-dir { padding: 3px 8px 3px 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--text); }
+.ftree-dir:hover { background: var(--bg3); }
+.ftree-icon { width: 14px; text-align: center; font-size: 10px; }
+.ftree-folder { font-size: 12px; }
+.ftree-children { padding-left: 12px; }
+.ftree-file { padding: 3px 8px 3px 30px; cursor: pointer; color: var(--text2); display: flex; align-items: center; gap: 4px; }
+.ftree-file:hover { background: var(--bg3); color: var(--text); }
+.ftree-active { color: var(--accent2) !important; }
+.ftree-selected { background: var(--bg3) !important; color: var(--accent) !important; border-left: 2px solid var(--accent); }
+
+/* ── Pipeline ── */
+.pipeline { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+.control-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; flex-shrink: 0; }
+.control-bar label { color: var(--text2); font-weight: 500; }
+.control-bar select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-family: inherit; }
+.control-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.btn { padding: 4px 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; transition: all 0.15s; }
+.btn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:disabled:hover { background: var(--bg3); border-color: var(--border); color: var(--text); }
+.btn-send { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+.btn-send:hover { background: var(--accent2); }
+.btn-auto.active { background: var(--warn); border-color: var(--warn); color: #000; }
+.btn-fail { border-color: var(--error); color: var(--error); }
+.btn-fail:hover { background: var(--error); color: white; }
+.btn-fail.active-fail { background: var(--error); color: white; animation: pulse-fail 1s infinite; }
+@keyframes pulse-fail { 0%,100%{ opacity:1 } 50%{ opacity:0.7 } }
+
+/* ── Pipeline Graph (React Flow canvas) ── */
+.pgraph { flex: 1; overflow: hidden; position: relative; }
+.pgraph .react-flow__renderer { background: #161822 !important; }
+.pgraph .react-flow__controls { display: none; }
+
+/* ── File Location Bar ── */
+.file-location { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: var(--bg2); border-top: 1px solid var(--border); font-size: 12px; flex-shrink: 0; }
+.file-loc-path { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.file-loc-sep { color: var(--border); }
+.file-loc-storage { color: var(--accent2); cursor: pointer; transition: color 0.15s; }
+.file-loc-storage:hover { color: var(--accent); text-decoration: underline; }
+
+/* ── Pipeline Nodes ── */
+.snode {
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  position: relative;
+  min-width: 140px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.snode:hover { border-color: var(--accent); box-shadow: 0 0 12px rgba(99,102,241,.25); }
+.snode.active { border-color: var(--accent); background: linear-gradient(135deg, var(--bg2) 0%, #1e1b4b 100%); box-shadow: 0 0 20px rgba(99,102,241,.3); animation: node-glow 2s infinite; }
+.snode.completed { border-color: var(--success); background: linear-gradient(135deg, var(--bg2) 0%, #052e16 100%); }
+.snode.failed { border-color: var(--error); animation: shake 0.3s; }
+.snode.dimmed { opacity: 0.3; pointer-events: none; }
+@keyframes node-glow { 0%,100%{box-shadow:0 0 20px rgba(99,102,241,.3)} 50%{box-shadow:0 0 30px rgba(99,102,241,.5)} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+.sname { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 2px; }
+.ssub { font-size: 11px; color: var(--text2); }
+.sinfo { position: absolute; top: 4px; right: 6px; font-size: 12px; cursor: pointer; opacity: 0.4; transition: opacity 0.15s; }
+.sinfo:hover { opacity: 1; }
+.sbadge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--success); color: white; font-size: 11px; align-items: center; justify-content: center; font-weight: 700; }
+
+/* Hook ping animation */
+.hook-ping { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--plugin); white-space: nowrap; animation: hookFadeIn 0.5s ease; }
+@keyframes hookFadeIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* Validate checkers */
+.vchecks { display: flex; gap: 3px; justify-content: center; margin-top: 6px; }
+.vck { width: 20px; height: 20px; border-radius: 4px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--text2); transition: all 0.3s; }
+.vck.pass { background: var(--success); border-color: var(--success); color: white; }
+
+/* ── Convergence Node ── */
+.conv-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 280px; position: relative; padding: 0 12px; }
+.conv-v-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.conv-v-bar { width: 2px; height: 60px; background: linear-gradient(to bottom, var(--accent), var(--accent2)); opacity: 0.5; }
+.conv-label-v { writing-mode: vertical-lr; text-orientation: mixed; font-size: 10px; color: var(--accent2); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; padding: 8px 0; }
+
+/* ── Delivery Nodes ── */
+.dnode { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); transition: all 0.3s; min-width: 170px; }
+.dnode.active-dest { border-color: var(--accent); background: linear-gradient(135deg, var(--bg2) 0%, #1e1b4b 100%); cursor: pointer; }
+.dnode.active-dest:hover { box-shadow: 0 0 12px rgba(99,102,241,.3); }
+.dnode.inactive-dest { opacity: 0.3; }
+.dnode.nas-offline { border-color: var(--error); background: linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%); animation: pulse-fail 1.5s infinite; }
+.dname { font-weight: 500; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.ddest { font-size: 10px; color: var(--text2); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+/* Circuit Breaker dots */
+.cb-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; }
+.cb-dot.cb-closed { background: var(--success); }
+.cb-dot.cb-open { background: var(--error); animation: pulse-fail 0.5s infinite; }
+.cb-dot.cb-half { background: var(--warn); animation: pulse-fail 1s infinite; }
+
+/* Tech Labels */
+.tech-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; }
+.marker-label { color: #fbbf24; background: rgba(251,191,36,.1); }
+.markerless-label { color: #38bdf8; background: rgba(56,189,248,.1); }
+.tech-label.dimmed { opacity: 0.3; }
+
+/* ── Data Packet ── */
+.data-packet { display: inline-block; background: var(--bg3); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+.data-packet:hover { background: var(--accent); color: white; }
+
+/* ── Inspector ── */
+.inspector { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; background: var(--bg2); overflow: hidden; position: relative; }
+.inspector-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.inspector-tab { padding: 8px 14px; font-size: 12px; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; transition: all 0.15s; }
+.inspector-tab:hover { color: var(--text); background: var(--bg3); }
+.inspector-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.inspector-content { flex: 1; overflow-y: auto; padding: 12px; font-size: 12px; }
+.inspector-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--accent2); }
+.inspector-subtitle { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.inspector-empty { color: var(--text2); padding: 24px; text-align: center; }
+
+/* Hook entries */
+.hook-entry { padding: 4px 8px; background: var(--bg3); border-radius: 4px; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.hook-badge { color: var(--plugin); font-weight: 700; }
+
+/* Log partitions */
+.log-partitions { display: flex; flex-direction: column; gap: 12px; }
+.log-partition { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.log-partition-title { background: var(--bg3); padding: 4px 8px; font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.log-line { padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; border-bottom: 1px solid var(--border); }
+
+/* ── Console ── */
+.console-header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: var(--bg2); border-top: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--text2); flex-shrink: 0; }
+.btn-clear { background: none; border: 1px solid var(--border); color: var(--text2); padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+.btn-clear:hover { background: var(--bg3); color: var(--text); }
+.console { grid-column: 1 / -1; background: var(--bg); overflow-y: auto; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; max-height: 150px; }
+.log-entry { padding: 2px 0; display: flex; gap: 8px; align-items: baseline; }
+.log-ts { color: var(--text2); opacity: 0.5; font-size: 10px; flex-shrink: 0; }
+.log-loc { color: var(--text2); font-size: 10px; flex-shrink: 0; }
+.log-msg { flex: 1; }
+.log-info .log-msg { color: var(--text); }
+.log-success .log-msg { color: var(--success); }
+.log-warn .log-msg { color: var(--warn); }
+.log-error .log-msg { color: var(--error); }
+.log-critical .log-msg { color: var(--critical); font-weight: 600; }
+.log-plugin .log-msg { color: var(--plugin); }
+
+/* ── Modal ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); z-index: 100; display: none; justify-content: center; align-items: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.modal-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; }
+.modal-close:hover { color: var(--text); }
+.modal h3 { font-size: 16px; margin-bottom: 4px; color: var(--accent2); }
+.modal-sub { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+.modal-section { margin-bottom: 16px; }
+.modal-section p { font-size: 13px; line-height: 1.6; color: var(--text); }
+.modal-section h4 { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Syntax Highlighting ── */
+.py { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; }
+.ln { color: var(--text2); opacity: 0.4; display: inline-block; width: 2.5em; text-align: right; margin-right: 12px; user-select: none; }
+.kw { color: #c084fc; }
+.str { color: #86efac; }
+.cmt { color: #64748b; font-style: italic; }
+.dec { color: #fbbf24; }
+.self { color: #f472b6; }
+.num { color: #38bdf8; }
+
+/* ── JSON Tree ── */
+.jtree { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; }
+.jkey { color: #818cf8; }
+.jstr { color: #86efac; }
+.jnum { color: #38bdf8; }
+.jbool { color: #c084fc; }
+.jnull { color: #64748b; }
+.jbrace { color: var(--text2); }
+.jtoggle { cursor: pointer; color: var(--text2); margin: 0 4px; user-select: none; }
+.jtoggle:hover { color: var(--accent); }
+.jpreview { color: var(--text2); opacity: 0.5; font-size: 11px; }
+.jcollapsed { display: none; }
+.json-diff-add { background: rgba(34,197,94,.15); border-radius: 2px; padding: 0 2px; }
+.json-diff-mod { background: rgba(99,102,241,.15); border-radius: 2px; padding: 0 2px; }
+
+/* ── React Flow Overrides ── */
+.react-flow__node { background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; pointer-events: all !important; }
+.react-flow__pane { pointer-events: all; }
+.react-flow__edge { pointer-events: all; cursor: pointer; }
+.react-flow__edge-text { font-family: 'Inter', sans-serif; font-size: 10px; fill: var(--text); }
+.react-flow__edge-textbg { fill: #161822 !important; }
+.react-flow__background { opacity: 0.3; }
+.react-flow__attribution { display: none; }
+
+/* ── Edge Hover Labels ── */
+/* Labels hidden by default, shown on hover over the edge group OR when show-all-labels class is on container */
+.react-flow__edge .react-flow__edge-text,
+.react-flow__edge .react-flow__edge-textbg { 
+  fill-opacity: 0; 
+  transition: fill-opacity 0.2s ease; 
+  transform: translateY(-12px); /* Move above the line */
+}
+
+/* Show labels on hover of ANY edge (via parent class toggled in JS) */
+.show-all-labels .react-flow__edge .react-flow__edge-text { 
+  fill-opacity: 1; 
+}
+.show-all-labels .react-flow__edge .react-flow__edge-textbg { 
+  fill-opacity: 0.85; 
+}
+
+/* Widen hover hit-area on edge paths */
+.react-flow__edge.edge-hover-label .react-flow__edge-interaction { stroke-width: 25; }
+
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
