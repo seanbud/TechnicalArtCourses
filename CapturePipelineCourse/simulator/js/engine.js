@@ -166,7 +166,7 @@ function onNext() {
 function onReset() {
   stopAuto();
   S.step = -1; S.running = false; S.packet = null; S.hooksDone = [];
-  S.retries = 0; S.queueCount = 0; S.cbState = "CLOSED";
+  S.retries = 0; S.queueCount = 0; S.cbState = "CLOSED"; S.fatalError = null;
   S.activeFiles = []; S.selectedFile = null; S.valIdx = undefined;
   document.getElementById("btn-next").textContent = "▶ Start";
   document.getElementById("btn-next").disabled = false;
@@ -253,6 +253,8 @@ async function advanceStep() {
     if (S.chaosActive && S.chaosModes.includes("vendor")) {
       await new Promise(function(r) { setTimeout(r, 600); });
       log("critical", "[System] FATAL: Vendor SDK segmentation fault. Core dumped.", S.tech === "marker" ? "Stage" : "Cloud");
+      triggerFailPing(S.tech === "marker" ? "node-cleanup" : "ml-node-cleanup", "💥 CORE DUMPED");
+      S.fatalError = "cleanup";
       stopAuto(); document.getElementById("btn-next").disabled = true;
       renderGraph(); renderInspector(); return;
     }
@@ -287,13 +289,16 @@ async function advanceStep() {
         log("success", "Checker [" + checks[i] + "]: ✓ PASS", "Cloud");
       } else {
         log("error", "Checker [" + checks[i] + "]: ❌ FAIL (Config mismatch)", "Cloud");
+        triggerFailPing("node-validate", "❌ Config Mismatch");
         allPassed = false;
       }
       renderGraph();
     }
     if (!allPassed) {
+       S.fatalError = "validate";
        log("critical", "[System] Pipeline halted: Validation failed.", "Cloud");
        stopAuto(); document.getElementById("btn-next").disabled = true;
+       renderGraph();
        return;
     }
     if (c.plugin === "metaverse_client") { 
@@ -328,6 +333,7 @@ async function advanceStep() {
         S.retries = r;
         log("warn", "[System] Retrying NAS mount (attempt " + r + "/3)...", "Storage");
         renderGraph(); renderInspector();
+        triggerFailPing("dest-" + c.delivery.method, "⚠️ Retry " + r + "/3");
         await new Promise(function(res) { setTimeout(res, 800); });
       }
       S.cbState = "OPEN"; 

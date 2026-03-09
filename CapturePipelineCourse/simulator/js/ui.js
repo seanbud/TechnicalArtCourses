@@ -205,7 +205,7 @@ function renderGraph() {
       var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState] || "cb-closed";
       extra = ' <span class="cb-dot ' + cc + '"></span>';
     }
-    h += '<div class="dnode ' + cls + '"><div class="dname">' + d.icon + ' ' + d.label + extra + badge + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
+    h += '<div class="dnode ' + cls + '" id="dest-' + d.id + '"><div class="dname">' + d.icon + ' ' + d.label + extra + badge + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
   });
   
   if (S.queueCount > 0) {
@@ -258,9 +258,13 @@ function mkNode(stage, name, sub, active, pfx, extraCls, hooks) {
   extraCls = extraCls || "";
   hooks = hooks || [];
   var idx = STAGES.indexOf(stage);
-  var cls = (S.step === idx && active) ? "active" : (S.step > idx && active ? "completed" : "");
+  var isFailed = (S.fatalError === stage && active);
+  var cls = (S.step === idx && active && !isFailed) ? "active" : (S.step > idx && active ? "completed" : "");
   if (extraCls) cls += " " + extraCls;
-  var badge = (S.step > idx && active) ? '<span class="sbadge" style="display:flex">✓</span>' : "";
+  if (isFailed) cls += " failed";
+  var badge = (S.step > idx && active && !isFailed) ? '<span class="sbadge" style="display:flex">✓</span>' : "";
+  if (isFailed) badge = '<span class="sbadge" style="display:flex; background-color: var(--accent-red); border-color: var(--accent-red)">✕</span>';
+
   var fail = (stage === "deliver" && S.cbState === "OPEN") ? " failed" : "";
   
   var hooksHtml = "";
@@ -280,12 +284,34 @@ function mkNode(stage, name, sub, active, pfx, extraCls, hooks) {
 
 function mkNodeValidate(c) {
   var idx = 3;
-  var cls = S.step === idx ? "active" : (S.step > idx ? "completed" : "");
-  var badge = S.step > idx ? '<span class="sbadge" style="display:flex">✓</span>' : "";
+  var hasFailed = false;
+  if (S.step >= idx && S.packet && S.packet.validation_results) {
+    hasFailed = S.packet.validation_results.some(function(r) { return r.passed === false; });
+  }
+
+  var cls = S.step === idx && !hasFailed ? "active" : (S.step > idx ? "completed" : "");
+  if (hasFailed) cls += " failed";
+
+  var badge = "";
+  if (S.step > idx && !hasFailed) badge = '<span class="sbadge" style="display:flex">✓</span>';
+  else if (hasFailed) badge = '<span class="sbadge" style="display:flex; background-color: var(--accent-red); border-color: var(--accent-red)">✕</span>';
+
   var vcks = '<div class="vchecks">';
   ["N","S","F","R","I"].forEach(function(l, i) {
-    var passed = S.step > idx || (S.step === idx && S.valIdx !== undefined && i <= S.valIdx);
-    vcks += '<div class="vck' + (passed ? ' pass' : '') + '">' + (passed ? '✓' : l) + '</div>';
+    var passed = false;
+    var failed = false;
+
+    if (S.packet && S.packet.validation_results && S.packet.validation_results.length > i) {
+      passed = S.packet.validation_results[i].passed;
+      failed = !passed;
+    } else {
+      passed = S.step > idx || (S.step === idx && S.valIdx !== undefined && i <= S.valIdx);
+    }
+
+    var vClass = passed ? ' pass' : (failed ? ' fail' : '');
+    var vLabel = passed ? '✓' : (failed ? '✕' : l);
+    
+    vcks += '<div class="vck' + vClass + '">' + vLabel + '</div>';
   });
   vcks += '</div>';
   
@@ -530,4 +556,31 @@ function triggerHookPing(nodeId, hookName) {
   ping.style.top = y + "px";
   
   setTimeout(function() { ping.remove(); }, 1200);
+}
+
+function triggerFailPing(nodeId, msg) {
+  var node = document.getElementById(nodeId);
+  if (!node) return;
+  
+  node.classList.add("node-fail");
+  
+  var rect = node.getBoundingClientRect();
+  var ping = document.createElement("div");
+  ping.className = "fail-badge";
+  ping.textContent = msg;
+  document.body.appendChild(ping);
+  
+  // Center above the node
+  var x = rect.left + rect.width / 2;
+  var y = rect.top - 30;
+  // Offset appropriately
+  ping.style.left = (x) + "px"; // we'll use transform in css if needed, but for now absolute position
+  // Actually, wait, let's offset by half its width after it's in the DOM
+  
+  requestAnimationFrame(function() {
+      ping.style.left = (x - ping.offsetWidth / 2) + "px";
+      ping.style.top = y + "px";
+  });
+  
+  setTimeout(function() { if (ping) ping.remove(); node.classList.remove("node-fail"); }, 3000);
 }

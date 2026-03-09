@@ -360,6 +360,71 @@ pre {
     accent-color: var(--accent-red);
 }
 
+/* Phase 5 Micro Animations */
+.fail-badge {
+    position: absolute;
+    background: var(--accent-red);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 4px 15px rgba(248, 113, 113, 0.4);
+    z-index: 1000;
+    pointer-events: none;
+    animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, fadeOut 0.5s ease-in 2.5s forwards;
+}
+
+@keyframes popUp {
+    from {
+        opacity: 0;
+        transform: translate(0, 15px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(0, 0);
+    }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translate(0, -10px);
+    }
+}
+
+.node-fail {
+    border-color: var(--accent-red) !important;
+    box-shadow: 0 0 15px rgba(248, 113, 113, 0.4) !important;
+    animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes shake {
+
+    10%,
+    90% {
+        transform: translate3d(-1px, 0, 0);
+    }
+
+    20%,
+    80% {
+        transform: translate3d(2px, 0, 0);
+    }
+
+    30%,
+    50%,
+    70% {
+        transform: translate3d(-4px, 0, 0);
+    }
+
+    40%,
+    60% {
+        transform: translate3d(4px, 0, 0);
+    }
+}
+
 /* Row assignments: marker=row1, universal=row2, markerless=row3 */
 
 .tech-label {
@@ -735,6 +800,11 @@ pre {
 .vck.pass {
     background: var(--accent-green);
     color: #000
+}
+
+.vck.fail {
+    background: var(--accent-red);
+    color: #fff
 }
 
 /* Data packet + file location */
