@@ -48,6 +48,20 @@ function openModal(type, key) {
     sd = sd.replace(/\`(.*?)\`/g, '<code class="modal-code" onclick="pingFile(\'$1\')">$1</code>');
     
     body.innerHTML = '<div class="modal-section"><p>' + sd + '</p></div>';
+  } else if (type === "runbook" && RUNBOOKS[key]) {
+    var rInfo = RUNBOOKS[key];
+    title.textContent = "RUNBOOK";
+    title.style.color = "var(--accent-red)";
+    sub.innerHTML = '<span class="sbadge" style="position:static;display:inline-flex;margin-right:6px">📖</span> ' + rInfo.title;
+    
+    // Process markdown-ish bold and code and headers
+    var rd = rInfo.desc
+        .replace(/^## (.*$)/gim, '<h2 style="font-size:14px; margin: 12px 0 6px 0; color:var(--text-primary)">$1</h2>')
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+        .replace(/\`(.*?)\`/g, '<code class="modal-code">$1</code>')
+        .replace(/^\d+\. (.*$)/gim, '<div style="margin-bottom:6px; padding-left:14px; text-indent:-14px;">• $1</div>');
+    
+    body.innerHTML = '<div class="modal-section" style="border-left:3px solid var(--accent-red); padding-left:12px;"><p>' + rd + '</p></div>';
   } else if (type === "packet" && S.packet) { 
     title.textContent = "Data Packet — " + S.packet.take_name;
     sub.textContent = "After stage: " + (STAGES[S.step] || "complete");

@@ -17,25 +17,103 @@ var S = {
   queueCount: 0,
   hooksDone: [],
   nasEnabled: true,
+  chaosActive: false,
+  chaosModes: [],
   prevPacket: null,
   focusTarget: null,
   logView: "sequential"
 };
 
-function toggleFailure() {
-  S.nasEnabled = !S.nasEnabled;
-  var btn = document.getElementById("btn-fail");
-  if (S.nasEnabled) {
-    btn.classList.remove("active-fail");
-    btn.innerHTML = "💥 NAS Failure";
-    log("info", "[System] NAS Storage restored. Circuit Breaker resetting...");
-    if (S.cbState === "OPEN") S.cbState = "HALF_OPEN";
+function toggleChaosMain() {
+  S.chaosActive = !S.chaosActive;
+  var btnMain = document.getElementById("btn-chaos-main");
+  var btnDrop = document.getElementById("btn-chaos-drop");
+  var menu = document.getElementById("chaos-menu");
+  
+  if (S.chaosActive) {
+    btnMain.classList.add("active");
+    btnMain.innerHTML = "🔴 Chaos: ON";
+    btnDrop.disabled = false;
+    log("warn", "[System] Chaos Event generator activated.");
+    updateChaosSelection(); // Apply currently selected
   } else {
-    btn.classList.add("active-fail");
-    btn.innerHTML = "🚨 NAS OFFLINE";
-    log("critical", "[System] Simulated NAS Hardware Failure initiated!");
+    btnMain.classList.remove("active");
+    btnMain.innerHTML = "⚪ Chaos: OFF";
+    btnDrop.disabled = true;
+    menu.classList.remove("show"); // Hide menu if open
+    
+    // Clear all
+    log("success", "[System] Chaos events cleared. Systems recovering...");
+    if (!S.nasEnabled) {
+      S.nasEnabled = true;
+      if (S.cbState === "OPEN") {
+         S.cbState = "HALF_OPEN";
+         log("info", "[System] NAS Storage restored. Circuit Breaker testing connection...", "System");
+         renderGraph(); renderInspector();
+         // Async flush
+         setTimeout(function() {
+             S.cbState = "CLOSED";
+             log("success", "[System] Circuit Breaker: CLOSED (Service Healthy)", "System");
+             renderGraph(); renderInspector();
+             
+             if (S.queueCount > 0) {
+                 log("info", "[Sweeper Daemon] Waking up to process fallback queue...", "System");
+                 setTimeout(function() {
+                     var c = CL[S.client];
+                     S.packet.delivery_timestamp = new Date().toISOString();
+                     S.queueCount = 0;
+                     log("success", "[Sweeper Daemon] Emptied fallback queue. All files safely on NAS.", "System");
+                     document.getElementById("btn-next").disabled = false;
+                     renderGraph(); renderInspector();
+                     
+                     // Advance simulation to complete
+                     setTimeout(function() { advanceStep(); }, 1000);
+                 }, 1500);
+             }
+         }, 1000);
+      }
+    }
   }
+  
+  if (S.inspectorTab === "health" || S.inspectorTab === "adapter") renderInspector();
 }
+
+function toggleChaosMenu() {
+  document.getElementById("chaos-menu").classList.toggle("show");
+}
+
+function updateChaosSelection() {
+  if (!S.chaosActive) return; // Only apply if master is on
+  
+  var checkboxes = document.querySelectorAll('.chaos-dropdown-item input[type="checkbox"]');
+  S.chaosModes = [];
+  S.nasEnabled = true; // reset to true, evaluate below
+  
+  checkboxes.forEach(function(cb) {
+    if (cb.checked) {
+      S.chaosModes.push(cb.value);
+      if (cb.value === "nas") {
+        S.nasEnabled = false;
+        log("critical", "[System] Simulated NAS Hardware Failure initiated!");
+      } else if (cb.value === "vendor") {
+        log("error", "[System] Simulated Vendor SDK Segfault armed (Cleanup stage).");
+      } else if (cb.value === "config") {
+        log("warn", "[System] Simulated Config Corruption armed (Validate stage).");
+      }
+    }
+  });
+  
+  if (S.inspectorTab === "health" || S.inspectorTab === "adapter") renderInspector();
+}
+
+// Close menu if clicked outside
+document.addEventListener('click', function(e) {
+  var container = document.getElementById("chaos-container");
+  if (container && !container.contains(e.target)) {
+    var menu = document.getElementById("chaos-menu");
+    if (menu && menu.classList.contains("show")) menu.classList.remove("show");
+  }
+});
 
 function clickStage(stage, preserveSelection) {
   // Sticky packet logic: if we are viewing the packet, preserve that state
@@ -116,7 +194,7 @@ function stopAuto() {
 }
 
 function scheduleAutoNext() {
-  if (!S.autoPlay || S.step >= STAGES.length - 1) { stopAuto(); return; }
+  if (!S.autoPlay || S.step >= STAGES.length) { stopAuto(); return; }
   S.autoTimer = setTimeout(function() { advanceStep(); scheduleAutoNext(); }, 2500);
 }
 
@@ -172,6 +250,13 @@ async function advanceStep() {
     await new Promise(function(r) { setTimeout(r, 400); });
     log("info", (S.tech === "marker" ? "MarkerIngest" : "MarkerlessIngest") + ": reading " + S.packet.source_file, "Stage");
   } else if (stage === "cleanup") {
+    if (S.chaosActive && S.chaosModes.includes("vendor")) {
+      await new Promise(function(r) { setTimeout(r, 600); });
+      log("critical", "[System] FATAL: Vendor SDK segmentation fault. Core dumped.", S.tech === "marker" ? "Stage" : "Cloud");
+      stopAuto(); document.getElementById("btn-next").disabled = true;
+      renderGraph(); renderInspector(); return;
+    }
+    
     S.packet.cleanup_applied = S.tech === "marker"
       ? ["marker_swap_fix (3)", "gap_fill (12)", "butterworth (6Hz)"]
       : ["temporal_smooth", "bone_stabilize", "contact_est", "conf_filter"];
@@ -192,12 +277,24 @@ async function advanceStep() {
   } else if (stage === "validate") {
     S.valIdx = -1; S.packet.validation_results = [];
     var checks = ["naming","skeleton","frames","root","integrity"];
+    var allPassed = true;
     for (var i = 0; i < checks.length; i++) {
       await new Promise(function(r) { setTimeout(r, 300); });
       S.valIdx = i;
-      S.packet.validation_results.push({checker: checks[i], passed: true});
-      log("success", "Checker [" + checks[i] + "]: ✓ PASS", "Cloud");
+      var passed = (S.chaosActive && S.chaosModes.includes("config") && i >= 1) ? false : true;
+      S.packet.validation_results.push({checker: checks[i], passed: passed});
+      if (passed) {
+        log("success", "Checker [" + checks[i] + "]: ✓ PASS", "Cloud");
+      } else {
+        log("error", "Checker [" + checks[i] + "]: ❌ FAIL (Config mismatch)", "Cloud");
+        allPassed = false;
+      }
       renderGraph();
+    }
+    if (!allPassed) {
+       log("critical", "[System] Pipeline halted: Validation failed.", "Cloud");
+       stopAuto(); document.getElementById("btn-next").disabled = true;
+       return;
     }
     if (c.plugin === "metaverse_client") { 
       await new Promise(function(r) { setTimeout(r, 200); });
@@ -224,8 +321,8 @@ async function advanceStep() {
       triggerHookPing("node-export", "post_export");
     }
   } else if (stage === "deliver") {
-    // Logic for NAS Failure injection
-    if (!S.nasEnabled && c.delivery.method === "nas") {
+    // Logic for Storage Failure injection
+    if (!S.nasEnabled) {
       log("error", "[System] NASDelivery: connection timeout (SMB Error 0x80070035)", "Storage");
       for (var r = 1; r <= 3; r++) {
         S.retries = r;
@@ -238,17 +335,8 @@ async function advanceStep() {
       S.queueCount = 1; 
       log("info", "[System] High-Availability: Queued take to local staging SSD.", "Stage");
       renderGraph(); renderInspector();
-      await new Promise(function(res) { setTimeout(res, 1500); });
-      
-      // Auto-restore after error demo
-      S.cbState = "HALF_OPEN"; 
-      log("warn", "[System] Circuit Breaker: HALF_OPEN (Testing heartbeat)", "System");
-      renderGraph(); renderInspector();
-      await new Promise(function(res) { setTimeout(res, 1000); });
-      
-      S.cbState = "CLOSED"; S.queueCount = 0;
-      log("success", "[System] Circuit Breaker: CLOSED (Healed)", "System");
-      log("info", "[System] Flushing staging queue to NAS...", "Storage");
+      stopAuto(); document.getElementById("btn-next").disabled = true;
+      return;
     }
 
     S.packet.delivery_method = c.delivery.method;

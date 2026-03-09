@@ -570,3 +570,49 @@ const STORAGE_INFO = {
   }
 };
 
+const RUNBOOKS = {
+  nas_runbook: {
+    title: "NAS Primary Storage Failure",
+    desc: `## Severity: CRITICAL
+## Time to Resolve Target: 10 minutes
+
+## Symptoms
+- Health monitor alert: "NAS: //nas01/captures/ — DOWN"
+- Delivery bot logs showing CircuitOpenError
+- Queued files accumulating in /tmp/capture_queue/
+
+## Immediate Actions
+1. **Check Slack** — Is IT already aware? (#infra-alerts)
+2. **Verify** — Can you ping the NAS? \`ping nas01.internal\`
+3. **Check mount** — Is the SMB share still mounted? \`mount | grep nas01\`
+4. **If remount fails** — Contact IT Support IMMEDIATELY.`
+  },
+  vendor_runbook: {
+    title: "Vendor Engine SDK Crash",
+    desc: `## Severity: HIGH
+## Time to Resolve Target: 30 minutes
+
+## Symptoms
+- CleanUp stage throws FATAL SDK segmentation fault.
+- Core dumped logs on Stage client.
+
+## Immediate Actions
+1. **Rollback SDK** — Use the deployment symlink to rollback the Vendor API. \`ln -sfn /pipeline/v2.3 /pipeline/current\`
+2. **Contact Vendor** — Open a support ticket with the crash dump logs.
+3. **Notify Stage** — Let actors know: "We are rolling back the solver engine. Processing will resume in 5 minutes."`
+  },
+  config_runbook: {
+    title: "Config Database Corruption",
+    desc: `## Severity: MEDIUM
+## Time to Resolve Target: 15 minutes
+
+## Symptoms
+- Validation stage failing on multiple checks across all games.
+- Config parser throwing mismatched target errors.
+
+## Immediate Actions
+1. **Re-sync Perforce** — The config file relies on Perforce depot definitions. \`p4 sync -f //depot/config/...\`
+2. **Check recent submits** — Did a Technical Artist accidentally push a bad config?
+3. **Revert** — If a bad config was pushed, revert the changelist and alert the team.`
+  }
+};
