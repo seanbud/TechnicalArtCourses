@@ -513,7 +513,7 @@ const STAGE_INFO = {
 const SF = {
   ingest:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/pipeline/plugin_manager.py","capture_pipeline/pipeline/client_registry.py","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/pipeline/plugin_manager.py","capture_pipeline/pipeline/client_registry.py","capture_pipeline/adapters/moveai_ingest.py"]},
   cleanup:{marker:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/vicon_ingest.py"],markerless:["capture_pipeline/pipeline/core.py","capture_pipeline/adapters/moveai_ingest.py"]},
-  retarget:{both:["capture_pipeline/pipeline/README.md","capture_pipeline/pipeline/retarget.py"]},validate:{both:["capture_pipeline/pipeline/validation.py"]},
+  retarget:{both:["capture_pipeline/pipeline/retarget.py"]},validate:{both:["capture_pipeline/pipeline/validation.py"]},
   export:{fbx:["capture_pipeline/adapters/fbx_export.py"],gltf:["capture_pipeline/adapters/gltf_export.py"]},
   deliver:{perforce:["capture_pipeline/adapters/p4_delivery.py","capture_pipeline/scripts/delivery_bot.py"],nas:["capture_pipeline/adapters/nas_delivery.py","capture_pipeline/scripts/delivery_bot.py"],s3:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"],sftp:["capture_pipeline/adapters/s3_delivery.py","capture_pipeline/scripts/delivery_bot.py"]}
 };
