@@ -185,6 +185,16 @@ function renderGraph() {
     var cls = isActive ? "active-dest" : "inactive-dest";
     if (isNasOffline && isActive) cls += " nas-offline";
     
+    var badge = "";
+    if (isActive && S.step >= 5) {
+      if (S.cbState === "OPEN") {
+        cls += " failed";
+      } else if (S.packet && S.packet.delivery_timestamp) {
+        cls += " completed";
+        badge = '<span class="sbadge" style="display:flex; position:static; margin-left:6px; transform:translateY(-1px)">✓</span>';
+      }
+    }
+    
     var dest = "";
     if (d.id === "perforce") dest = c.delivery.depot_path || "";
     else if (d.id === "nas") dest = c.delivery.nas_path || "";
@@ -195,7 +205,7 @@ function renderGraph() {
       var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState] || "cb-closed";
       extra = ' <span class="cb-dot ' + cc + '"></span>';
     }
-    h += '<div class="dnode ' + cls + '"><div class="dname">' + d.icon + ' ' + d.label + extra + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
+    h += '<div class="dnode ' + cls + '"><div class="dname">' + d.icon + ' ' + d.label + extra + badge + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
   });
   h += '</div>';
 

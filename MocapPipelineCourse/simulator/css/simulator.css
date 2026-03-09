@@ -549,7 +549,7 @@ pre {
 
 .darrow-label {
     font-size: .58rem;
-    color: var(--accent-green);
+    color: var(--accent-blue);
     margin-bottom: 2px;
     font-weight: 600
 }
@@ -565,8 +565,8 @@ pre {
 }
 
 .dnode.active-dest {
-    border-color: var(--accent-green);
-    box-shadow: 0 0 10px rgba(52, 211, 153, .1)
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 10px rgba(96, 165, 250, .2)
 }
 
 .dnode.inactive-dest {
@@ -574,10 +574,33 @@ pre {
     border-style: dashed
 }
 
+.dnode.completed {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 10px rgba(52, 211, 153, .15)
+}
+
+.dnode.failed {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 10px rgba(248, 113, 113, .1);
+    animation: flashFail 1s infinite alternate
+}
+
+@keyframes flashFail {
+    from {
+        box-shadow: 0 0 5px rgba(248, 113, 113, .1);
+    }
+
+    to {
+        box-shadow: 0 0 15px rgba(248, 113, 113, .4);
+    }
+}
+
 .dnode .dname {
     font-weight: 600;
     color: var(--text-primary);
-    font-size: .7rem
+    font-size: .7rem;
+    display: flex;
+    align-items: center
 }
 
 .dnode .ddest {
