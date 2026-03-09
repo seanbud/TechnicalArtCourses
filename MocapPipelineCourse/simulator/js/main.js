@@ -102,25 +102,49 @@ function closeModal(e) {
   document.getElementById("modal-overlay").classList.remove("open");
 }
 
-// ── Resize handle ──
+// ── Resize handles ──
 (function() {
-  var handle = document.getElementById("resize-handle");
+  // Vertical inspector resize
+  var handleV = document.getElementById("resize-handle");
   var app = document.querySelector(".app");
-  var dragging = false, startX, startW;
-  handle.addEventListener("mousedown", function(e) {
-    dragging = true; startX = e.clientX;
+  var draggingV = false, startX, startW;
+  handleV.addEventListener("mousedown", function(e) {
+    draggingV = true; startX = e.clientX;
     startW = document.querySelector(".inspector").offsetWidth;
-    handle.classList.add("dragging"); e.preventDefault();
+    handleV.classList.add("dragging"); e.preventDefault();
   });
   document.addEventListener("mousemove", function(e) {
-    if (!dragging) return;
-    var diff = startX - e.clientX;
-    var nw = Math.min(600, Math.max(320, startW + diff));
-    app.style.setProperty("--inspector-w", nw + "px");
+    if (draggingV) {
+      var diff = startX - e.clientX;
+      var nw = Math.min(600, Math.max(320, startW + diff));
+      app.style.setProperty("--inspector-w", nw + "px");
+    }
   });
   document.addEventListener("mouseup", function() {
-    if (dragging) { dragging = false; handle.classList.remove("dragging"); }
+    if (draggingV) { draggingV = false; handleV.classList.remove("dragging"); }
   });
+  
+  // Horizontal console resize
+  var handleH = document.getElementById("console-resize");
+  var draggingH = false, startY, startH;
+  if(handleH) {
+    handleH.addEventListener("mousedown", function(e) {
+      draggingH = true; startY = e.clientY;
+      startH = document.querySelector(".console-pane").offsetHeight;
+      handleH.classList.add("dragging"); e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (draggingH) {
+        var diff = startY - e.clientY;
+        // Limit console height between 100px and 600px
+        var nh = Math.min(600, Math.max(100, startH + diff));
+        app.style.setProperty("--console-h", nh + "px");
+      }
+    });
+    document.addEventListener("mouseup", function() {
+      if (draggingH) { draggingH = false; handleH.classList.remove("dragging"); }
+    });
+  }
 })();
 
 // ── Init ──

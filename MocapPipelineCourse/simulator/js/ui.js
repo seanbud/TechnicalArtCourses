@@ -400,14 +400,41 @@ function renderInspector() {
     });
     body.innerHTML = html;
   } else if (t === "logs") {
-    var stage = S.step >= 0 ? STAGES[S.step] : null;
-    var f = S.logs.filter(function(l) { return !stage || l.stage === stage; });
-    body.innerHTML = '<div class="inspector-label">Logs' + (stage ? ' — ' + stage : '') + 
-      ' <button class="btn-clear" onclick="clearLogs()" title="Clear all logs">Clear</button></div>' +
-      f.map(function(l) { 
+    var f = S.logs;
+    
+    var selHtml = '<select class="log-view-sel" onchange="S.logView=this.value;renderInspector()">' +
+                    '<option value="sequential" ' + (S.logView==='sequential'?'selected':'') + '>Sequential</option>' +
+                    '<option value="categorized" ' + (S.logView==='categorized'?'selected':'') + '>Categorized</option>' +
+                  '</select>';
+
+    var header = '<div class="inspector-label" style="display:flex;justify-content:space-between;align-items:center">' +
+                 '<span>Logs</span>' +
+                 '<div>' + selHtml + '<button class="btn-clear" onclick="clearLogs()" title="Clear all logs">Clear</button></div></div>';
+    
+    var logsHtml = "";
+    if (S.logView === "categorized") {
+      var buckets = {};
+      f.forEach(function(l) {
+        var loc = l.nodeLoc || "System";
+        if (!buckets[loc]) buckets[loc] = [];
+        buckets[loc].push(l);
+      });
+      // Sort keys alphabetically
+      var locs = Object.keys(buckets).sort();
+      locs.forEach(function(loc) {
+        logsHtml += '<div style="margin: 8px 0 4px 0"><span class="l-badge lb-' + loc.toLowerCase() + '">' + loc + '</span></div>';
+        logsHtml += buckets[loc].map(function(l) {
+          return '<div class="log-entry ' + l.level + '" style="padding-left:10px;border-left:1px solid var(--border)"><span class="ts">' + l.time + '</span> <span class="msg">' + l.msg + '</span></div>';
+        }).join("");
+      });
+    } else {
+      logsHtml = f.map(function(l) { 
         var b = l.nodeLoc ? '<span class="l-badge lb-' + l.nodeLoc.toLowerCase() + '">' + l.nodeLoc + '</span>' : '';
         return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> ' + b + '<span class="msg">' + l.msg + '</span></div>'; 
       }).join("");
+    }
+    
+    body.innerHTML = header + logsHtml;
   }
   
   if (S.focusTarget) {
@@ -429,10 +456,19 @@ function log(level, msg, nodeLoc, stage) {
   var now = new Date();
   var time = '[' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0') + ']';
   S.logs.push({time:time, level:level, msg:msg, nodeLoc:nodeLoc, stage:stage || STAGES[S.step] || null});
+  
+  // Real-time update for both panels
   var el = document.getElementById("console-log");
-  var b = nodeLoc ? '<span class="l-badge lb-' + nodeLoc.toLowerCase() + '">' + nodeLoc + '</span>' : '';
-  el.innerHTML += '<div class="log-entry ' + level + '"><span class="ts">' + time + '</span> ' + b + '<span class="msg">' + msg + '</span></div>';
-  el.scrollTop = el.scrollHeight;
+  if (el) {
+    var b = nodeLoc ? '<span class="l-badge lb-' + nodeLoc.toLowerCase() + '">' + nodeLoc + '</span>' : '';
+    el.innerHTML += '<div class="log-entry ' + level + '"><span class="ts">' + time + '</span> ' + b + '<span class="msg">' + msg + '</span></div>';
+    el.scrollTop = el.scrollHeight;
+  }
+  
+  // Force a render tick if we are looking at logs during simulation looping
+  if (S.inspectorTab === "logs") {
+     renderInspector();
+  }
 }
 
 function triggerHookPing(nodeId, hookName) {

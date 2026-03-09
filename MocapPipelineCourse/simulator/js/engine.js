@@ -18,7 +18,8 @@ var S = {
   hooksDone: [],
   nasEnabled: true,
   prevPacket: null,
-  focusTarget: null
+  focusTarget: null,
+  logView: "sequential"
 };
 
 function toggleFailure() {
@@ -39,6 +40,7 @@ function toggleFailure() {
 function clickStage(stage, preserveSelection) {
   // Sticky packet logic: if we are viewing the packet, preserve that state
   var wasInspectingPacket = (S.inspectorTab === "data" && S.selectedFile === null && S.packet !== null);
+  var isInspectingLogs = (S.inspectorTab === "logs");
 
   var idx = STAGES.indexOf(stage);
   var c = CL[S.client];
@@ -62,9 +64,14 @@ function clickStage(stage, preserveSelection) {
   else S.inspectorTab = "data";
 
   // Override defaults if sticky selection is requested and active
-  if (preserveSelection && wasInspectingPacket) {
-    S.selectedFile = null;
-    S.inspectorTab = "data";
+  if (preserveSelection) {
+    if (wasInspectingPacket) {
+      S.selectedFile = null;
+      S.inspectorTab = "data";
+    } else if (isInspectingLogs) {
+      S.selectedFile = null;
+      S.inspectorTab = "logs";
+    }
   }
   
   setActiveTab(S.inspectorTab);
