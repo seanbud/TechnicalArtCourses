@@ -6,7 +6,7 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function highlightPy(code) {
+function highlightPy(code, focusTarget) {
   // Tokenizer approach: extract strings & comments as atomic tokens first,
   // then apply keyword highlighting only to remaining code fragments.
   // This prevents the double-wrapping bug with docstrings.
@@ -14,6 +14,15 @@ function highlightPy(code) {
   var src = code;
   var out = '';
   var i = 0;
+  
+  var rawLines = src.split('\n');
+  var hlIndex = -1;
+  if (focusTarget) {
+     for (var l = 0; l < rawLines.length; l++) {
+        if (rawLines[l].includes(focusTarget)) { hlIndex = l; break; }
+     }
+  }
+
   while (i < src.length) {
     // Triple-quoted strings (""" or ''')
     if (src.slice(i, i+3) === '"""' || src.slice(i, i+3) === "'''") {
@@ -22,7 +31,7 @@ function highlightPy(code) {
       if (end === -1) end = src.length - 3;
       var tok = src.slice(i, end+3);
       var ph = '\x00T' + tokens.length + '\x00';
-      tokens.push('<span class="str">' + esc(tok) + '</span>');
+      tokens.push(esc(tok).split('\n').map(function(l) { return '<span class="str">' + l + '</span>'; }).join('\n'));
       out += ph; i = end + 3;
     }
     // f-strings or regular strings
@@ -63,8 +72,10 @@ function highlightPy(code) {
   // Split into lines and add line numbers
   var lines = h.split('\n');
   var lineH = lines.map(function(line, idx) {
-    return '<span class="ln">' + (idx + 1) + '</span>' + line;
-  }).join('\n');
+    var isFocus = idx === hlIndex;
+    var ext = isFocus ? ' id="focus-target" class="code-focus"' : '';
+    return '<div' + ext + '><span class="ln">' + (idx + 1) + '</span>' + line + '</div>';
+  }).join('');
 
   return '<pre class="py">' + lineH + '</pre>';
 }

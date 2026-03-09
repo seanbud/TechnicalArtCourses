@@ -17,7 +17,8 @@ var S = {
   queueCount: 0,
   hooksDone: [],
   nasEnabled: true,
-  prevPacket: null
+  prevPacket: null,
+  focusTarget: null
 };
 
 function toggleFailure() {

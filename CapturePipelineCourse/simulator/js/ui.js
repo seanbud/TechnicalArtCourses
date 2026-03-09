@@ -92,8 +92,9 @@ function toggleDir(p, e) {
   renderTree();
 }
 
-function selectFile(p) {
+function selectFile(p, focusTarget) {
   S.selectedFile = p;
+  S.focusTarget = focusTarget || null;
   var app = document.querySelector(".app");
   if (p.includes("config/clients/")) {
     var id = p.split("/").pop().replace(".json","");
@@ -360,7 +361,7 @@ function renderInspector() {
         
         body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div><div class="md-view" style="padding:10px"><p>' + mdHTML + '</p></div>';
       } else {
-        body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw);
+        body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw, S.focusTarget);
       }
     } else if (S.packet) {
       body.innerHTML = '<div class="inspector-label">CaptureResult — after ' + (STAGES[S.step] || 'idle') + '</div><div class="jtree">' + buildJsonTree(S.packet, 0, S.prevPacket || undefined) + '</div>';
@@ -380,9 +381,9 @@ function renderInspector() {
     var delFile = "capture_pipeline/adapters/" + ({perforce:"p4",nas:"nas",s3:"s3",sftp:"sftp"})[c.delivery.method] + "_delivery.py";
     
     body.innerHTML = '<div class="inspector-label">Active Adapters</div>' +
-      '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + expFile + '\')" title="Click to view code">' +
+      '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + expFile + '\', \'class ' + getExpAdapter(c) + '\')" title="Click to view code">' +
       '<h4>Export: ' + exp + '</h4><p>Pattern: Adapter + Factory</p><p>Format: ' + c.export.format.toUpperCase() + ' ' + (c.export.fbx_version || '') + '</p></div>' +
-      '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + delFile + '\')" title="Click to view code">' +
+      '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + delFile + '\', \'class ' + getDelAdapter(c) + '\')" title="Click to view code">' +
       '<h4>Delivery: ' + del + '</h4><p>Dest: ' + getDest(c) + '</p><p>Slack: ' + c.delivery.slack + '</p>' + cb + '</div>';
   } else if (t === "hooks") {
     if (!c.plugin) {
@@ -394,7 +395,7 @@ function renderInspector() {
     hooks.forEach(function(k) {
       var done = S.hooksDone.includes(k);
       var pPath = "capture_pipeline/plugins/" + c.plugin + ".py";
-      html += '<div class="hook-item" style="cursor:pointer" onclick="selectFile(\'' + pPath + '\')" title="Click to view code">' +
+      html += '<div class="hook-item" style="cursor:pointer" onclick="selectFile(\'' + pPath + '\', \'def ' + k + '\')" title="Click to view code">' +
         '<span class="' + (done ? 'hook-done' : 'hook-pending') + '">' + (done ? '✓' : '○') + '</span> ' + k + '()</div>';
     });
     body.innerHTML = html;
@@ -407,6 +408,13 @@ function renderInspector() {
         var b = l.nodeLoc ? '<span class="l-badge lb-' + l.nodeLoc.toLowerCase() + '">' + l.nodeLoc + '</span>' : '';
         return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> ' + b + '<span class="msg">' + l.msg + '</span></div>'; 
       }).join("");
+  }
+  
+  if (S.focusTarget) {
+    setTimeout(function() {
+      var el = document.getElementById("focus-target");
+      if (el) el.scrollIntoView({behavior: "smooth", block: "center"});
+    }, 50);
   }
 }
 

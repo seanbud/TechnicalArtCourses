@@ -1016,6 +1016,24 @@ pre {
     font-style: italic
 }
 
+.code-focus {
+    background: rgba(52, 211, 153, 0.15);
+    border-left: 3px solid var(--accent-green);
+    display: inline-block;
+    min-width: 100%;
+    animation: flashFocus 1s ease-out
+}
+
+@keyframes flashFocus {
+    0% {
+        background: rgba(52, 211, 153, 0.5);
+    }
+
+    100% {
+        background: rgba(52, 211, 153, 0.15);
+    }
+}
+
 /* ═══ CONSOLE ═══ */
 .console {
     grid-area: console;
