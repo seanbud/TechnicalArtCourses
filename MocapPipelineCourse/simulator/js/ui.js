@@ -136,7 +136,7 @@ function renderGraph() {
        mkNode("ingest", "Ingest", "Vicon .c3d", isMk) + '</div>';
   h += '<div style="grid-row:1;grid-column:2" class="parrow ' + (S.step >= 1 && isMk ? 'active-arrow' : '') + ' ' + (isMk ? '' : 'dimmed') + '">→<span class="arrow-tip">Raw CaptureResult</span></div>';
   h += '<div style="grid-row:1;grid-column:3" class="' + (isMk ? '' : 'dimmed') + '">' + mkNode("cleanup", "Cleanup", "Swap Fix / Gap Fill", isMk, "", "last-cleanup") + '</div>';
-  h += '<div style="grid-row:1;grid-column:4;align-self:center" class="parrow tight-arrow ' + (isMk ? '' : 'dimmed') + '">→</div>';
+  h += '<div style="grid-row:1;grid-column:4;align-self:center" class="parrow tight-arrow ' + (S.step >= 2 && isMk ? 'active-arrow' : '') + ' ' + (isMk ? '' : 'dimmed') + '">→</div>';
 
   // ROW 3 — Markerless path
   h += '<div style="grid-row:3;grid-column:1;position:relative;display:flex;align-items:center;justify-content:center" class="' + (isMk ? 'dimmed' : '') + '">' +
@@ -144,7 +144,7 @@ function renderGraph() {
        mkNode("ingest", "Ingest", "Move.ai Video", !isMk, "ml-") + '</div>';
   h += '<div style="grid-row:3;grid-column:2" class="parrow ' + (S.step >= 1 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→<span class="arrow-tip">Raw CaptureResult</span></span></div>';
   h += '<div style="grid-row:3;grid-column:3" class="' + (isMk ? 'dimmed' : '') + '">' + mkNode("cleanup", "Cleanup", "ML Jitter Filter", !isMk, "ml-", "last-cleanup") + '</div>';
-  h += '<div style="grid-row:3;grid-column:4;align-self:center" class="parrow tight-arrow ' + (isMk ? 'dimmed' : '') + '">→</div>';
+  h += '<div style="grid-row:3;grid-column:4;align-self:center" class="parrow tight-arrow ' + (S.step >= 2 && !isMk ? 'active-arrow' : '') + ' ' + (isMk ? 'dimmed' : '') + '">→</div>';
 
   // COLUMN 5 — Convergence (Spans 3 rows)
   h += '<div class="conv-cell" style="grid-row:1/4;grid-column:5">';
@@ -376,8 +376,8 @@ function renderInspector() {
       var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState];
       cb = '<p>Circuit Breaker: <span class="cb-dot ' + cc + '" style="display:inline-block"></span> ' + S.cbState + '</p><p>Retries: ' + S.retries + ' | Queued: ' + S.queueCount + '</p>';
     }
-    var expFile = c.export.format === "gltf" ? "adapters/gltf_export.py" : "adapters/fbx_export.py";
-    var delFile = "adapters/" + ({perforce:"p4",nas:"nas",s3:"s3",sftp:"s3"})[c.delivery.method] + "_delivery.py";
+    var expFile = c.export.format === "gltf" ? "capture_pipeline/adapters/gltf_export.py" : "capture_pipeline/adapters/fbx_export.py";
+    var delFile = "capture_pipeline/adapters/" + ({perforce:"p4",nas:"nas",s3:"s3",sftp:"sftp"})[c.delivery.method] + "_delivery.py";
     
     body.innerHTML = '<div class="inspector-label">Active Adapters</div>' +
       '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + expFile + '\')" title="Click to view code">' +
@@ -393,7 +393,7 @@ function renderInspector() {
     var html = '<div class="inspector-label">Plugin: ' + c.plugin + '.py</div>';
     hooks.forEach(function(k) {
       var done = S.hooksDone.includes(k);
-      var pPath = "plugins/" + c.plugin + ".py";
+      var pPath = "capture_pipeline/plugins/" + c.plugin + ".py";
       html += '<div class="hook-item" style="cursor:pointer" onclick="selectFile(\'' + pPath + '\')" title="Click to view code">' +
         '<span class="' + (done ? 'hook-done' : 'hook-pending') + '">' + (done ? '✓' : '○') + '</span> ' + k + '()</div>';
     });
