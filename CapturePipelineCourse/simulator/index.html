@@ -1,94 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pipeline Simulator | EA Capture Prep</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/simulator.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipeline Simulator | EA Capture Prep</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/simulator.css">
 </head>
+
 <body>
-<div class="app">
-  <!-- NAV -->
-  <nav class="nav">
-    <a href="../index.html">← Course</a>
-    <span class="nav-title">Pipeline Simulator</span>
-  </nav>
+  <div class="app">
+    <!-- NAV -->
+    <nav class="nav">
+      <a href="../index.html">← Course</a>
+      <span class="nav-title">Pipeline Simulator</span>
+    </nav>
 
-  <!-- FILE EXPLORER -->
-  <div class="files">
-    <div class="files-header">Project Explorer</div>
-    <div id="file-tree"></div>
-  </div>
-
-  <!-- PIPELINE -->
-  <div class="pipeline">
-    <div class="control-bar">
-      <label>Client:</label>
-      <select id="sel-client">
-        <option value="fc_sports">FC (FIFA)</option>
-        <option value="madden">Madden</option>
-        <option value="battlefield">Battlefield</option>
-        <option value="metaverse">Metaverse</option>
-        <option value="vendor_a">Vendor A</option>
-      </select>
-      <label>Tech:</label>
-      <select id="sel-tech">
-        <option value="marker">⚡ Marker</option>
-        <option value="markerless">📷 Markerless</option>
-      </select>
-      <div class="control-sep"></div>
-      <button class="btn btn-send" id="btn-next" onclick="onNext()">▶ Start</button>
-      <button class="btn" id="btn-reset" onclick="onReset()" style="display:none">↻ Reset</button>
-      <button class="btn btn-auto" id="btn-auto" onclick="toggleAuto()">▶▶ Auto</button>
-      <div class="control-sep"></div>
-      <button class="btn btn-fail" id="btn-fail" onclick="toggleFailure()">💥 NAS Failure</button>
+    <!-- FILE EXPLORER -->
+    <div class="files">
+      <div class="files-header">Project Explorer</div>
+      <div id="file-tree"></div>
     </div>
-    <div class="pgraph" id="pgraph"></div>
-    <div style="text-align:center;padding:4px 0">
-      <div class="data-packet" id="data-packet" onclick="inspectPacket()" style="display:none">📦</div>
-      <div class="file-loc" id="file-loc"></div>
+
+    <!-- PIPELINE -->
+    <div class="pipeline">
+      <div class="control-bar">
+        <label>Client:</label>
+        <select id="sel-client">
+          <option value="fc_sports">FC (FIFA)</option>
+          <option value="madden">Madden</option>
+          <option value="battlefield">Battlefield</option>
+          <option value="metaverse">Metaverse</option>
+          <option value="vendor_a">Vendor A</option>
+        </select>
+        <label>Tech:</label>
+        <select id="sel-tech">
+          <option value="marker">⚡ Marker</option>
+          <option value="markerless">📷 Markerless</option>
+        </select>
+        <div class="control-sep"></div>
+        <button class="btn btn-send" id="btn-next" onclick="onNext()">▶ Start</button>
+        <button class="btn" id="btn-reset" onclick="onReset()" style="display:none">↻ Reset</button>
+        <button class="btn btn-auto" id="btn-auto" onclick="toggleAuto()">▶▶ Auto</button>
+        <div class="control-sep"></div>
+        <div class="chaos-group" id="chaos-container">
+          <button id="btn-chaos-main" class="btn-chaos-toggle" onclick="toggleChaosMain()">⚪ Chaos: OFF</button>
+          <button id="btn-chaos-drop" class="chaos-dropdown-btn" onclick="toggleChaosMenu()" disabled>▼</button>
+          <div id="chaos-menu" class="chaos-dropdown-menu">
+            <label class="chaos-dropdown-item">
+              <input type="checkbox" value="nas" onchange="updateChaosSelection()"> 💥 Disconnect NAS
+            </label>
+            <label class="chaos-dropdown-item">
+              <input type="checkbox" value="vendor" onchange="updateChaosSelection()"> 💥 SDK Crash
+            </label>
+            <label class="chaos-dropdown-item">
+              <input type="checkbox" value="config" onchange="updateChaosSelection()"> 💥 Corrupt Config
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="pgraph" id="pgraph"></div>
+      <div style="text-align:center;padding:4px 0">
+        <div class="data-packet" id="data-packet" onclick="inspectPacket()" style="display:none">📦</div>
+        <div class="file-loc" id="file-loc"></div>
+      </div>
+    </div>
+
+    <!-- INSPECTOR -->
+    <div class="inspector">
+      <div class="resize-handle" id="resize-handle"></div>
+      <div class="inspector-tabs">
+        <div class="inspector-tab active" data-tab="data" onclick="switchTab('data',this)">Data</div>
+        <div class="inspector-tab" data-tab="config" onclick="switchTab('config',this)">Config</div>
+        <div class="inspector-tab" data-tab="adapter" onclick="switchTab('adapter',this)">Adapter</div>
+        <div class="inspector-tab" data-tab="hooks" onclick="switchTab('hooks',this)">Hooks</div>
+        <div class="inspector-tab" data-tab="health" onclick="switchTab('health',this)">Health</div>
+        <div class="inspector-tab" data-tab="logs" onclick="switchTab('logs',this)">Logs</div>
+      </div>
+      <div class="inspector-content" id="inspector-body"></div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console-pane">
+      <div class="resize-handle-h" id="console-resize"></div>
+      <div class="console-header">
+        <span>System Console</span>
+        <button class="btn-clear" onclick="clearLogs()">Clear</button>
+      </div>
+      <div class="console" id="console-log"></div>
     </div>
   </div>
 
-  <!-- INSPECTOR -->
-  <div class="inspector">
-    <div class="resize-handle" id="resize-handle"></div>
-    <div class="inspector-tabs">
-      <div class="inspector-tab active" data-tab="data" onclick="switchTab('data',this)">Data</div>
-      <div class="inspector-tab" data-tab="config" onclick="switchTab('config',this)">Config</div>
-      <div class="inspector-tab" data-tab="adapter" onclick="switchTab('adapter',this)">Adapter</div>
-      <div class="inspector-tab" data-tab="hooks" onclick="switchTab('hooks',this)">Hooks</div>
-      <div class="inspector-tab" data-tab="logs" onclick="switchTab('logs',this)">Logs</div>
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <h3 id="modal-title"></h3>
+      <div class="modal-sub" id="modal-sub"></div>
+      <div id="modal-body"></div>
     </div>
-    <div class="inspector-content" id="inspector-body"></div>
   </div>
 
-  <!-- CONSOLE -->
-  <div class="console-pane">
-    <div class="resize-handle-h" id="console-resize"></div>
-    <div class="console-header">
-      <span>System Console</span>
-      <button class="btn-clear" onclick="clearLogs()">Clear</button>
-    </div>
-    <div class="console" id="console-log"></div>
-  </div>
-</div>
-
-<!-- MODAL -->
-<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-close" onclick="closeModal()">×</button>
-    <h3 id="modal-title"></h3>
-    <div class="modal-sub" id="modal-sub"></div>
-    <div id="modal-body"></div>
-  </div>
-</div>
-
-<script src="js/data.js"></script>
-<script src="js/utils.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/main.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/main.js"></script>
 </body>
+
 </html>

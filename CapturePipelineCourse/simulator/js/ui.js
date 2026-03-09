@@ -189,7 +189,7 @@ function renderGraph() {
     if (isActive && S.step >= 5) {
       if (S.cbState === "OPEN") {
         cls += " failed";
-      } else if (S.packet && S.packet.delivery_timestamp) {
+      } else if (S.packet && S.packet.delivery_timestamp && S.queueCount === 0) {
         cls += " completed";
         badge = '<span class="sbadge" style="display:flex; position:static; margin-left:6px; transform:translateY(-1px)">✓</span>';
       }
@@ -201,12 +201,19 @@ function renderGraph() {
     else if (d.id === "s3") dest = c.delivery.s3_bucket ? "s3://" + c.delivery.s3_bucket + "/" : "";
     else if (d.id === "sftp") dest = c.delivery.sftp_host || "";
     var extra = "";
-    if (isActive && S.step === 5) {
+    if (isActive && S.step >= 5) {
       var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState] || "cb-closed";
       extra = ' <span class="cb-dot ' + cc + '"></span>';
     }
     h += '<div class="dnode ' + cls + '"><div class="dname">' + d.icon + ' ' + d.label + extra + badge + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
   });
+  
+  if (S.queueCount > 0) {
+    h += '<div class="dnode active-dest fallback-node" style="margin-top:10px; border-color:var(--accent-yellow); box-shadow:0 0 10px rgba(250, 204, 21, 0.2);">' + 
+         '<div class="dname" style="color:var(--accent-yellow)">📁 Local Fallback Queue</div>' + 
+         '<div class="ddest">Queue Depth: ' + S.queueCount + '</div></div>';
+  }
+  
   h += '</div>';
 
   document.getElementById("pgraph").innerHTML = '<div class="pgraph-content" id="pgraph-content">' + h + '</div>';
@@ -383,9 +390,13 @@ function renderInspector() {
   } else if (t === "adapter") {
     var exp = getExpAdapter(c), del = getDelAdapter(c);
     var cb = "";
-    if (S.step === 5) {
-      var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState];
-      cb = '<p>Circuit Breaker: <span class="cb-dot ' + cc + '" style="display:inline-block"></span> ' + S.cbState + '</p><p>Retries: ' + S.retries + ' | Queued: ' + S.queueCount + '</p>';
+    if (S.step >= 5) {
+      var cc = ({CLOSED:"cb-closed",OPEN:"cb-open",HALF_OPEN:"cb-half"})[S.cbState] || "cb-closed";
+      var stateColor = ({CLOSED:"var(--accent-green)",OPEN:"var(--accent-red)",HALF_OPEN:"var(--accent-yellow)"})[S.cbState] || "var(--accent-green)";
+      cb = '<div style="margin-top:12px; padding:8px; border:1px solid ' + stateColor + '; border-radius:4px; background:rgba(0,0,0,0.2);">' +
+           '<h5 style="margin:0 0 4px 0; color:' + stateColor + '; font-size:11px; text-transform:uppercase;">Circuit Breaker</h5>' +
+           '<p style="margin:0; font-size:11px">State: <span style="font-weight:bold">' + S.cbState + '</span><span class="cb-dot ' + cc + '" style="margin-left:6px"></span></p>' +
+           '<p style="margin:4px 0 0 0; font-size:10px; color:var(--text-muted)">Retries: ' + S.retries + ' | Queued: ' + S.queueCount + '</p></div>';
     }
     var expFile = c.export.format === "gltf" ? "capture_pipeline/adapters/gltf_export.py" : "capture_pipeline/adapters/fbx_export.py";
     var delFile = "capture_pipeline/adapters/" + ({perforce:"p4",nas:"nas",s3:"s3",sftp:"sftp"})[c.delivery.method] + "_delivery.py";
@@ -409,6 +420,28 @@ function renderInspector() {
         '<span class="' + (done ? 'hook-done' : 'hook-pending') + '">' + (done ? '✓' : '○') + '</span> ' + k + '()</div>';
     });
     body.innerHTML = html;
+  } else if (t === "health") {
+    var h = '<div class="inspector-label" style="display:flex; justify-content:space-between; align-items:center;"><span>Health Monitor (Grafana)</span><span class="l-badge lb-system">Live</span></div>';
+    
+    // NAS
+    var nasStatus = S.nasEnabled ? '<span style="color:var(--accent-green)">🟢 UP</span>' : '<span style="color:var(--accent-red)">🔴 DOWN</span>';
+    var nasBtn = S.nasEnabled ? '' : '<button class="btn btn-fail" style="margin-top:8px; width:100%" onclick="openModal(\'runbook\', \'nas_runbook\')">📖 Open Runbook</button>';
+    h += '<div style="margin-bottom:12px; padding:10px; background:var(--bg-input); border-radius:4px; border-left:4px solid ' + (S.nasEnabled ? 'var(--accent-green)' : 'var(--accent-red)') + '">';
+    h += '<h4 style="margin:0">Primary Storage (NAS)</h4><p style="margin:4px 0 0 0; font-size:12px;">Status: ' + nasStatus + '</p>' + nasBtn + '</div>';
+    
+    // Vendor
+    var vStatus = !S.chaosActive || !S.chaosModes.includes("vendor") ? '<span style="color:var(--accent-green)">🟢 UP</span>' : '<span style="color:var(--accent-red)">🔴 CRASH LOOP</span>';
+    var vBtn = !S.chaosActive || !S.chaosModes.includes("vendor") ? '' : '<button class="btn btn-fail" style="margin-top:8px; width:100%" onclick="openModal(\'runbook\', \'vendor_runbook\')">📖 Open Runbook</button>';
+    h += '<div style="margin-bottom:12px; padding:10px; background:var(--bg-input); border-radius:4px; border-left:4px solid ' + (!S.chaosActive || !S.chaosModes.includes("vendor") ? 'var(--accent-green)' : 'var(--accent-red)') + '">';
+    h += '<h4 style="margin:0">Vendor Engine SDK</h4><p style="margin:4px 0 0 0; font-size:12px;">Status: ' + vStatus + '</p>' + vBtn + '</div>';
+
+    // Config
+    var cStatus = !S.chaosActive || !S.chaosModes.includes("config") ? '<span style="color:var(--accent-green)">🟢 UP</span>' : '<span style="color:var(--accent-red)">🔴 CORRUPT HEAD</span>';
+    var cBtn = !S.chaosActive || !S.chaosModes.includes("config") ? '' : '<button class="btn btn-fail" style="margin-top:8px; width:100%" onclick="openModal(\'runbook\', \'config_runbook\')">📖 Open Runbook</button>';
+    h += '<div style="margin-bottom:12px; padding:10px; background:var(--bg-input); border-radius:4px; border-left:4px solid ' + (!S.chaosActive || !S.chaosModes.includes("config") ? 'var(--accent-green)' : 'var(--accent-red)') + '">';
+    h += '<h4 style="margin:0">Config Database</h4><p style="margin:4px 0 0 0; font-size:12px;">Status: ' + cStatus + '</p>' + cBtn + '</div>';
+
+    body.innerHTML = h;
   } else if (t === "logs") {
     var f = S.logs;
     

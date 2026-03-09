@@ -278,7 +278,86 @@ pre {
     row-gap: 15px;
     column-gap: 15px;
     padding: 1rem;
-    transform-origin: center center
+    transform-origin: top center
+}
+
+/* Chaos Control UX Refactor */
+.chaos-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.btn-chaos-toggle {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 4px 0 0 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+}
+
+.btn-chaos-toggle.active {
+    background: var(--accent-red);
+    color: #000;
+    border-color: var(--accent-red);
+}
+
+.chaos-dropdown-btn {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-left: none;
+    padding: 6px 8px;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all .2s;
+}
+
+.chaos-dropdown-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.chaos-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: none;
+    min-width: 180px;
+    flex-direction: column;
+}
+
+.chaos-dropdown-menu.show {
+    display: flex;
+}
+
+.chaos-dropdown-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background .2s;
+}
+
+.chaos-dropdown-item:hover {
+    background: var(--bg-input);
+}
+
+.chaos-dropdown-item input[type="checkbox"] {
+    accent-color: var(--accent-red);
 }
 
 /* Row assignments: marker=row1, universal=row2, markerless=row3 */
