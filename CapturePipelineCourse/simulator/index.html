@@ -65,11 +65,14 @@
   </div>
 
   <!-- CONSOLE -->
-  <div class="console-header">
-    <span>System Console</span>
-    <button class="btn-clear" onclick="clearLogs()">Clear</button>
+  <div class="console-pane">
+    <div class="resize-handle-h" id="console-resize"></div>
+    <div class="console-header">
+      <span>System Console</span>
+      <button class="btn-clear" onclick="clearLogs()">Clear</button>
+    </div>
+    <div class="console" id="console-log"></div>
   </div>
-  <div class="console" id="console-log"></div>
 </div>
 
 <!-- MODAL -->
