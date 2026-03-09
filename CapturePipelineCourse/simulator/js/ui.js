@@ -159,11 +159,19 @@ function renderGraph() {
   // ROW 2 — Universal stages
   h += '<div style="grid-row:2;grid-column:6;display:flex;align-items:center;gap:6px">';
   h += '<span class="parrow tight-arrow ' + (S.step >= 2 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Remapped joints</span></span>';
-  h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true, "", "first-conv");
+  
+  var retarget_hooks = [];
+  if (c.plugin === "fc_custom") retarget_hooks.push("custom_retarget");
+  h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true, "", "first-conv", retarget_hooks);
+  
   h += '<span class="parrow ' + (S.step >= 3 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Validated data</span></span>';
   h += mkNodeValidate(c);
   h += '<span class="parrow ' + (S.step >= 4 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + c.export.format.toUpperCase() + ' file</span></span>';
-  h += mkNode("export", "Export", (c.export.format === "gltf" ? "GLTF" : "FBX") + " via " + getExpAdapter(c), true);
+  
+  var export_hooks = [];
+  if (c.plugin === "metaverse_client") export_hooks.push("pre_export", "post_export");
+  h += mkNode("export", "Export", (c.export.format === "gltf" ? "GLTF" : "FBX") + " via " + getExpAdapter(c), true, "", "", export_hooks);
+  
   h += '<span class="parrow ' + (S.step >= 5 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + getDelAdapter(c) + '</span></span>';
   h += '</div>';
 
@@ -190,19 +198,66 @@ function renderGraph() {
   });
   h += '</div>';
 
-  document.getElementById("pgraph").innerHTML = h;
+  document.getElementById("pgraph").innerHTML = '<div class="pgraph-content" id="pgraph-content">' + h + '</div>';
   renderFileLocation();
+  scaleGraph();
 }
 
-function mkNode(stage, name, sub, active, pfx) {
+function scaleGraph() {
+  var container = document.getElementById("pgraph");
+  var content = document.getElementById("pgraph-content");
+  if (!container || !content) return;
+  
+  content.style.transform = "none";
+  var cw = container.clientWidth;
+  var ch = container.clientHeight;
+  var iw = content.scrollWidth;
+  var ih = content.scrollHeight;
+  
+  if (iw === 0 || ih === 0) return;
+  
+  var scaleX = (cw - 40) / iw;
+  var scaleY = (ch - 40) / ih;
+  var scale = Math.min(scaleX, scaleY);
+  
+  // Clamping minimum scale to prevent text illegibility
+  if (scale < 0.2) scale = 0.2;
+  
+  content.style.transform = "scale(" + scale + ")";
+}
+
+// Add ResizeObserver to properly detect zooming and scaling of the container
+var graphObserver = new ResizeObserver(function() {
+  scaleGraph();
+});
+window.addEventListener("DOMContentLoaded", function() {
+  var container = document.getElementById("pgraph");
+  if (container) graphObserver.observe(container);
+});
+
+function mkNode(stage, name, sub, active, pfx, extraCls, hooks) {
   pfx = pfx || "";
+  extraCls = extraCls || "";
+  hooks = hooks || [];
   var idx = STAGES.indexOf(stage);
   var cls = (S.step === idx && active) ? "active" : (S.step > idx && active ? "completed" : "");
+  if (extraCls) cls += " " + extraCls;
   var badge = (S.step > idx && active) ? '<span class="sbadge" style="display:flex">✓</span>' : "";
   var fail = (stage === "deliver" && S.cbState === "OPEN") ? " failed" : "";
+  
+  var hooksHtml = "";
+  if (hooks.length > 0) {
+    hooksHtml = '<div class="shooks">';
+    hooks.forEach(function(h) {
+      var d = S.hooksDone.includes(h) ? " done" : "";
+      hooksHtml += '<div class="shook' + d + '">' + h + '()</div>';
+    });
+    hooksHtml += '</div>';
+  }
+  
   return '<div class="snode ' + cls + fail + '" id="' + pfx + 'node-' + stage + '" onclick="clickStage(\'' + stage + '\')">' +
     '<span class="sinfo" onclick="event.stopPropagation();openModal(\'info\',\'' + stage + '\')">ⓘ</span>' +
-    '<div class="sname">' + name + '</div><div class="ssub">' + sub + '</div>' + badge + '</div>';
+    '<div class="sname">' + name + '</div><div class="ssub">' + sub + '</div>' + hooksHtml + badge + '</div>';
 }
 
 function mkNodeValidate(c) {
@@ -215,9 +270,17 @@ function mkNodeValidate(c) {
     vcks += '<div class="vck' + (passed ? ' pass' : '') + '">' + (passed ? '✓' : l) + '</div>';
   });
   vcks += '</div>';
+  
+  var hooksHtml = "";
+  if (c.plugin === "metaverse_client") {
+    var h = "custom_validate";
+    var d = S.hooksDone.includes(h) ? " done" : "";
+    hooksHtml = '<div class="shooks"><div class="shook' + d + '">' + h + '()</div></div>';
+  }
+  
   return '<div class="snode ' + cls + '" id="node-validate" onclick="clickStage(\'validate\')">' +
     '<span class="sinfo" onclick="event.stopPropagation();openModal(\'info\',\'validate\')">ⓘ</span>' +
-    '<div class="sname">Validate</div><div class="ssub">5 Checkers</div>' + vcks + badge + '</div>';
+    '<div class="sname">Validate</div><div class="ssub">5 Checkers</div>' + vcks + hooksHtml + badge + '</div>';
 }
 
 function getExpAdapter(c) { return c.export.format === "gltf" ? "GLTFExportAdapter" : "FBXExportAdapter"; }
