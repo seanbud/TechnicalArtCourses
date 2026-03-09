@@ -59,33 +59,33 @@ function openModal(type, key) {
 
 function pingFile(term, checkOnly) {
   var map = {
-    "Watchdog daemon": "capture_pipeline/scripts/delivery_bot.py",
-    "Deadline": "capture_pipeline/pipeline/core.py",
-    "P4Python": "capture_pipeline/adapters/p4_delivery.py",
-    "boto3": "capture_pipeline/adapters/s3_delivery.py",
-    "PipelineRunner": "capture_pipeline/pipeline/runner.py",
-    "Strategy Registry": "capture_pipeline/pipeline/runner.py",
-    "MarkerIngest": "capture_pipeline/adapters/vicon_ingest.py",
-    "MarkerlessIngest": "capture_pipeline/adapters/moveai_ingest.py",
-    "RetargetStage": "capture_pipeline/pipeline/retarget.py",
-    "retarget stage.process": "capture_pipeline/pipeline/retarget.py",
-    "RetargetStage.process()": "capture_pipeline/pipeline/retarget.py",
-    "Client Registry": "capture_pipeline/pipeline/client_registry.py",
-    "HumanIK": "capture_pipeline/pipeline/retarget.py",
-    "PluginManager": "capture_pipeline/pipeline/plugin_manager.py",
-    "ValidationStage": "capture_pipeline/pipeline/validation.py",
-    "pre-export": "capture_pipeline/plugins/metaverse_client.py",
-    "post-export": "capture_pipeline/plugins/metaverse_client.py",
-    "pre_export": "capture_pipeline/plugins/metaverse_client.py",
-    "post_export": "capture_pipeline/plugins/metaverse_client.py",
-    "ExportFactory": "capture_pipeline/adapters/fbx_export.py",
-    "Circuit Breaker": "capture_pipeline/adapters/nas_delivery.py",
-    "CaptureResult": "capture_pipeline/adapters/vicon_ingest.py"
+    "Watchdog daemon": {f:"capture_pipeline/scripts/delivery_bot.py", t:"class DeliveryBot"},
+    "Deadline": {f:"capture_pipeline/pipeline/core.py", t:"class PipelineRunner"},
+    "P4Python": {f:"capture_pipeline/adapters/p4_delivery.py", t:"class PerforceDelivery"},
+    "boto3": {f:"capture_pipeline/adapters/s3_delivery.py", t:"class S3Delivery"},
+    "PipelineRunner": {f:"capture_pipeline/pipeline/runner.py", t:"class UniversalPipeline"},
+    "Strategy Registry": {f:"capture_pipeline/pipeline/runner.py", t:"STRATEGIES = {"},
+    "MarkerIngest": {f:"capture_pipeline/adapters/vicon_ingest.py", t:"class MarkerIngest"},
+    "MarkerlessIngest": {f:"capture_pipeline/adapters/moveai_ingest.py", t:"class MarkerlessIngest"},
+    "RetargetStage": {f:"capture_pipeline/pipeline/retarget.py", t:"class HumanIKRetarget"},
+    "retarget stage.process": {f:"capture_pipeline/pipeline/retarget.py", t:"def retarget"},
+    "RetargetStage.process()": {f:"capture_pipeline/pipeline/retarget.py", t:"def retarget"},
+    "Client Registry": {f:"capture_pipeline/pipeline/client_registry.py", t:"class ClientRegistry"},
+    "HumanIK": {f:"capture_pipeline/pipeline/retarget.py", t:"class HumanIKRetarget"},
+    "PluginManager": {f:"capture_pipeline/pipeline/plugin_manager.py", t:"class PluginManager"},
+    "ValidationStage": {f:"capture_pipeline/pipeline/validation.py", t:"class UniversalValidator"},
+    "pre-export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def pre_export"},
+    "post-export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def post_export"},
+    "pre_export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def pre_export"},
+    "post_export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def post_export"},
+    "ExportFactory": {f:"capture_pipeline/adapters/fbx_export.py", t:"class FBXExportAdapter"},
+    "Circuit Breaker": {f:"capture_pipeline/adapters/nas_delivery.py", t:"@circuit_breaker"},
+    "CaptureResult": {f:"capture_pipeline/adapters/vicon_ingest.py", t:"result = CaptureResult()"}
   };
-  var path = map[term];
-  if (path) {
+  var target = map[term];
+  if (target) {
     document.getElementById("modal-overlay").classList.remove("open");
-    selectFile(path);
+    selectFile(target.f, target.t);
     log("info", "Pinging file for term: " + term);
   }
 }
