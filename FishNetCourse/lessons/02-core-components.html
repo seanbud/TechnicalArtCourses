@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 2: Core Components | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 02</div>
+      <h1>The FishNet Foundations</h1>
+      <p class="lesson-subtitle">Mastering NetworkObject, NetworkManager, and RPC routing logic.</p>
+    </div>
+
+    <h2>Introduction</h2>
+    <p>Unlike Quantum where you query the Frame state for entities, FishNet is deeply integrated into Unity's component system. Data and logic are attached directly to GameObjects using specialised behaviours.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: NetworkBehaviour</div>
+      <p>Any script that needs to synchronize data over the network or send RPCs (Remote Procedure Calls) must inherit from <code>NetworkBehaviour</code> instead of <code>MonoBehaviour</code>.</p>
+    </div>
+
+    <h2>Core Architecture</h2>
+
+    <h3>1. NetworkManager</h3>
+    <p>This is the heart of FishNet. It manages the server instance, client connections, transport layer (e.g., Tugboat or Unity Transport via Relay), and scene loading. In your <code>SlopBox</code> project, this is injected and heavily wrapped by <code>ConnectionManager</code> to track player states.</p>
+
+    <h3>2. NetworkObject</h3>
+    <p>Every GameObject that exists on the network requires a <code>NetworkObject</code> component. This assigns the object a unique network ID. Prefabs with a `NetworkObject` must be registered with the `NetworkManager`'s spawnable prefabs list.</p>
+
+    <h2>Lifecycle Hooks</h2>
+    <p>In standard Unity, you use <code>Awake()</code> and <code>Start()</code>. In FishNet, you must wait until the network is ready before interacting with networked variables.</p>
+
+    <h3>Code Example: Basic Lifecycle</h3>
+    <pre><code>public class HealthSystem : NetworkBehaviour {
+    // Fired when the network starts for this object (Client OR Server)
+    public override void OnStartNetwork() {
+        base.OnStartNetwork();
+        if (IsServerInitialized) {
+            Debug.Log("I am the Server!");
+        }
+        if (IsOwner) {
+            Debug.Log("I have authority over this object!");
+        }
+    }
+}</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Common Pitfall: The Start() Trap</div>
+      <p>Do not initialize network states or send RPCs inside Unity's <code>Start()</code> method! The <code>NetworkObject</code> may not have been assigned its network ID yet. Always use <code>OnStartNetwork</code>, <code>OnStartServer</code>, or <code>OnStartClient</code>.</p>
+    </div>
+
+    <h2>RPCs: Remote Procedure Calls</h2>
+    <p>RPCs are how you explicitly send commands across the network. There are two primary types you need to know:</p>
+
+    <h3>1. [ServerRpc]</h3>
+    <p>Sent by a client, executed <strong>only on the server</strong>. Use this for actions like validating a shot, requesting to open a door, or applying damage.</p>
+    <pre><code>[ServerRpc(RequireOwnership = false)]
+public void RequestOpenDoor(GameObject door) {
+    // Only runs on the Server. Validate logic here.
+}</code></pre>
+
+    <h3>2. [ObserversRpc]</h3>
+    <p>Sent by the server, executed on <strong>all clients observing the object</strong>. Use this for ephemeral visual effects, like spawning particles or playing a sound that doesn't need strict state synchronization.</p>
+    <pre><code>[ObserversRpc]
+public void PlayHitEffect(Vector3 position) {
+    // Runs on all clients
+    Instantiate(sparkPrefab, position, Quaternion.identity);
+}</code></pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Pro Tip: SyncVars vs RPCs</div>
+      <p>Always prefer <code>SyncVar</code> for persistent state (like Health, Armor, Team) and only use RPCs for ephemeral events (Explosions, UI notifications, Voice lines). If a player joins late, they will receive the current value of a SyncVar, but they will <strong>not</strong> re-receive old RPCs!</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Use <code>NetworkBehaviour</code> for custom logic.</li>
+      <li>Replace <code>Start()</code> with <code>OnStartNetwork()</code> when dealing with multiplayer initialization.</li>
+      <li>Clients ask the Server to do things via <code>[ServerRpc]</code>.</li>
+      <li>Servers tell Clients about physical events via <code>[ObserversRpc]</code>.</li>
+      <li>Use <code>SyncVar</code> for state, RPCs for events.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="01-paradigm-shift.html">
+        <span class="label">← Back to</span>
+        <span class="title">Previous Lesson</span>
+      </a>
+      <a href="03-networked-physics-csp.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Smooth Multiplayer Physics & CSP</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

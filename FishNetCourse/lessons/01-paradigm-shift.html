@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 1: FishNet vs Quantum | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 01</div>
+      <h1>FishNet vs Quantum & Server Topologies</h1>
+      <p class="lesson-subtitle">Bridging the gap from deterministic lockstep to server-authoritative state replication.</p>
+    </div>
+
+    <h2>Introduction</h2>
+    <p>As a senior technical artist comfortable with Photon Quantum, you are accustomed to a very specific set of rules: perfect determinism, separation of input/simulation/view, and lockstep rollbacks. FishNet represents a fundamentally different paradigm that is more closely aligned with traditional Unity development but comes with its own networking challenges.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: Server-Authoritative State</div>
+      <p>Instead of relying on every client playing the exact same simulation perfectly in sync (Quantum), FishNet relies on a single authority (the Server) simulating the true state, and broadcasting that state to "dumb" clients who try to interpolate or predict the result.</p>
+    </div>
+
+    <h2>The Paradigm Shift</h2>
+    <p>In Quantum, logic must use fixed mathematical types (FP, FPVector3) and strictly avoid Unity's transform API or float-based physics to ensure determinism. In FishNet, <strong>you can use Unity's built-in physics and math</strong> because the server enforces the truth. If a client simulates something slightly different due to a float precision error, the server's update will eventually correct it (reconciliation).</p>
+    
+    <p>This makes prototyping significantly faster, but it means dealing with <em>network conditions</em> differently. In Quantum, latency is handled by delaying input and rolling back the deterministic state. In FishNet, latency is handled by <strong>Client-Side Prediction (CSP)</strong> and <strong>Interpolation</strong>.</p>
+
+    <h2>Server Topologies</h2>
+    <p>When running a FishNet instance for a cooperative game like your Prince of Persia sandbox, you have two main architecture choices:</p>
+
+    <h3>1. Dedicated Server (Authoritative)</h3>
+    <p>The game server runs as a headless Unity instance in the cloud. No player has a zero-ping advantage. It's secure and highly reliable, but it costs money to host.</p>
+
+    <h3>2. Host Mode (Peer-to-Peer / Relay-Backed)</h3>
+    <p>One player acts as both a Client and the Server (the "Host"). The other players connect to the Host.</p>
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Common Pitfall: Host Advantage</div>
+      <p>In Host mode, the hosting player has 0ms of latency and doesn't experience rubberbanding, while remote clients do. Co-op games often use Relay services (like Unity Relay or Steam lobbies) to bypass port forwarding, but the architecture remains Host-Client. A Relay is essentially a dumb pipe bouncing packets, but the <i>Host</i> is still running the server logic.</p>
+    </div>
+
+    <h3>Why Networked Physics Can Feel "Slow"</h3>
+    <p>When you use basic networked physics (like a Rigidbody synced over a NetworkTransform), remote clients are watching a delayed feed of the host's simulation. If a client presses "Jump", that input travels to the host, the host jumps, and the result travels back to the client. This results in sluggish, delayed controls.</p>
+    
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Pro Tip: The Solution</div>
+      <p>To get instantaneous, responsive physics (like in Quantum), we must employ <strong>Client-Side Prediction (CSP)</strong>, which allows the client to immediately move its local Rigidbody/CharacterController, and only accept corrections from the server if it made a mistake. We'll cover this deeply in Lesson 3.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Quantum = Deterministic Lockstep. FishNet = Server-Authoritative State Replication.</li>
+      <li>FishNet allows standard Unity floats and Physics, trusting the server to correct discrepancies.</li>
+      <li>For a co-op game, Host mode (often backed by a Relay to avoid port forwarding) is standard, but you must account for host ping advantage.</li>
+      <li>Raw networked physics feels delayed without Client-Side Prediction (CSP).</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">← Back to</span>
+        <span class="title">All Lessons</span>
+      </a>
+      <a href="02-core-components.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">The FishNet Foundations</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

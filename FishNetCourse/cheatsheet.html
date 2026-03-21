@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cheat Sheet | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .cheatsheet-section {
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      background: var(--bg-card);
+    }
+    .cheatsheet-section h3 {
+      margin-top: 0;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+    }
+    code {
+      display: inline-block;
+      margin-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html" class="active">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>FishNet Cheat Sheet</h1>
+      <p class="hero-subtitle">Quick reference for architecture, attributes, and CSP logic.</p>
+    </div>
+
+    <div class="cheatsheet-section">
+      <h3>Core Attributes</h3>
+      <ul>
+        <li><code>[ServerRpc(RequireOwnership = false)]</code>: Invoked by Client, executed on Server. RequireOwnership prevents hacking but limits who can call it (e.g. interacting with world objects).</li>
+        <li><code>[ObserversRpc(BufferLast = true)]</code>: Invoked by Server, executed on Clients. BufferLast ensures late-joining players receive the last fired RPC.</li>
+        <li><code>[TargetRpc]</code>: Invoked by Server, executed on ONE specific Client (requires passing a NetworkConnection).</li>
+      </ul>
+    </div>
+
+    <div class="cheatsheet-section">
+      <h3>SyncTypes (State)</h3>
+      <p>Used to sync variables from Server to Clients automatically.</p>
+      <ul>
+        <li><code>SyncVar&lt;T&gt;</code>: Syncs primitive values (int, float, bool, Vector3). Exposes OnChange event.</li>
+        <li><code>SyncList&lt;T&gt;</code>: Syncs collections. Includes events for Add, Remove, Clear.</li>
+        <li><code>SyncObject</code>: Custom complex structs synced entirely.</li>
+      </ul>
+    </div>
+
+    <div class="cheatsheet-section">
+      <h3>Client-Side Prediction (CSP)</h3>
+      <ul>
+        <li><code>[Replicate]</code>: Executes moving logic. Runs on Predictor + Server.</li>
+        <li><code>[Reconcile]</code>: Returns ground-truth state from Server to Client. Snaps the client to the server's perspective.</li>
+        <li><code>TimeManager.OnTick</code>: Bind here to construct Replicate data structurally (avoids Update() float jitter).</li>
+      </ul>
+    </div>
+
+    <div class="cheatsheet-section">
+      <h3>NetworkBehaviour Properties</h3>
+      <ul>
+        <li><code>IsServerInitialized</code>: True if the code is currently running on the server.</li>
+        <li><code>IsClientInitialized</code>: True if running on the client.</li>
+        <li><code>IsOwner</code>: True if the local player has authority over this specific game object.</li>
+        <li><code>OwnerId</code>: The integer ID of the connection that owns the object.</li>
+      </ul>
+    </div>
+
+    <div class="cheatsheet-section">
+      <h3>Lifetime Hooks</h3>
+      <ul>
+        <li><code>public override void OnStartNetwork()</code> (Wait for network initialize)</li>
+        <li><code>public override void OnStartServer()</code> (Server logic init)</li>
+        <li><code>public override void OnStartClient()</code> (Client logic init)</li>
+        <li><code>public override void OnOwnershipClient(NetworkConnection prevOwner)</code> (Authority changed)</li>
+      </ul>
+    </div>
+
+  </div>
+</body>
+</html>

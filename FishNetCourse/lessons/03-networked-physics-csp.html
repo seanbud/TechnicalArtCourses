@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 3: Networked Physics & CSP | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 03</div>
+      <h1>Smooth Multiplayer Physics & CSP</h1>
+      <p class="lesson-subtitle">Client-Side Prediction (CSP) for responsive movement in authoritative servers.</p>
+    </div>
+
+    <h2>Introduction</h2>
+    <p>This is where FishNet shines over generic built-in Unity networking. If you want a Prince of Persia style game where movement must feel instantaneous and perfectly smooth, standard server-authoritative logic (sending input, waiting for server to move you) feels terrible due to latency.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: Client-Side Prediction (CSP)</div>
+      <p>In CSP, the client executes its input immediately upon pressing a button. At the same time, it sends that input to the server. The server executes it authoritatively. If the client's result diverges from the server's authoritative result, the client "snaps" back to the server's reality and replays any inputs that happened in between. It is functionally similar to a Quantum rollback, but applied only to specific NetworkBehaviours instead of the entire global game state.</p>
+    </div>
+
+    <h2>The Replicate & Reconcile Pattern</h2>
+    <p>FishNet implements CSP through two critically important method attributes: <code>[Replicate]</code> and <code>[Reconcile]</code>.</p>
+
+    <h3>1. [Replicate]</h3>
+    <p>This method houses your actual physics or movement logic (e.g., <code>characterController.Move</code>). It is called multiple times:</p>
+    <ul>
+      <li>On the Client: First to predict the movement immediately, and later during replays during reconciliation.</li>
+      <li>On the Server: To execute the authoritative movement using the client's shipped inputs.</li>
+    </ul>
+
+    <h3>2. [Reconcile]</h3>
+    <p>When the Server finishes a `[Replicate]`, it fires a `[Reconcile]` back to the owners. This method receives a struct containing the <strong>true</strong> state of the object (position, rotation, velocity). The Client receives this, applies the true state, and then FishNet automatically calls `[Replicate]` again for any unacknowledged inputs (the replay).</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Common Pitfall: Non-deterministic logic in Replicate</div>
+      <p>If your <code>[Replicate]</code> logic relies on `Time.deltaTime` instead of the data provided by FishNet's `TimeManager.TickDelta`, your client and server will desync immediately. CSP relies on executing the exact same mathematical instructions using fixed tick time steps.</p>
+    </div>
+
+    <h2>Setting up CSP</h2>
+    <p>To use this, you must define data structures for <code>Inputs</code> (which go up to the server) and <code>State</code> (which comes down to the client).</p>
+    
+    <h3>Code Example: CSP Boilerplate</h3>
+    <pre><code>public struct MoveData : IReplicateData {
+    public Vector3 InputDirection;
+    public bool Jump;
+    private uint _tick;
+    public uint GetTick() => _tick;
+    public void SetTick(uint value) => _tick = value;
+    public void Dispose() {}
+}
+
+public struct MoveState : IReconcileData {
+    public Vector3 Position;
+    public Vector3 Velocity;
+    private uint _tick;
+    public uint GetTick() => _tick;
+    public void SetTick(uint value) => _tick = value;
+    public void Dispose() {}
+}</code></pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Pro Tip: Struct Layouts</div>
+      <p>Always keep your Replicate and Reconcile structs as small as possible. This data is being sent up to 60 times a second.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>CSP gives clients the illusion of zero latency by predicting authoritative results locally.</li>
+      <li><code>[Replicate]</code> logic runs on both Client and Server. It must only use inputs provided to it, never outside variables.</li>
+      <li><code>[Reconcile]</code> snaps the Client to the exact Server state.</li>
+      <li>FishNet handles the rollback and replay (re-executing Replicate) automatically.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="02-core-components.html">
+        <span class="label">← Back to</span>
+        <span class="title">Previous Lesson</span>
+      </a>
+      <a href="04-slop-box-casestudy.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Slop-Box Architecture Case Study</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
