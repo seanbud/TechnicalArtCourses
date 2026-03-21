@@ -20,69 +20,575 @@
   <div class="container">
     <div class="lesson-header">
       <div class="lesson-number">Lesson 03</div>
-      <h1>Smooth Multiplayer Physics & CSP</h1>
-      <p class="lesson-subtitle">Client-Side Prediction (CSP) for responsive movement in authoritative servers.</p>
+      <h1>Smooth Multiplayer Physics & Client-Side Prediction</h1>
+      <p class="lesson-subtitle">Building frame-perfect, responsive movement for a co-op Prince of Persia — the single most important system in your game's netcode.</p>
     </div>
-
-    <h2>Introduction</h2>
-    <p>This is where FishNet shines over generic built-in Unity networking. If you want a Prince of Persia style game where movement must feel instantaneous and perfectly smooth, standard server-authoritative logic (sending input, waiting for server to move you) feels terrible due to latency.</p>
-
-    <div class="callout callout-concept">
-      <div class="callout-title">🧠 Key Concept: Client-Side Prediction (CSP)</div>
-      <p>In CSP, the client executes its input immediately upon pressing a button. At the same time, it sends that input to the server. The server executes it authoritatively. If the client's result diverges from the server's authoritative result, the client "snaps" back to the server's reality and replays any inputs that happened in between. It is functionally similar to a Quantum rollback, but applied only to specific NetworkBehaviours instead of the entire global game state.</p>
-    </div>
-
-    <h2>The Replicate & Reconcile Pattern</h2>
-    <p>FishNet implements CSP through two critically important method attributes: <code>[Replicate]</code> and <code>[Reconcile]</code>.</p>
-
-    <h3>1. [Replicate]</h3>
-    <p>This method houses your actual physics or movement logic (e.g., <code>characterController.Move</code>). It is called multiple times:</p>
-    <ul>
-      <li>On the Client: First to predict the movement immediately, and later during replays during reconciliation.</li>
-      <li>On the Server: To execute the authoritative movement using the client's shipped inputs.</li>
-    </ul>
-
-    <h3>2. [Reconcile]</h3>
-    <p>When the Server finishes a `[Replicate]`, it fires a `[Reconcile]` back to the owners. This method receives a struct containing the <strong>true</strong> state of the object (position, rotation, velocity). The Client receives this, applies the true state, and then FishNet automatically calls `[Replicate]` again for any unacknowledged inputs (the replay).</p>
 
     <div class="callout callout-warning">
-      <div class="callout-title">⚠️ Common Pitfall: Non-deterministic logic in Replicate</div>
-      <p>If your <code>[Replicate]</code> logic relies on `Time.deltaTime` instead of the data provided by FishNet's `TimeManager.TickDelta`, your client and server will desync immediately. CSP relies on executing the exact same mathematical instructions using fixed tick time steps.</p>
+      <div class="callout-title">⚠️ This Is The Most Important Lesson</div>
+      <p>If you get CSP wrong, your game feels like controlling a character through mud. If you get it right, players won't even notice they're playing over a network. This lesson is the core of everything that makes FishNet worth using for a physics-heavy platformer.</p>
     </div>
 
-    <h2>Setting up CSP</h2>
-    <p>To use this, you must define data structures for <code>Inputs</code> (which go up to the server) and <code>State</code> (which comes down to the client).</p>
-    
-    <h3>Code Example: CSP Boilerplate</h3>
-    <pre><code>public struct MoveData : IReplicateData {
-    public Vector3 InputDirection;
-    public bool Jump;
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The CSP Mental Model</h2>
+    <p>Client-Side Prediction is conceptually similar to Quantum's rollback — but applied per-object instead of globally. Here's the full flow, tick by tick:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│              CLIENT-SIDE PREDICTION TIMELINE (CSP)                       │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  CLIENT (Owner)                          SERVER (Authority)              │
+│  ──────────────                          ─────────────────               │
+│                                                                          │
+│  Tick 100: Read input (Jump pressed)                                     │
+│    → Build MoveData { jump=true }                                        │
+│    → Execute [Replicate] LOCALLY           ← Instant! Player jumps.     │
+│    → Send MoveData to Server ─────────────→                              │
+│                                             Tick 100: Receive MoveData   │
+│  Tick 101: Read input (Move forward)         → Execute [Replicate]      │
+│    → Execute [Replicate] LOCALLY             → Build MoveState           │
+│    → Send MoveData to Server ──────────────→ → Send [Reconcile] ──┐     │
+│                                                                    │     │
+│  Tick 102: Read input (still moving)        Tick 101: Receive     │     │
+│    → Execute [Replicate] LOCALLY             MoveData...          │     │
+│                                                                    │     │
+│  ┌─ Tick 102: Receive Reconcile for Tick 100 ←────────────────────┘     │
+│  │  Compare predicted position vs server:                                │
+│  │                                                                       │
+│  │  IF positions match (within tolerance):                               │
+│  │    → Do nothing. Prediction was correct. ✅                          │
+│  │                                                                       │
+│  │  IF positions diverge:                                                │
+│  │    → SNAP to server's Tick 100 state                                  │
+│  │    → REPLAY Tick 101 inputs on top of corrected state                 │
+│  │    → REPLAY Tick 102 inputs on top of that                            │
+│  │    → Player's screen shows corrected position                         │
+│  │    → This all happens in ONE frame (invisible to player) ✅          │
+│  └───────────────────────────────────────────────────────────────────    │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Musician Analogy</div>
+      <p>Think of CSP like a musician playing a piece from memory over a slightly delayed earpiece connected to a conductor. You play confidently ahead of the conductor. Most of the time, you're in perfect sync. If you miss a note and the conductor corrects you through the earpiece, you instantly snap back to that measure, speed-play all the notes you played since then, and get back in sync. To the audience, they never notice the correction. That's Replicate and Reconcile.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. The Data Structures: MoveData & MoveState</h2>
+    <p>CSP requires two structs: one for <strong>inputs going UP to the server</strong>, and one for <strong>state coming DOWN to the client</strong>. Getting these right is critical for bandwidth and correctness:</p>
+
+    <h3>What Goes in Each Struct</h3>
+    <table>
+      <tr>
+        <th>Struct</th>
+        <th>Direction</th>
+        <th>Contains</th>
+        <th>Sent How Often</th>
+      </tr>
+      <tr>
+        <td><strong>MoveData</strong> (IReplicateData)</td>
+        <td>Client → Server</td>
+        <td>Player inputs ONLY (WASD, jump, sprint, camera yaw)</td>
+        <td>Every tick (~60/sec)</td>
+      </tr>
+      <tr>
+        <td><strong>MoveState</strong> (IReconcileData)</td>
+        <td>Server → Client</td>
+        <td>Authoritative physics state (position, velocity, grounded, timers)</td>
+        <td>Every tick (~60/sec)</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Keep MoveData Small</div>
+      <p>MoveData is sent <strong>every single tick</strong> from client to server. If your tick rate is 60, that's 60 packets per second. Every extra byte costs bandwidth. Include ONLY the raw inputs needed to reproduce the movement — never include derived values like position or velocity in MoveData. Those belong in MoveState.</p>
+    </div>
+
+    <div class="code-block">
+      <h3>C#: MoveData — Input Struct (Client → Server)</h3>
+      <pre><code class="language-csharp">using FishNet.Object.Prediction;
+using UnityEngine;
+
+/// &lt;summary&gt;
+/// Inputs sent from the owning client to the server every tick.
+/// Keep this as SMALL as possible — it's sent 60 times per second.
+/// &lt;/summary&gt;
+public struct MoveData : IReplicateData
+{
+    // ── Raw Inputs ──
+    public Vector2 InputDirection;  // WASD mapped to X/Z
+    public float RotationY;         // Camera yaw (drives character facing)
+    public float Pitch;             // Camera pitch (for aiming/looking)
+    public bool JumpPressed;        // Was jump pressed THIS tick?
+    public bool JumpHeld;           // Is jump HELD this tick? (variable jump height)
+    public bool SprintHeld;         // Is sprint held?
+
+    // ── FishNet Tick Tracking (REQUIRED) ──
     private uint _tick;
+    public void Dispose() { }
     public uint GetTick() => _tick;
     public void SetTick(uint value) => _tick = value;
-    public void Dispose() {}
 }
 
-public struct MoveState : IReconcileData {
-    public Vector3 Position;
-    public Vector3 Velocity;
-    private uint _tick;
-    public uint GetTick() => _tick;
-    public void SetTick(uint value) => _tick = value;
-    public void Dispose() {}
-}</code></pre>
-
-    <div class="callout callout-tip">
-      <div class="callout-title">💡 Pro Tip: Struct Layouts</div>
-      <p>Always keep your Replicate and Reconcile structs as small as possible. This data is being sent up to 60 times a second.</p>
+// ─── WHAT NOT TO PUT IN MOVEDATA ───
+// ❌ Position       → This is OUTPUT, not input
+// ❌ Velocity       → This is OUTPUT, not input
+// ❌ IsGrounded     → This is OUTPUT, not input
+// ❌ AnimationState → Derive from MoveState on the client
+// ❌ Camera Pitch   → UNLESS it affects physics (e.g., aim direction)
+//                     In Slop-Box, Pitch is included because it
+//                     drives the camera pivot which affects simulation.</code></pre>
     </div>
 
+    <div class="code-block">
+      <h3>C#: MoveState — Authoritative State Struct (Server → Client)</h3>
+      <pre><code class="language-csharp">using FishNet.Object.Prediction;
+using UnityEngine;
+
+/// &lt;summary&gt;
+/// The authoritative physics state sent from server to client.
+/// Must contain EVERY variable that affects physical position.
+/// If a variable is missing, reconciliation will fail silently.
+/// &lt;/summary&gt;
+public struct MoveState : IReconcileData
+{
+    // ── Core Physics State ──
+    public Vector3 Position;         // World position
+    public float RotationY;          // Body facing direction
+    public Vector3 Velocity;         // Current movement velocity
+    public bool IsGrounded;          // Is the character touching ground?
+
+    // ── Simulation Timers ──
+    // CRITICAL: Any timer that affects movement MUST be reconciled.
+    // If JumpTimer ticks down in [Replicate] but isn't in MoveState,
+    // the client and server will desync on jump duration.
+    public float JumpTimer;          // Remaining jump force time
+    public float CoyoteTimer;       // Time since leaving ground (coyote time)
+    public float StaggerTimer;       // Knockback recovery timer
+
+    // ── Camera State (for non-owner interpolation) ──
+    public float Pitch;              // Look-up/down angle
+
+    // ── FishNet Tick Tracking (REQUIRED) ──
+    private uint _tick;
+    public void Dispose() { }
+    public uint GetTick() => _tick;
+    public void SetTick(uint value) => _tick = value;
+}
+
+// ─── THE RECONCILE COMPLETENESS RULE ───
+// If a variable is modified inside [Replicate] and it affects
+// the character's position on subsequent ticks, it MUST be
+// in MoveState. Otherwise, after reconciliation, the client
+// will replay ticks with WRONG timer values and desync again.
+//
+// Symptoms of a missing variable:
+// • Character "vibrates" or jitters visually
+// • Jump height is inconsistent between host and client
+// • Knockback distance differs between players</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. The Complete CSP NetworkBehaviour</h2>
+    <p>Here is a production-grade CSP implementation. This is the pattern you'll use for any predicted object in your game — player characters, physics props, vehicles:</p>
+
+    <div class="code-block">
+      <h3>C#: NetworkMovement.cs — Full CSP Implementation</h3>
+      <pre><code class="language-csharp">using FishNet.Object;
+using FishNet.Object.Prediction;
+using FishNet.Transporting;
+using UnityEngine;
+
+/// &lt;summary&gt;
+/// FishNet Client-Side Prediction wrapper.
+/// Collects input → ships to server → predicts locally → reconciles.
+///
+/// ARCHITECTURE: This script handles ONLY networking.
+/// Actual physics/movement math lives in CharacterMovement.cs.
+/// This separation keeps your simulation testable offline.
+/// &lt;/summary&gt;
+public class NetworkMovement : NetworkBehaviour
+{
+    [Header("Simulation")]
+    [SerializeField] private CharacterMovement _sim;
+
+    private IInputProvider _input;
+
+    // ═══════════════════════════════════════════════════════
+    // LIFECYCLE
+    // ═══════════════════════════════════════════════════════
+
+    private void Awake()
+    {
+        if (_sim == null)
+            _sim = GetComponent&lt;CharacterMovement&gt;();
+    }
+
+    public override void OnStartNetwork()
+    {
+        base.OnStartNetwork();
+        // OnTick = fixed network timestep (like Quantum's frame advance)
+        TimeManager.OnTick += OnTick;
+        TimeManager.OnPostTick += OnPostTick;
+    }
+
+    public override void OnStopNetwork()
+    {
+        base.OnStopNetwork();
+        if (TimeManager != null)
+        {
+            TimeManager.OnTick -= OnTick;
+            TimeManager.OnPostTick -= OnPostTick;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TICK LOOP (runs at fixed network rate, e.g. 60Hz)
+    // ═══════════════════════════════════════════════════════
+
+    private void OnTick()
+    {
+        // Step 1: Build input data (only meaningful for the owner)
+        MoveData input = BuildMoveData();
+
+        // Step 2: Execute [Replicate]
+        // - On OWNER CLIENT: executes immediately as prediction
+        // - On SERVER: executes authoritatively with the client's input
+        // - On NON-OWNER CLIENTS: executes with default/empty data
+        Replicate(input);
+    }
+
+    private void OnPostTick()
+    {
+        // Step 3: After the server's [Replicate], build authoritative state
+        // FishNet calls CreateReconcile() automatically on the server
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // INPUT COLLECTION (runs on owner client only)
+    // ═══════════════════════════════════════════════════════
+
+    private MoveData BuildMoveData()
+    {
+        // Return empty data if we're not the owner
+        // (server and non-owner clients don't generate input)
+        if (!IsOwner || _input == null)
+            return default;
+
+        // Don't move if the cursor is unlocked (menu, DevBar, etc.)
+        if (Cursor.lockState != CursorLockMode.Locked)
+            return new MoveData
+            {
+                RotationY = _sim.CameraYaw,
+                Pitch = _sim.CameraPitch
+            };
+
+        return new MoveData
+        {
+            InputDirection = _input.MoveInput,
+            RotationY = _sim.CameraYaw,
+            Pitch = _sim.CameraPitch,
+            JumpPressed = _input.IsJumpPressed,
+            JumpHeld = _input.IsJumpHeld,
+            SprintHeld = _input.IsSprintHeld
+        };
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // [REPLICATE] — The Core Simulation Step
+    // ═══════════════════════════════════════════════════════
+
+    /// &lt;summary&gt;
+    /// Executes movement physics for one tick.
+    ///
+    /// This runs on:
+    ///   • Owner Client: IMMEDIATELY (prediction)
+    ///   • Server: with the SAME input (authoritative)
+    ///   • Owner Client AGAIN: during reconciliation replays
+    ///
+    /// CRITICAL RULES:
+    ///   1. Use TimeManager.TickDelta, NEVER Time.deltaTime
+    ///   2. Only use data from the MoveData struct + simulation state
+    ///   3. Never read external state (Time.time, Input.GetKey, etc.)
+    ///   4. Must be DETERMINISTIC given the same inputs + state
+    /// &lt;/summary&gt;
+    [Replicate]
+    private void Replicate(
+        MoveData data,
+        ReplicateState state = ReplicateState.Invalid,
+        Channel channel = Channel.Unreliable)
+    {
+        // Delegate to the pure physics simulation
+        float delta = (float)TimeManager.TickDelta;
+        _sim.Simulate(data, delta);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // [RECONCILE] — Server Correction
+    // ═══════════════════════════════════════════════════════
+
+    /// &lt;summary&gt;
+    /// Called automatically by FishNet. The server builds
+    /// the authoritative state, sends it to the owning client.
+    /// The client snaps to this state and replays unacked inputs.
+    /// &lt;/summary&gt;
+    public override void CreateReconcile()
+    {
+        MoveState state = new MoveState
+        {
+            Position = transform.position,
+            RotationY = transform.eulerAngles.y,
+            Velocity = _sim.Velocity,
+            IsGrounded = _sim.IsGrounded,
+            JumpTimer = _sim.JumpTimer,
+            CoyoteTimer = _sim.CoyoteTimer,
+            StaggerTimer = _sim.StaggerTimer,
+            Pitch = _sim.CameraPitch
+        };
+        Reconcile(state);
+    }
+
+    /// &lt;summary&gt;
+    /// Applies the server's authoritative state to the local simulation.
+    /// After this, FishNet replays all unacknowledged [Replicate] calls.
+    /// &lt;/summary&gt;
+    [Reconcile]
+    private void Reconcile(
+        MoveState state,
+        Channel channel = Channel.Unreliable)
+    {
+        // Snap the simulation to the server's truth
+        transform.position = state.Position;
+        transform.eulerAngles = new Vector3(0f, state.RotationY, 0f);
+        _sim.SetState(state);
+    }
+}</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. The Replay Loop Explained</h2>
+    <p>When a reconcile correction arrives, FishNet performs the following steps in a single frame. This is the replay loop — the heart of CSP:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                  THE RECONCILIATION REPLAY LOOP                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  1. Server sends MoveState for Tick 100                                  │
+│     (Position: [10, 0, 5], Velocity: [2, 0, 0], Grounded: true)        │
+│                                                                          │
+│  2. Client is currently at Tick 103 (predicted ahead by 3 ticks)         │
+│     Client's predicted position: [16.1, 0, 5]                           │
+│     Server's authoritative position: [16.0, 0, 5]                       │
+│                                                                          │
+│  3. Client compares: difference = 0.1 units                              │
+│     (FishNet handles this comparison internally)                         │
+│                                                                          │
+│  4. IF difference exceeds tolerance:                                     │
+│     ┌─────────────────────────────────────────────────────────┐          │
+│     │ a. SNAP transform to server state at Tick 100            │          │
+│     │    position = [10, 0, 5]                                 │          │
+│     │    velocity = [2, 0, 0]                                  │          │
+│     │                                                          │          │
+│     │ b. REPLAY Tick 101 input on corrected state              │          │
+│     │    → [Replicate](savedInput101)                          │          │
+│     │                                                          │          │
+│     │ c. REPLAY Tick 102 input                                 │          │
+│     │    → [Replicate](savedInput102)                          │          │
+│     │                                                          │          │
+│     │ d. REPLAY Tick 103 input                                 │          │
+│     │    → [Replicate](savedInput103)                          │          │
+│     │                                                          │          │
+│     │ e. Client is now at Tick 103 with CORRECTED state        │          │
+│     │    New predicted position: [16.0, 0, 5] ✅              │          │
+│     └─────────────────────────────────────────────────────────┘          │
+│                                                                          │
+│  5. ALL of this happens in ONE Unity frame — invisible to the player     │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Why This Works</div>
+      <p>The key insight is that <code>[Replicate]</code> is a <strong>pure function</strong> — given the same input and the same starting state, it produces the same result. So by snapping to the server's state and replaying all buffered inputs, the client arrives at the correct predicted position. As long as your Replicate logic is deterministic (no <code>Time.deltaTime</code>, no random calls), the correction is invisible.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. TickDelta vs DeltaTime: The Silent Killer</h2>
+    <p>This is the single most common bug in FishNet CSP implementations, and it causes the most infuriating symptom: characters that jitter and vibrate.</p>
+
+    <table>
+      <tr>
+        <th></th>
+        <th><code>Time.deltaTime</code></th>
+        <th><code>TimeManager.TickDelta</code></th>
+      </tr>
+      <tr>
+        <td><strong>Value</strong></td>
+        <td>Variable (depends on frame rate)</td>
+        <td>Fixed (e.g., 1/60 = 0.01667s)</td>
+      </tr>
+      <tr>
+        <td><strong>On Client at 144fps</strong></td>
+        <td>~0.00694s</td>
+        <td>0.01667s</td>
+      </tr>
+      <tr>
+        <td><strong>On Server at 30fps</strong></td>
+        <td>~0.03333s</td>
+        <td>0.01667s</td>
+      </tr>
+      <tr>
+        <td><strong>During Replay</strong></td>
+        <td>~0.00001s (runs in a burst)</td>
+        <td>0.01667s (correct)</td>
+      </tr>
+      <tr>
+        <td><strong>CSP Compatible?</strong></td>
+        <td style="color: var(--accent-red);"><strong>❌ NO — breaks everything</strong></td>
+        <td style="color: var(--accent-green);"><strong>✅ YES — required</strong></td>
+      </tr>
+    </table>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Symptom</div>
+      <p>If you use <code>Time.deltaTime</code> inside <code>[Replicate]</code>, here's what happens: the client predicts movement using its frame rate (e.g., 144fps = tiny delta). The server runs at a different frame rate (e.g., 60fps = larger delta). Even if the same input is applied, the results diverge. Then during reconciliation replay, <code>Time.deltaTime</code> is near-zero because 3 ticks are replayed instantly in one frame. The character position oscillates between prediction and correction every frame, causing visible jitter. <strong>Always use <code>(float)TimeManager.TickDelta</code> inside [Replicate].</strong></p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Interpolation for Non-Owner Observers</h2>
+    <p>CSP only handles the <strong>owning player's</strong> experience. Other players watching you move see a different challenge: they receive your position updates at the server's tick rate, which can look choppy without interpolation.</p>
+
+    <table>
+      <tr>
+        <th>Technique</th>
+        <th>How It Works</th>
+        <th>Latency</th>
+        <th>Best For</th>
+      </tr>
+      <tr>
+        <td><strong>Interpolation</strong></td>
+        <td>Smoothly blend between the last two known positions</td>
+        <td>Adds ~1 tick of visual delay</td>
+        <td>Co-op allies, NPCs, most objects</td>
+      </tr>
+      <tr>
+        <td><strong>Extrapolation</strong></td>
+        <td>Predict where the object is going based on velocity</td>
+        <td>No added delay, but can overshoot</td>
+        <td>Fast projectiles</td>
+      </tr>
+      <tr>
+        <td><strong>Snap</strong></td>
+        <td>Teleport to each new position</td>
+        <td>None</td>
+        <td>Nothing — looks terrible</td>
+      </tr>
+    </table>
+
+    <p>FishNet's built-in <code>NetworkTransform</code> component handles interpolation for non-predicted objects automatically. For CSP-predicted objects, non-owners see the result of the server's <code>[Replicate]</code> execution, which naturally provides smooth updates at the tick rate.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Physics Settings for CSP</h2>
+    <p>Unity's physics engine needs specific configuration to work correctly with FishNet's tick-based simulation:</p>
+
+    <div class="code-block">
+      <h3>C#: Physics Configuration for FishNet CSP</h3>
+      <pre><code class="language-csharp">// In your bootstrap or NetworkManager setup:
+
+void ConfigurePhysicsForCSP()
+{
+    // 1. Disable automatic Physics simulation.
+    //    FishNet advances physics manually per-tick.
+    Physics.simulationMode = SimulationMode.Script;
+
+    // 2. Set fixed timestep to match FishNet's tick rate.
+    //    If NetworkManager.TickRate = 60, then:
+    Time.fixedDeltaTime = 1f / 60f;  // 0.01667s
+
+    // 3. FishNet's PredictionManager handles calling
+    //    Physics.Simulate() at the right time during
+    //    [Replicate] execution and reconciliation replays.
+    //
+    //    You do NOT call Physics.Simulate() yourself.
+    //    FishNet does it for you.
+}
+
+// WHY Physics.simulationMode = Script?
+//
+// If Unity runs physics automatically in FixedUpdate(),
+// it will run at its own rate, independent of network ticks.
+// This causes the client's physics to drift from the server's.
+// By switching to Script mode, FishNet controls EXACTLY when
+// physics steps occur, ensuring client and server stay in sync.</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. Prince of Persia: Encoding Complex Actions in MoveData</h2>
+    <p>For a platformer with advanced movement, your MoveData needs to encode everything the simulation needs to reproduce acrobatic actions:</p>
+
+    <div class="code-block">
+      <h3>C#: Extended MoveData for a Platformer</h3>
+      <pre><code class="language-csharp">public struct PlatformerMoveData : IReplicateData
+{
+    // ── Basic Movement ──
+    public Vector2 InputDirection;
+    public float CameraYaw;
+    public bool SprintHeld;
+
+    // ── Jump Mechanics ──
+    public bool JumpPressed;      // Tap = normal jump
+    public bool JumpHeld;         // Hold = variable jump height
+    // Note: double-jump is NOT an input — it's a state check
+    // inside [Replicate]. If IsGrounded==false && JumpPressed
+    // && doubleJumpAvailable, consume the double jump.
+
+    // ── Wall Interactions ──
+    public bool GrabPressed;      // Grab ledge / wall grip
+    // Note: whether the player IS on a wall is checked by raycasts
+    // inside [Replicate], not sent as input. Only the INTENT
+    // to grab is input. The physics determines if they CAN grab.
+
+    // ── Combat ──
+    public bool AttackPressed;    // Swing sword
+    public bool BlockHeld;        // Shield up
+
+    // ── FishNet Required ──
+    private uint _tick;
+    public void Dispose() { }
+    public uint GetTick() => _tick;
+    public void SetTick(uint value) => _tick = value;
+}
+
+// ─── THE INPUT vs STATE RULE ───
+//
+// INPUT (MoveData): What the player WANTS to do.
+//   → "I pressed jump"   "I'm holding grab"   "I pressed attack"
+//
+// STATE (MoveState): What the physics ACTUALLY resulted in.
+//   → "I'm at position X"  "I'm on a wall"  "My velocity is Y"
+//
+// The [Replicate] function connects them:
+//   Given INPUT + current STATE → produce next STATE</code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 The Golden Rule of MoveData</div>
+      <p>Only encode <strong>player intent</strong>. Never encode <strong>simulation results</strong>. "I pressed jump" is input. "I'm in the air" is state. "I want to grab a ledge" is input. "I'm currently grabbing a ledge" is state. If you mix these up, your reconcile loop will replay with stale state data and produce constant jitter.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <h2>Key Takeaways</h2>
     <ul>
-      <li>CSP gives clients the illusion of zero latency by predicting authoritative results locally.</li>
-      <li><code>[Replicate]</code> logic runs on both Client and Server. It must only use inputs provided to it, never outside variables.</li>
-      <li><code>[Reconcile]</code> snaps the Client to the exact Server state.</li>
-      <li>FishNet handles the rollback and replay (re-executing Replicate) automatically.</li>
+      <li><strong>CSP = predict locally, correct from server.</strong> The client executes movement immediately. The server sends corrections. FishNet replays unacked inputs automatically during reconciliation.</li>
+      <li><strong>[Replicate] must be a pure function.</strong> Same input + same state = same result. No <code>Time.deltaTime</code>, no <code>Random</code>, no external reads.</li>
+      <li><strong>Always use TimeManager.TickDelta.</strong> Using <code>Time.deltaTime</code> inside [Replicate] causes jitter because client, server, and replay all run at different frame rates.</li>
+      <li><strong>MoveData = player intent (inputs).</strong> MoveState = physics results (positions, velocities, timers). Never mix them.</li>
+      <li><strong>Every variable modified in [Replicate] that affects position MUST be in MoveState.</strong> Missing a timer or flag causes invisible desyncs that manifest as jitter.</li>
+      <li><strong>Set Physics.simulationMode = Script.</strong> FishNet controls when physics steps occur to keep client and server in sync.</li>
+      <li><strong>Non-owners see interpolated positions.</strong> CSP only helps the owner. Everyone else sees smooth interpolation of server-authoritative updates.</li>
     </ul>
 
     <div class="lesson-nav">

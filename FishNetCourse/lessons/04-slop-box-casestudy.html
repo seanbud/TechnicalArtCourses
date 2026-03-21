@@ -21,46 +21,593 @@
     <div class="lesson-header">
       <div class="lesson-number">Lesson 04</div>
       <h1>Slop-Box Architecture Case Study</h1>
-      <p class="lesson-subtitle">Analyzing NetworkMovement.cs and decoupling visual simulation from the networking layer.</p>
+      <p class="lesson-subtitle">A deep analysis of a real FishNet codebase — what's production-ready, what's missing, and how to scale it for a co-op Prince of Persia.</p>
     </div>
-
-    <h2>Introduction</h2>
-    <p>Let's look closely at your existing project, <code>Slop-Box</code>. The core of your networking logic exists inside <code>SlopBox.Core.Movement.NetworkMovement</code>. You have chosen an excellent architectural pattern: wrapping a separate simulation script.</p>
 
     <div class="callout callout-concept">
-      <div class="callout-title">🧠 Key Architecture: Decoupling Simulation from Network</div>
-      <p>The <code>NetworkMovement.cs</code> script handles purely the network data (Client-Side Prediction, Inputs, RPCs, SyncVars). It passes data into <code>CharacterMovement.cs</code>, which handles the actual rigidbodies and math. This is highly analogous to Quantum's System vs View logic.</p>
+      <div class="callout-title">🧠 Why This Lesson Matters</div>
+      <p>Theory is one thing — reading someone else's real code is another. This lesson walks through the actual Slop-Box codebase script by script, annotates the architectural decisions, identifies gaps, and gives you a clear list of what needs to change to ship a polished co-op experience.</p>
     </div>
 
-    <h2>Reviewing the Implementation</h2>
-    <p>Inside <code>NetworkMovement.cs</code>, you properly use the FishNet `TimeManager` to hook into the Tick system:</p>
-    
-    <pre><code>public override void OnStartNetwork() {
-    base.OnStartNetwork();
-    TimeManager.OnTick += TimeManager_OnTick;
-    TimeManager.OnPostTick += TimeManager_OnPostTick;
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Architecture Overview</h2>
+    <p>Slop-Box uses a clean layered architecture. Here's the full system map, from bootstrap to physics:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                  SLOP-BOX NETWORK ARCHITECTURE                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────┐        │
+│  │  BOOTSTRAP LAYER (Zenject ProjectContext)                    │        │
+│  │                                                              │        │
+│  │  NetworkBootstrap ──→ Wraps NetworkManager Start/Stop        │        │
+│  │  NetworkAutoStart ──→ Auto-starts Host mode on scene load    │        │
+│  │  NetworkingSystemInstaller ──→ Binds FishNet to Zenject DI   │        │
+│  └───────────────────────────┬─────────────────────────────────┘        │
+│                              │                                           │
+│  ┌───────────────────────────▼─────────────────────────────────┐        │
+│  │  CONNECTION LAYER                                            │        │
+│  │                                                              │        │
+│  │  ConnectionManager ──→ Tracks connected players              │        │
+│  │    • OnPlayerConnected  (event)                              │        │
+│  │    • OnPlayerDisconnected (event)                            │        │
+│  │    • ConnectedClients (readonly dict)                        │        │
+│  └───────────────────────────┬─────────────────────────────────┘        │
+│                              │                                           │
+│  ┌───────────────────────────▼─────────────────────────────────┐        │
+│  │  PREDICTION LAYER (per NetworkObject)                        │        │
+│  │                                                              │        │
+│  │  NetworkMovement ──→ CSP wrapper (FishNet-aware)             │        │
+│  │    • Collects input in OnTick                                │        │
+│  │    • Calls [Replicate] with MoveData                         │        │
+│  │    • Sends [Reconcile] with MoveState                        │        │
+│  │    • Syncs camera pitch via SyncVar                          │        │
+│  └───────────────────────────┬─────────────────────────────────┘        │
+│                              │                                           │
+│  ┌───────────────────────────▼─────────────────────────────────┐        │
+│  │  SIMULATION LAYER (pure Unity — NO networking awareness)     │        │
+│  │                                                              │        │
+│  │  CharacterMovement ──→ Pure physics simulation               │        │
+│  │    • CharacterController.Move()                              │        │
+│  │    • Jump (variable-height with sustain)                     │        │
+│  │    • Directional speed modifiers                             │        │
+│  │    • Coyote time, stagger, knockback                         │        │
+│  │    • Returns MoveState for reconciliation                    │        │
+│  └─────────────────────────────────────────────────────────────┘        │
+│                                                                          │
+│  KEY PRINCIPLE: The Simulation Layer knows NOTHING about FishNet.        │
+│  It receives inputs, simulates physics, returns state.                   │
+│  This is the exact same pattern as Quantum's System/View split.         │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Architecture Grade: A-</div>
+      <p>This is a genuinely good architecture. The separation of NetworkMovement (FishNet-aware) from CharacterMovement (pure simulation) is the single most important pattern in FishNet development. It means you can test CharacterMovement offline without a network, iterate on physics feel without touching netcode, and swap networking frameworks without rewriting movement math. The only missing piece is completeness of the reconcile state (see Section 4).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. NetworkBootstrap: The Entry Point</h2>
+    <p>The bootstrap layer wraps FishNet's NetworkManager into a clean API:</p>
+
+    <div class="code-block">
+      <h3>C#: NetworkBootstrap.cs (Annotated)</h3>
+      <pre><code class="language-csharp">public class NetworkBootstrap : MonoBehaviour
+{
+    private NetworkManager _networkManager;
+
+    // Zenject injects the NetworkManager found in the scene.
+    // This fires BEFORE OnStartNetwork — safe for reference caching.
+    [Inject]
+    public void Construct(NetworkManager networkManager)
+    {
+        _networkManager = networkManager;
+    }
+
+    /// &lt;summary&gt;
+    /// Two calls = Host mode (Server + Client simultaneously).
+    /// This is the standard pattern for co-op.
+    /// &lt;/summary&gt;
+    public void StartHost()
+    {
+        _networkManager.ServerManager.StartConnection();  // ← Server logic
+        _networkManager.ClientManager.StartConnection();  // ← Local client
+    }
+
+    // ARCHITECTURE NOTE:
+    // This class is a "thin wrapper." It doesn't add logic — it just
+    // provides a clean API for other systems to call. This keeps
+    // the FishNet API from leaking into game code.
+    //
+    // In production, you'd add:
+    // - Lobby/matchmaking integration
+    // - Unity Relay allocation before starting
+    // - Error handling for failed connections
+    // - Reconnection logic
 }</code></pre>
+    </div>
 
-    <p>This guarantees that input collection and physics execution happens in sync with the server's expected clock step, avoiding the float precision errors typical of <code>Update()</code> loops.</p>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. ConnectionManager: Tracking Players</h2>
+    <p>This script hooks into FishNet's <code>OnRemoteConnectionState</code> event to track when players join and leave:</p>
 
-    <h3>The Replicate Data Collection</h3>
-    <p>In your <code>TimeManager_OnTick()</code>, you collect local hardware input constraints (checking `CursorLockMode`) and assemble your <code>MoveData</code> struct. The simulation is correctly driven purely by this structure.</p>
+    <div class="code-block">
+      <h3>C#: ConnectionManager.cs (Annotated)</h3>
+      <pre><code class="language-csharp">public class ConnectionManager : MonoBehaviour
+{
+    private NetworkManager _networkManager;
 
-    <h3>Pitch and Yaw Replicating</h3>
-    <p>Your implementation of updating Camera Pitch independently of physics via `SyncVar` is a clever solution to a common problem:</p>
-    <pre><code>private readonly SyncVar&lt;float&gt; _replicatedPitch = new();</code></pre>
-    <p>Because camera rotation (where the player is looking) often diverges from the physics orientation (where the body is facing), decoupling the Yaw for the simulation and the Pitch via a simple SyncVar saves massive bandwidth over sending full Quaternions in the Replicate data.</p>
+    // Events that other systems can subscribe to
+    public event Action&lt;NetworkConnection&gt; OnPlayerConnected;
+    public event Action&lt;NetworkConnection&gt; OnPlayerDisconnected;
+
+    // Server-side only: all currently connected clients
+    public IReadOnlyDictionary&lt;int, NetworkConnection&gt; ConnectedClients =&gt;
+        _networkManager?.ServerManager?.Clients ??
+        new Dictionary&lt;int, NetworkConnection&gt;();
+
+    private void OnEnable()
+    {
+        // Subscribe to FishNet's connection state changes
+        _networkManager.ServerManager.OnRemoteConnectionState +=
+            HandleRemoteConnectionState;
+    }
+
+    private void HandleRemoteConnectionState(
+        NetworkConnection conn,
+        RemoteConnectionStateArgs args)
+    {
+        switch (args.ConnectionState)
+        {
+            case RemoteConnectionState.Started:
+                OnPlayerConnected?.Invoke(conn);
+                break;
+            case RemoteConnectionState.Stopped:
+                OnPlayerDisconnected?.Invoke(conn);
+                break;
+        }
+    }
+
+    // ARCHITECTURE NOTE:
+    // This is a MEDIATOR pattern. Instead of every system
+    // (UI, spawning, game loop) subscribing directly to
+    // FishNet's raw events, they subscribe to ConnectionManager.
+    // This gives you one place to add logging, filtering,
+    // and connection validation.
+    //
+    // WHAT'S MISSING:
+    // - No reconnection handling (if a player disconnects
+    //   and reconnects, they get a new ClientId)
+    // - No player data (name, team) associated with connections
+    // - No host migration (if the host leaves, game ends)
+}</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. NetworkMovement: The CSP Wrapper</h2>
+    <p>This is the most critical script in the project. It bridges between FishNet's tick system and CharacterMovement's pure simulation:</p>
+
+    <div class="code-block">
+      <h3>C#: NetworkMovement.cs (Fully Annotated)</h3>
+      <pre><code class="language-csharp">public class NetworkMovement : NetworkBehaviour
+{
+    [SerializeField] private CharacterMovement _simulation;
+
+    // Camera pitch is synced as a SyncVar instead of through MoveData.
+    // This is a BANDWIDTH OPTIMIZATION — see Section 5.
+    private readonly SyncVar&lt;float&gt; _replicatedPitch = new();
+    private readonly SyncVar&lt;float&gt; _replicatedCameraYaw = new();
+
+    private IInputProvider _input;
+
+    [Inject]
+    public void Construct(IInputProvider input) =&gt; _input = input;
+
+    // ─── LIFECYCLE ───
+
+    public override void OnStartNetwork()
+    {
+        base.OnStartNetwork();
+        // Hook into FishNet's fixed tick loop — NOT Unity's Update().
+        // TimeManager.OnTick fires at the NetworkManager's tick rate
+        // (typically 60Hz), which is independent of frame rate.
+        TimeManager.OnTick += TimeManager_OnTick;
+        TimeManager.OnPostTick += TimeManager_OnPostTick;
+    }
+
+    // ─── TICK LOOP ───
+
+    private void TimeManager_OnTick()
+    {
+        // Step 1: Collect input (only relevant for the owner)
+        MoveData data = BuildMoveData();
+
+        // Step 2: Execute simulation.
+        // On OWNER: runs immediately as prediction.
+        // On SERVER: runs authoritatively with the client's input.
+        Replicate(data);
+    }
+
+    private void TimeManager_OnPostTick()
+    {
+        // Step 3: After the server executes [Replicate],
+        // update the camera SyncVars so non-owners can see
+        // where this player is looking.
+        if (IsServerInitialized)
+        {
+            var pivot = _simulation?.CameraPivot;
+            if (pivot != null)
+            {
+                _replicatedPitch.Value = pivot.eulerAngles.x;
+                _replicatedCameraYaw.Value = pivot.eulerAngles.y;
+            }
+        }
+    }
+
+    // ─── INPUT COLLECTION ───
+
+    private MoveData BuildMoveData()
+    {
+        // Non-owners return empty data (they don't generate input)
+        if (!IsOwner || _input == null) return default;
+
+        // IMPORTANT: Cursor lock check prevents movement while
+        // interacting with UI. Input still collected for camera.
+        if (Cursor.lockState != CursorLockMode.Locked)
+            return new MoveData { RotationY = ..., Pitch = ... };
+
+        return new MoveData
+        {
+            InputDirection = _input.MoveInput,
+            RotationY      = _simulation.CameraYaw,
+            Pitch          = _simulation.CameraPitch,
+            JumpPressed    = _input.IsJumpHeld, // ← BUG: see Section 6
+            JumpHeld       = _input.IsJumpHeld,
+            SprintHeld     = _input.IsSprintHeld
+        };
+    }
+
+    // ─── CSP CORE ───
+
+    [Replicate]
+    private void Replicate(MoveData data,
+        ReplicateState state = ReplicateState.Invalid,
+        Channel channel = Channel.Unreliable)
+    {
+        // CORRECT: uses TickDelta, not Time.deltaTime
+        float delta = (float)TimeManager.TickDelta;
+        _simulation.Simulate(data, delta);
+    }
+
+    public override void CreateReconcile()
+    {
+        MoveState state = new MoveState
+        {
+            Position   = transform.position,
+            RotationY  = transform.eulerAngles.y,
+            Pitch      = ...,
+            Velocity   = _simulation.Velocity,
+            IsGrounded = _simulation.IsGrounded,
+            JumpTimer    = 0f,   // ← ISSUE: see Section 6
+            StaggerTimer = 0f    // ← ISSUE: see Section 6
+        };
+        Reconcile(state);
+    }
+
+    [Reconcile]
+    private void Reconcile(MoveState state,
+        Channel channel = Channel.Unreliable)
+    {
+        _simulation.SetState(state);
+    }
+}</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. The SyncVar Pitch Optimization</h2>
+    <p>One of the smartest decisions in the codebase is how camera rotation is handled. Instead of stuffing the full camera state into MoveData (which is sent 60 times per second), the camera pitch and yaw are synced via lightweight SyncVars:</p>
+
+    <table>
+      <tr>
+        <th>Approach</th>
+        <th>Bandwidth per Tick</th>
+        <th>Affects Physics?</th>
+        <th>Verdict</th>
+      </tr>
+      <tr>
+        <td>Camera rotation in MoveData</td>
+        <td>~16 bytes (two floats sent every tick)</td>
+        <td>Only if aiming affects movement</td>
+        <td>Wasteful for non-physics data</td>
+      </tr>
+      <tr>
+        <td>Camera rotation via SyncVar</td>
+        <td>~8 bytes (only when changed, delta-compressed)</td>
+        <td>No — purely cosmetic for spectators</td>
+        <td>✅ Correct choice</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Bandwidth Rule</div>
+      <p>MoveData should only contain values that <strong>affect the physics simulation</strong>. If the camera pitch doesn't change how the CharacterController moves (it doesn't — the body faces the camera yaw, not the pitch), then it's cosmetic data that doesn't need to be replicated through the prediction system. Syncing it as a SyncVar is cheaper and simpler. This is the equivalent of putting "visual-only" data in Quantum's View layer instead of the Simulation.</p>
+    </div>
+
+    <p>However, there's a subtlety: <code>RotationY</code> (the camera yaw) IS in MoveData because it drives the character's body rotation and movement direction. If you removed it, the server wouldn't know which direction "forward" means for the WASD input, and the character would drift.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Reconcile Completeness Audit</h2>
+    <p>This is the most important health check for any CSP implementation. Every variable that is modified inside <code>[Replicate]</code> (via <code>CharacterMovement.Simulate()</code>) and affects future tick calculations <strong>MUST</strong> be included in MoveState. Let's audit:</p>
+
+    <table>
+      <tr>
+        <th>Variable in CharacterMovement</th>
+        <th>Modified in Simulate()?</th>
+        <th>Affects Future Ticks?</th>
+        <th>In MoveState?</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <td><code>transform.position</code></td>
+        <td>✅ Yes (CharacterController.Move)</td>
+        <td>✅ Yes</td>
+        <td>✅ Yes (Position)</td>
+        <td style="color: var(--accent-green);">✅ OK</td>
+      </tr>
+      <tr>
+        <td><code>transform.rotation</code></td>
+        <td>✅ Yes (Quaternion.Slerp)</td>
+        <td>✅ Yes (body facing affects movement)</td>
+        <td>✅ Yes (RotationY)</td>
+        <td style="color: var(--accent-green);">✅ OK</td>
+      </tr>
+      <tr>
+        <td><code>Velocity</code></td>
+        <td>✅ Yes (combined horizontal + vertical)</td>
+        <td>✅ Yes</td>
+        <td>✅ Yes</td>
+        <td style="color: var(--accent-green);">✅ OK</td>
+      </tr>
+      <tr>
+        <td><code>IsGrounded</code></td>
+        <td>✅ Yes (CharacterController.isGrounded)</td>
+        <td>✅ Yes (affects jump availability)</td>
+        <td>✅ Yes</td>
+        <td style="color: var(--accent-green);">✅ OK</td>
+      </tr>
+      <tr>
+        <td><code>_jumpTimer</code></td>
+        <td>✅ Yes (incremented during jump sustain)</td>
+        <td>✅ Yes (determines jump sustain duration)</td>
+        <td>⚠️ Hardcoded to 0f</td>
+        <td style="color: var(--accent-red);"><strong>❌ BUG</strong></td>
+      </tr>
+      <tr>
+        <td><code>_staggerTimer</code></td>
+        <td>✅ Yes (decremented during stagger)</td>
+        <td>✅ Yes (determines input lockout)</td>
+        <td>⚠️ Hardcoded to 0f</td>
+        <td style="color: var(--accent-red);"><strong>❌ BUG</strong></td>
+      </tr>
+      <tr>
+        <td><code>_coyoteTimer</code></td>
+        <td>✅ Yes (decremented when airborne)</td>
+        <td>✅ Yes (allows late jumps after leaving edge)</td>
+        <td>❌ Not included</td>
+        <td style="color: var(--accent-red);"><strong>❌ MISSING</strong></td>
+      </tr>
+      <tr>
+        <td><code>_hasJumped</code></td>
+        <td>✅ Yes (set true on jump, reset on ground)</td>
+        <td>✅ Yes (prevents double-jump)</td>
+        <td>❌ Not included</td>
+        <td style="color: var(--accent-red);"><strong>❌ MISSING</strong></td>
+      </tr>
+      <tr>
+        <td><code>_horizontalVelocity</code></td>
+        <td>✅ Yes (MoveTowards each tick)</td>
+        <td>✅ Yes (used as base for next tick's acceleration)</td>
+        <td>⚠️ Derived from Velocity.Flat() in SetState</td>
+        <td style="color: var(--accent-orange);">⚠️ FRAGILE</td>
+      </tr>
+      <tr>
+        <td><code>_verticalVelocity</code></td>
+        <td>✅ Yes (gravity, jump force)</td>
+        <td>✅ Yes</td>
+        <td>⚠️ Derived from Velocity.y in SetState</td>
+        <td style="color: var(--accent-orange);">⚠️ FRAGILE</td>
+      </tr>
+    </table>
 
     <div class="callout callout-warning">
-      <div class="callout-title">⚠️ Potential Pitfall: Reconcile Depth</div>
-      <p>Inside <code>CreateReconcile()</code>, you ensure properties like <code>JumpTimer</code> and <code>StaggerTimer</code> are captured. If these variables are somehow modified inside Update() inside <code>CharacterMovement.cs</code> rather than explicitly via Replicate ticks, CSP will eventually fail and clients will vibrate as they continually mispredict logic based on variable framerates. Always ensure timers run off `TimeManager.TickDelta`, just like Quantum's deterministic frames.</p>
+      <div class="callout-title">⚠️ The JumpTimer / StaggerTimer Bug</div>
+      <p>In <code>CreateReconcile()</code>, <code>JumpTimer</code> and <code>StaggerTimer</code> are hardcoded to <code>0f</code> instead of reading from the simulation. This means every reconcile resets these timers to zero. The symptom: if a client is mid-jump when a reconcile arrives, the replay loop restarts with JumpTimer=0, causing the jump sustain to re-apply and the character to jump higher than intended. Similarly, knockback stagger will be shorter on the client than on the server.</p>
     </div>
 
+    <div class="code-block">
+      <h3>C#: The Fix — Complete CreateReconcile</h3>
+      <pre><code class="language-csharp">public override void CreateReconcile()
+{
+    MoveState state = new MoveState
+    {
+        Position     = transform.position,
+        RotationY    = transform.eulerAngles.y,
+        Pitch        = _simulation.CameraPitch,
+        Velocity     = _simulation.Velocity,
+        IsGrounded   = _simulation.IsGrounded,
+        JumpTimer    = _simulation.JumpTimer,      // ← FIX: read actual value
+        StaggerTimer = _simulation.StaggerTimer,   // ← FIX: read actual value
+        CoyoteTimer  = _simulation.CoyoteTimer,    // ← ADD: missing field
+        HasJumped    = _simulation.HasJumped,       // ← ADD: missing field
+    };
+    Reconcile(state);
+}
+
+// Also update MoveState struct:
+public struct MoveState : IReconcileData
+{
+    public Vector3 Position;
+    public float RotationY;
+    public float Pitch;
+    public Vector3 Velocity;
+    public bool IsGrounded;
+    public float JumpTimer;
+    public float StaggerTimer;
+    public float CoyoteTimer;   // ← ADD
+    public bool HasJumped;      // ← ADD
+    // ... tick tracking
+}</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. What's Missing: Networking Hazards & Co-op Systems</h2>
+    <p>Currently, the Slop-Box project networks player movement but doesn't yet network environmental hazards or co-op interactions. Here's what needs to be built:</p>
+
+    <table>
+      <tr>
+        <th>System</th>
+        <th>Current State</th>
+        <th>Required For Co-op</th>
+        <th>Recommended Approach</th>
+      </tr>
+      <tr>
+        <td><strong>Hazard Damage</strong></td>
+        <td>Local only — each client resolves damage independently</td>
+        <td>Server-authoritative damage</td>
+        <td>Hazards call <code>[Server] TakeDamage()</code> on the health system. Clients see damage VFX via <code>[ObserversRpc]</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Knockback Sync</strong></td>
+        <td>Local ApplyKnockback on CharacterMovement</td>
+        <td>Server-authoritative knockback</td>
+        <td>Server calls ApplyKnockback → next <code>[Reconcile]</code> includes the new StaggerTimer and velocity, so CSP handles the visual sync automatically.</td>
+      </tr>
+      <tr>
+        <td><strong>Ragdoll Death</strong></td>
+        <td>Local ragdoll activation</td>
+        <td>All players see ragdoll at the same time</td>
+        <td><code>[ObserversRpc] TriggerRagdoll()</code>. Ragdolls are cosmetic — they don't need to be deterministic.</td>
+      </tr>
+      <tr>
+        <td><strong>Puzzle Triggers</strong></td>
+        <td>Not implemented</td>
+        <td>Both players stand on pressure plates, etc.</td>
+        <td>Server checks conditions (both players in trigger zone). State changes via SyncVar.</td>
+      </tr>
+      <tr>
+        <td><strong>Pickup Items</strong></td>
+        <td>Not implemented</td>
+        <td>One player picks up item, both see it disappear</td>
+        <td><code>[ServerRpc]</code> request → server validates → despawn NetworkObject → <code>[ObserversRpc]</code> for VFX.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 The Pattern</div>
+      <p>Notice the repeating pattern: <strong>Client requests → Server validates → Server applies → Server notifies</strong>. This is the fundamental loop of server-authoritative game design. In Quantum, this loop is implicit (all input goes through deterministic sim). In FishNet, you build it explicitly with <code>[ServerRpc]</code> → server logic → SyncVar/<code>[ObserversRpc]</code>.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. The JumpPressed Bug</h2>
+    <p>There's a subtle input bug in <code>BuildMoveData()</code> that you should fix immediately:</p>
+
+    <div class="code-block">
+      <h3>C#: The Bug</h3>
+      <pre><code class="language-csharp">// CURRENT CODE:
+return new MoveData
+{
+    JumpPressed = _input.IsJumpHeld,  // ← BUG: uses "Held" for "Pressed"
+    JumpHeld    = _input.IsJumpHeld,  // ← Both are the same value!
+};
+
+// THE PROBLEM:
+// JumpPressed should be TRUE only on the FIRST tick the button is down.
+// JumpHeld should be TRUE for every tick the button is held.
+//
+// Currently, both read IsJumpHeld, so JumpPressed fires EVERY tick
+// while the button is held. In CharacterMovement.Simulate(), the jump
+// check uses JumpPressed:
+//
+//   if (data.JumpPressed && canJump) → fire jump
+//
+// Because _hasJumped prevents double-jumping, this bug is MASKED —
+// the player can't actually double-jump. But if you ever add wall-jumps
+// or other jump-consuming mechanics, this bug will re-surface.
+
+// THE FIX:
+return new MoveData
+{
+    JumpPressed = _input.IsJumpPressed,  // ← Single-frame press detection
+    JumpHeld    = _input.IsJumpHeld,     // ← Continuous hold
+};</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>9. Scaling Recommendations</h2>
+    <p>To ship Slop-Box as a polished co-op experience, here's the priority list:</p>
+
+    <table>
+      <tr>
+        <th>Priority</th>
+        <th>Task</th>
+        <th>Effort</th>
+        <th>Impact</th>
+      </tr>
+      <tr>
+        <td style="color: var(--accent-red);"><strong>P0</strong></td>
+        <td>Fix CreateReconcile — add JumpTimer, StaggerTimer, CoyoteTimer, HasJumped</td>
+        <td>30 min</td>
+        <td>Eliminates jump jitter and knockback desyncs</td>
+      </tr>
+      <tr>
+        <td style="color: var(--accent-red);"><strong>P0</strong></td>
+        <td>Fix JumpPressed vs JumpHeld input bug</td>
+        <td>5 min</td>
+        <td>Prevents future jump-mechanic bugs</td>
+      </tr>
+      <tr>
+        <td style="color: var(--accent-orange);"><strong>P1</strong></td>
+        <td>Network hazard damage (server-authoritative health)</td>
+        <td>2-4 hours</td>
+        <td>Core co-op gameplay — both players see consistent damage</td>
+      </tr>
+      <tr>
+        <td style="color: var(--accent-orange);"><strong>P1</strong></td>
+        <td>Network ragdoll deaths via ObserversRpc</td>
+        <td>1-2 hours</td>
+        <td>Visual consistency for co-op partner</td>
+      </tr>
+      <tr>
+        <td><strong>P2</strong></td>
+        <td>Add Physics.simulationMode = Script configuration</td>
+        <td>30 min</td>
+        <td>Prevents physics desync on different framerates</td>
+      </tr>
+      <tr>
+        <td><strong>P2</strong></td>
+        <td>Add reconnection support to ConnectionManager</td>
+        <td>2-3 hours</td>
+        <td>Graceful recovery from network drops</td>
+      </tr>
+      <tr>
+        <td><strong>P3</strong></td>
+        <td>Integrate Unity Relay or Steam Networking transport</td>
+        <td>4-8 hours</td>
+        <td>Required for players who can't port-forward</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <h2>Key Takeaways</h2>
     <ul>
-      <li>Your wrap-around architecture (NetworkLogic &rarr; View/Simulation) is the correct path for clean, testable code.</li>
-      <li>Hooking into <code>TimeManager.OnTick</code> ensures CSP inputs align with sever clock rates.</li>
-      <li>Ensure every single variable that can affect a player's physical position is encapsulated inside the Reconcile struct to prevent client-side desyncs.</li>
+      <li><strong>The architecture is solid.</strong> Separating NetworkMovement (network-aware) from CharacterMovement (pure simulation) is the correct production pattern. Maintain this separation as you add new systems.</li>
+      <li><strong>The reconcile state is incomplete.</strong> JumpTimer and StaggerTimer are hardcoded to 0, and CoyoteTimer/HasJumped are missing entirely. Fix this first — it's the source of any jitter or inconsistent jump behaviour between host and client.</li>
+      <li><strong>The SyncVar pitch optimization is clever.</strong> Camera rotation that doesn't affect physics should always be synced separately from the CSP data to save bandwidth.</li>
+      <li><strong>JumpPressed has a masked bug.</strong> Both JumpPressed and JumpHeld read the same input. Fix it now before adding wall-jumps or multi-jump mechanics.</li>
+      <li><strong>Hazards, damage, and interactions all follow the same pattern:</strong> Client requests → Server validates → Server applies → Server notifies. Build this loop for every new networked system.</li>
+      <li><strong>The Zenject + FishNet integration works cleanly.</strong> Continue using <code>[Inject]</code> for reference caching and <code>OnStartNetwork()</code> for network initialization.</li>
     </ul>
 
     <div class="lesson-nav">
@@ -69,7 +616,7 @@
         <span class="title">Previous Lesson</span>
       </a>
       <a href="../cheatsheet.html">
-        <span class="label">Next Lesson →</span>
+        <span class="label">Next →</span>
         <span class="title">Cheat Sheet</span>
       </a>
     </div>
