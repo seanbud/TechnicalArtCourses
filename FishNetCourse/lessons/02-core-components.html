@@ -21,77 +21,605 @@
     <div class="lesson-header">
       <div class="lesson-number">Lesson 02</div>
       <h1>The FishNet Foundations</h1>
-      <p class="lesson-subtitle">Mastering NetworkObject, NetworkManager, and RPC routing logic.</p>
+      <p class="lesson-subtitle">Mastering NetworkObject, NetworkBehaviour, RPCs, SyncVars, and the lifecycle hooks that replace your Quantum Systems.</p>
     </div>
 
-    <h2>Introduction</h2>
-    <p>Unlike Quantum where you query the Frame state for entities, FishNet is deeply integrated into Unity's component system. Data and logic are attached directly to GameObjects using specialised behaviours.</p>
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Biggest Trap</div>
+      <p>The single most common mistake by newcomers to FishNet: initializing networked state inside Unity's <code>Start()</code> or <code>Awake()</code>. At that point, the <code>NetworkObject</code> may not have been assigned a network ID yet. All networked initialization <strong>must</strong> happen inside FishNet's lifecycle hooks: <code>OnStartNetwork()</code>, <code>OnStartServer()</code>, or <code>OnStartClient()</code>.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Component Hierarchy</h2>
+    <p>In Quantum, the architecture is: Quantum Simulation (ECS) → Unity View (MonoBehaviours). In FishNet, everything lives in Unity's component system, with a clear hierarchy of networked components:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    FISHNET COMPONENT HIERARCHY                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   ┌─────────────────────────────────────────────────────────┐            │
+│   │                   NetworkManager                         │            │
+│   │   (Singleton — one per scene)                            │            │
+│   │                                                          │            │
+│   │   ├── ServerManager    → runs authoritative logic        │            │
+│   │   ├── ClientManager    → handles local client connection │            │
+│   │   ├── TransportManager → Tugboat, FishyUnityTransport   │            │
+│   │   ├── SceneManager     → networked scene loading         │            │
+│   │   ├── TimeManager      → tick clock, TickDelta           │            │
+│   │   └── ObserverManager  → controls who sees what          │            │
+│   └─────────────────────────────────────────────────────────┘            │
+│                         │                                                │
+│          ┌──────────────┼──────────────┐                                 │
+│          ▼              ▼              ▼                                  │
+│   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                       │
+│   │NetworkObject│ │NetworkObject│ │NetworkObject│  (one per networked   │
+│   │  (Player)   │ │  (Enemy)    │ │  (Pickup)   │   GameObject)         │
+│   ├─────────────┤ ├─────────────┤ ├─────────────┤                       │
+│   │NetworkBhvr  │ │NetworkBhvr  │ │NetworkBhvr  │  (your custom        │
+│   │NetworkBhvr  │ │NetworkBhvr  │ └─────────────┘   scripts)            │
+│   │NetworkBhvr  │ └─────────────┘                                       │
+│   └─────────────┘                                                        │
+│                                                                          │
+│   RULE: Every GameObject with ANY networked behaviour must               │
+│         have a NetworkObject component. Period.                          │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
 
     <div class="callout callout-concept">
-      <div class="callout-title">🧠 Key Concept: NetworkBehaviour</div>
-      <p>Any script that needs to synchronize data over the network or send RPCs (Remote Procedure Calls) must inherit from <code>NetworkBehaviour</code> instead of <code>MonoBehaviour</code>.</p>
+      <div class="callout-title">🧠 Quantum Mapping</div>
+      <p>Think of <code>NetworkObject</code> as the equivalent of a Quantum EntityRef — it gives the object a unique identity across the network. Think of <code>NetworkBehaviour</code> as the equivalent of a Quantum System — it contains the logic that runs on both server and client. The key difference: in Quantum, Systems are global singletons that iterate over components. In FishNet, NetworkBehaviours are attached directly to GameObjects.</p>
     </div>
 
-    <h2>Core Architecture</h2>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Lifecycle Hooks: When to Initialize What</h2>
+    <p>FishNet provides a series of callbacks that fire at different stages of a NetworkObject's life. Understanding their execution order is critical:</p>
 
-    <h3>1. NetworkManager</h3>
-    <p>This is the heart of FishNet. It manages the server instance, client connections, transport layer (e.g., Tugboat or Unity Transport via Relay), and scene loading. In your <code>SlopBox</code> project, this is injected and heavily wrapped by <code>ConnectionManager</code> to track player states.</p>
+    <table>
+      <tr>
+        <th>Hook</th>
+        <th>Fires On</th>
+        <th>Use For</th>
+        <th>Quantum Equivalent</th>
+      </tr>
+      <tr>
+        <td><code>Awake()</code></td>
+        <td>Unity standard</td>
+        <td>Non-networked setup ONLY (caching components)</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>OnStartNetwork()</code></td>
+        <td>Server AND Client</td>
+        <td>Subscribing to TimeManager events</td>
+        <td>OnInit in a Quantum System</td>
+      </tr>
+      <tr>
+        <td><code>OnStartServer()</code></td>
+        <td>Server only</td>
+        <td>Spawning AI, initializing game state</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>OnStartClient()</code></td>
+        <td>Client only (including Host's client)</td>
+        <td>Setting up UI, camera, input bindings</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>OnOwnershipServer()</code></td>
+        <td>Server, when ownership changes</td>
+        <td>Transferring authority between players</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>OnOwnershipClient()</code></td>
+        <td>Client, when ownership changes</td>
+        <td>Enabling/disabling input for new owner</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>OnStopNetwork()</code></td>
+        <td>Server AND Client</td>
+        <td>Cleanup, unsubscribing events</td>
+        <td>—</td>
+      </tr>
+    </table>
 
-    <h3>2. NetworkObject</h3>
-    <p>Every GameObject that exists on the network requires a <code>NetworkObject</code> component. This assigns the object a unique network ID. Prefabs with a `NetworkObject` must be registered with the `NetworkManager`'s spawnable prefabs list.</p>
+    <h3>Execution Order on Spawn</h3>
+    <pre><code>// When a NetworkObject is spawned, hooks fire in this order:
+// 1. Awake()              ← Unity standard. No network ID yet!
+// 2. OnStartNetwork()     ← Network ID assigned. Safe for TimeManager.
+// 3. OnStartServer()      ← Server-only. Safe for server initialization.
+// 4. OnStartClient()      ← Client-only. Safe for UI, camera, input.
+//
+// When checking ownership inside these hooks:
+// • IsOwner         → true if the local player owns this object
+// • IsServerInitialized → true if running on the server
+// • IsClientInitialized → true if running on a client
+// • IsHostInitialized   → true if running as Host (server + client)</code></pre>
 
-    <h2>Lifecycle Hooks</h2>
-    <p>In standard Unity, you use <code>Awake()</code> and <code>Start()</code>. In FishNet, you must wait until the network is ready before interacting with networked variables.</p>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Full Example: A Networked Health System</h2>
+    <p>Let's build a complete, production-quality health system. This demonstrates SyncVars, lifecycle hooks, ownership checks, and RPCs working together:</p>
 
-    <h3>Code Example: Basic Lifecycle</h3>
-    <pre><code>public class HealthSystem : NetworkBehaviour {
-    // Fired when the network starts for this object (Client OR Server)
-    public override void OnStartNetwork() {
+    <div class="code-block">
+      <h3>C#: NetworkHealth.cs — Full Server-Authoritative Health</h3>
+      <pre><code class="language-csharp">using FishNet.Object;
+using FishNet.Object.Synchronizing;
+using UnityEngine;
+using System;
+
+/// &lt;summary&gt;
+/// Server-authoritative health system using SyncVars.
+/// Only the server can modify health. Clients observe changes via OnChange.
+/// &lt;/summary&gt;
+public class NetworkHealth : NetworkBehaviour
+{
+    [Header("Configuration")]
+    [SerializeField] private float _maxHealth = 100f;
+
+    // ── SyncVars: Server → All Clients automatically ──
+    // SyncVar replaces Quantum's "component fields on an entity."
+    // The server sets the value; all clients receive the update.
+    private readonly SyncVar&lt;float&gt; _currentHealth = new();
+    private readonly SyncVar&lt;bool&gt; _isDead = new();
+
+    // ── Events for local systems (UI, VFX, etc.) ──
+    public event Action&lt;float, float&gt; OnHealthChanged;  // (oldHP, newHP)
+    public event Action OnDied;
+
+    // ── Properties ──
+    public float CurrentHealth =&gt; _currentHealth.Value;
+    public float MaxHealth =&gt; _maxHealth;
+    public bool IsDead =&gt; _isDead.Value;
+
+    // ═══════════════════════════════════════════════════════
+    // LIFECYCLE
+    // ═══════════════════════════════════════════════════════
+
+    public override void OnStartNetwork()
+    {
         base.OnStartNetwork();
-        if (IsServerInitialized) {
-            Debug.Log("I am the Server!");
+
+        // Subscribe to SyncVar change events.
+        // This fires on BOTH server and clients when the value changes.
+        _currentHealth.OnChange += HandleHealthChanged;
+        _isDead.OnChange += HandleDeathChanged;
+    }
+
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+
+        // Server initializes health. Clients receive this via SyncVar.
+        _currentHealth.Value = _maxHealth;
+        _isDead.Value = false;
+    }
+
+    public override void OnStopNetwork()
+    {
+        base.OnStopNetwork();
+        _currentHealth.OnChange -= HandleHealthChanged;
+        _isDead.OnChange -= HandleDeathChanged;
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // SERVER-SIDE LOGIC (only executes on the server)
+    // ═══════════════════════════════════════════════════════
+
+    /// &lt;summary&gt;
+    /// Apply damage. Called by hazard systems, combat systems, etc.
+    /// Only runs on the server — clients cannot call this directly.
+    /// &lt;/summary&gt;
+    [Server]
+    public void TakeDamage(float amount, NetworkBehaviour source = null)
+    {
+        if (_isDead.Value) return;
+
+        float oldHealth = _currentHealth.Value;
+        _currentHealth.Value = Mathf.Max(0f, oldHealth - amount);
+
+        Debug.Log($"[Health] {gameObject.name} took {amount} damage " +
+                  $"({oldHealth} → {_currentHealth.Value})");
+
+        if (_currentHealth.Value &lt;= 0f)
+        {
+            _isDead.Value = true;
+            // Tell all clients to play death VFX
+            PlayDeathEffectRpc();
         }
-        if (IsOwner) {
-            Debug.Log("I have authority over this object!");
+        else
+        {
+            // Tell all clients to play hit VFX
+            PlayHitEffectRpc(_currentHealth.Value / _maxHealth);
+        }
+    }
+
+    [Server]
+    public void Heal(float amount)
+    {
+        if (_isDead.Value) return;
+        _currentHealth.Value = Mathf.Min(_maxHealth, _currentHealth.Value + amount);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // RPCs (Server → Clients)
+    // ═══════════════════════════════════════════════════════
+
+    /// &lt;summary&gt;
+    /// Ephemeral VFX event — late-joining players don't need to see this.
+    /// &lt;/summary&gt;
+    [ObserversRpc]
+    private void PlayHitEffectRpc(float healthPercent)
+    {
+        // Spawn particles, flash screen red, camera shake, etc.
+        Debug.Log($"[VFX] Hit! Health at {healthPercent:P0}");
+    }
+
+    [ObserversRpc]
+    private void PlayDeathEffectRpc()
+    {
+        Debug.Log("[VFX] Death effect triggered!");
+        OnDied?.Invoke();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // SYNCVAR CALLBACKS (fires on ALL clients when value changes)
+    // ═══════════════════════════════════════════════════════
+
+    private void HandleHealthChanged(float oldValue, float newValue, bool asServer)
+    {
+        // Update UI, health bar, etc.
+        OnHealthChanged?.Invoke(oldValue, newValue);
+    }
+
+    private void HandleDeathChanged(bool oldValue, bool newValue, bool asServer)
+    {
+        if (newValue && !oldValue)
+        {
+            OnDied?.Invoke();
         }
     }
 }</code></pre>
+    </div>
 
     <div class="callout callout-warning">
-      <div class="callout-title">⚠️ Common Pitfall: The Start() Trap</div>
-      <p>Do not initialize network states or send RPCs inside Unity's <code>Start()</code> method! The <code>NetworkObject</code> may not have been assigned its network ID yet. Always use <code>OnStartNetwork</code>, <code>OnStartServer</code>, or <code>OnStartClient</code>.</p>
+      <div class="callout-title">⚠️ [Server] vs [ServerRpc]</div>
+      <p><code>[Server]</code> means "this method only runs on the server, period." If a client calls it, nothing happens. Use it for internal server-side logic. <code>[ServerRpc]</code> means "a client can call this, and it will execute on the server." Use it when a client needs to <em>request</em> an action. In the health system above, <code>TakeDamage</code> is <code>[Server]</code> because only other server-side systems (hazards, combat) should call it. A client should never directly set their own health.</p>
     </div>
 
-    <h2>RPCs: Remote Procedure Calls</h2>
-    <p>RPCs are how you explicitly send commands across the network. There are two primary types you need to know:</p>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. RPCs: The Communication Channels</h2>
+    <p>RPCs (Remote Procedure Calls) are how you explicitly send commands across the network. Think of them as typed messages between server and client:</p>
 
-    <h3>1. [ServerRpc]</h3>
-    <p>Sent by a client, executed <strong>only on the server</strong>. Use this for actions like validating a shot, requesting to open a door, or applying damage.</p>
-    <pre><code>[ServerRpc(RequireOwnership = false)]
-public void RequestOpenDoor(GameObject door) {
-    // Only runs on the Server. Validate logic here.
-}</code></pre>
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           RPC FLOW DIAGRAM                               │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  CLIENT (Owner)                     SERVER                               │
+│  ─────────────                     ──────                                │
+│  Player presses "Use"                                                    │
+│       │                                                                  │
+│       ├──→ [ServerRpc] RequestOpenDoor() ──→ Server validates:           │
+│       │                                      • Is player close enough?   │
+│       │                                      • Is door unlocked?         │
+│       │                                      • Is player alive?          │
+│       │                                                                  │
+│       │                                      IF valid:                   │
+│       │                                        door.Open()               │
+│       │                                           │                      │
+│       │    ←── [ObserversRpc] OnDoorOpened() ──────┘                     │
+│       │                                                                  │
+│       ▼                                                                  │
+│  ALL CLIENTS play door animation                                         │
+│  and sound effect                                                        │
+│                                                                          │
+│  ────────────────────────────────────────────────────────────────────    │
+│                                                                          │
+│  [ServerRpc]    = Client → Server  (request an action)                   │
+│  [ObserversRpc] = Server → ALL Clients  (broadcast an event)             │
+│  [TargetRpc]    = Server → ONE Client  (private message)                 │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
 
-    <h3>2. [ObserversRpc]</h3>
-    <p>Sent by the server, executed on <strong>all clients observing the object</strong>. Use this for ephemeral visual effects, like spawning particles or playing a sound that doesn't need strict state synchronization.</p>
-    <pre><code>[ObserversRpc]
-public void PlayHitEffect(Vector3 position) {
-    // Runs on all clients
-    Instantiate(sparkPrefab, position, Quaternion.identity);
+    <h3>C#: Door Interaction Example</h3>
+    <div class="code-block">
+      <h3>C#: NetworkDoor.cs — ServerRpc + ObserversRpc Pattern</h3>
+      <pre><code class="language-csharp">using FishNet.Object;
+using FishNet.Object.Synchronizing;
+using FishNet.Connection;
+using UnityEngine;
+
+public class NetworkDoor : NetworkBehaviour
+{
+    [SerializeField] private float _interactionRange = 2.5f;
+    [SerializeField] private Animator _animator;
+
+    // Persistent state — late-joiners see if the door is open or closed
+    private readonly SyncVar&lt;bool&gt; _isOpen = new();
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        // When a new client joins, sync the door to its current state
+        _isOpen.OnChange += OnDoorStateChanged;
+        // Apply initial state
+        if (_isOpen.Value)
+            _animator.Play("DoorOpen", 0, 1f); // snap to open
+    }
+
+    /// &lt;summary&gt;
+    /// Client asks the server to open this door.
+    /// RequireOwnership = false: ANY client can call this, not just the owner.
+    /// &lt;/summary&gt;
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestOpenDoorServerRpc(NetworkConnection caller = null)
+    {
+        if (_isOpen.Value) return; // Already open
+
+        // Validate: is the caller close enough?
+        if (caller?.FirstObject != null)
+        {
+            float dist = Vector3.Distance(
+                caller.FirstObject.transform.position,
+                transform.position
+            );
+            if (dist > _interactionRange)
+            {
+                Debug.LogWarning($"[Door] Player too far: {dist:F1}m");
+                return;
+            }
+        }
+
+        // Server approves — update SyncVar
+        _isOpen.Value = true;
+        // Fire ephemeral VFX/SFX to all clients
+        PlayDoorOpenEffectRpc();
+    }
+
+    [ObserversRpc]
+    private void PlayDoorOpenEffectRpc()
+    {
+        _animator.SetTrigger("Open");
+        // AudioSource.PlayClipAtPoint(openSFX, transform.position);
+    }
+
+    private void OnDoorStateChanged(bool prev, bool next, bool asServer)
+    {
+        // React to SyncVar change (e.g., update UI prompts)
+    }
 }</code></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. SyncVar vs RPC: The Decision Matrix</h2>
+    <p>This is a critical decision you'll make constantly. The wrong choice leads to subtle, hard-to-debug issues (especially with late-joining players):</p>
+
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Use SyncVar?</th>
+        <th>Use RPC?</th>
+        <th>Why</th>
+      </tr>
+      <tr>
+        <td>Player health</td>
+        <td>✅ SyncVar</td>
+        <td>❌</td>
+        <td>Persistent state. Late-joiners must see current health.</td>
+      </tr>
+      <tr>
+        <td>Door open/closed</td>
+        <td>✅ SyncVar</td>
+        <td>❌</td>
+        <td>Persistent state. Late-joiners must see door position.</td>
+      </tr>
+      <tr>
+        <td>Explosion VFX</td>
+        <td>❌</td>
+        <td>✅ ObserversRpc</td>
+        <td>Ephemeral event. Late-joiners don't need to see old explosions.</td>
+      </tr>
+      <tr>
+        <td>Chat message</td>
+        <td>❌</td>
+        <td>✅ ObserversRpc</td>
+        <td>Ephemeral event. Log if needed, but don't sync perpetually.</td>
+      </tr>
+      <tr>
+        <td>Player team/name</td>
+        <td>✅ SyncVar</td>
+        <td>❌</td>
+        <td>Persistent. Scoreboard must show on join.</td>
+      </tr>
+      <tr>
+        <td>Damage number popup</td>
+        <td>❌</td>
+        <td>✅ ObserversRpc</td>
+        <td>Ephemeral visual. Gone after 1 second.</td>
+      </tr>
+      <tr>
+        <td>"Player X opened a door" log</td>
+        <td>❌</td>
+        <td>✅ ObserversRpc</td>
+        <td>Ephemeral notification.</td>
+      </tr>
+      <tr>
+        <td>Trap armed/disarmed state</td>
+        <td>✅ SyncVar</td>
+        <td>❌</td>
+        <td>Persistent. Late-joiner must know if trap is active.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Rule of Thumb</div>
+      <p>Ask yourself: <strong>"If a player joins the game 5 minutes late, do they need to know about this?"</strong> If yes → SyncVar. If no → RPC. SyncVars automatically send their current value to any newly connected client. RPCs only fire once and are not replayed for late-joiners (unless you use <code>BufferLast = true</code>).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. The Zenject Bridge: Dependency Injection + FishNet</h2>
+    <p>Your Slop-Box project uses Zenject for dependency injection. This creates a timing challenge: when do Zenject bindings resolve relative to FishNet's lifecycle?</p>
+
+    <div class="code-block">
+      <h3>C#: The Timing Dance</h3>
+      <pre><code class="language-csharp">// In Slop-Box's NetworkMovement.cs, you'll see:
+
+public class NetworkMovement : NetworkBehaviour
+{
+    private IInputProvider _input;
+
+    [Inject]
+    public void Construct(IInputProvider input)
+    {
+        // Zenject calls this BEFORE OnStartNetwork.
+        // This is safe because Construct() only stores references.
+        _input = input;
+    }
+
+    public override void OnStartNetwork()
+    {
+        base.OnStartNetwork();
+        // FishNet calls this AFTER Zenject injection.
+        // Now safe to use both _input AND network features.
+        TimeManager.OnTick += TimeManager_OnTick;
+    }
+}
+
+// ORDER OF EXECUTION:
+// 1. Awake()                 ← Unity
+// 2. [Inject] Construct()    ← Zenject
+// 3. Start()                 ← Unity (DON'T use for network init!)
+// 4. OnStartNetwork()        ← FishNet (SAFE for network init)
+// 5. OnStartServer()         ← FishNet (server only)
+// 6. OnStartClient()         ← FishNet (client only)</code></pre>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Gotcha</div>
+      <p>Zenject's <code>[Inject]</code> fires during object construction (before <code>Start()</code>), so it's safe to cache references there. But do NOT use injected network services (like <code>NetworkManager</code>) in <code>Construct()</code> to send RPCs or modify SyncVars — the NetworkObject hasn't been initialized yet. Always wait for <code>OnStartNetwork()</code>.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Spawning Networked Objects</h2>
+    <p>In Quantum, entities exist in the simulation frame and the view layer instantiates visual representations. In FishNet, you spawn GameObjects on the server and they automatically replicate to all clients:</p>
+
+    <div class="code-block">
+      <h3>C#: Server-Side Player Spawning</h3>
+      <pre><code class="language-csharp">using FishNet;
+using FishNet.Object;
+using FishNet.Connection;
+using FishNet.Managing;
+using UnityEngine;
+
+public class PlayerSpawner : MonoBehaviour
+{
+    [SerializeField] private GameObject _playerPrefab;
+    [SerializeField] private Transform[] _spawnPoints;
+
+    private NetworkManager _networkManager;
+
+    private void Start()
+    {
+        _networkManager = InstanceFinder.NetworkManager;
+        // Subscribe to player connections (server-side only)
+        _networkManager.SceneManager.OnClientLoadedStartScenes += OnClientReady;
+    }
+
+    private void OnClientReady(NetworkConnection conn, bool asServer)
+    {
+        if (!asServer) return;
+
+        // Pick a spawn point
+        Transform spawn = _spawnPoints[conn.ClientId % _spawnPoints.Length];
+
+        // Instantiate on the server
+        GameObject player = Instantiate(
+            _playerPrefab,
+            spawn.position,
+            spawn.rotation
+        );
+
+        // Spawn on the network — this replicates to ALL clients
+        // and assigns ownership to the connecting player.
+        _networkManager.ServerManager.Spawn(player, conn);
+
+        Debug.Log($"[Spawner] Spawned player for Client {conn.ClientId}");
+    }
+}</code></pre>
+    </div>
 
     <div class="callout callout-tip">
-      <div class="callout-title">💡 Pro Tip: SyncVars vs RPCs</div>
-      <p>Always prefer <code>SyncVar</code> for persistent state (like Health, Armor, Team) and only use RPCs for ephemeral events (Explosions, UI notifications, Voice lines). If a player joins late, they will receive the current value of a SyncVar, but they will <strong>not</strong> re-receive old RPCs!</p>
+      <div class="callout-title">💡 Ownership Matters</div>
+      <p>The second argument to <code>Spawn(player, conn)</code> assigns <strong>ownership</strong> to that connection. Only the owner can send <code>[ServerRpc]</code> calls (unless <code>RequireOwnership = false</code>), and <code>IsOwner</code> will return true only on that client. This is how you control which player controls which character — the same concept as Quantum's PlayerRef.</p>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. NetworkBehaviour Properties Quick Reference</h2>
+    <p>These properties are available in any <code>NetworkBehaviour</code> and replace a lot of the context you'd get from Quantum's Frame:</p>
+
+    <table>
+      <tr>
+        <th>Property</th>
+        <th>Type</th>
+        <th>What It Means</th>
+      </tr>
+      <tr>
+        <td><code>IsServerInitialized</code></td>
+        <td>bool</td>
+        <td>True if this object exists on the server (authoritative)</td>
+      </tr>
+      <tr>
+        <td><code>IsClientInitialized</code></td>
+        <td>bool</td>
+        <td>True if this object exists on a client</td>
+      </tr>
+      <tr>
+        <td><code>IsOwner</code></td>
+        <td>bool</td>
+        <td>True if the local player owns this specific object</td>
+      </tr>
+      <tr>
+        <td><code>IsHostInitialized</code></td>
+        <td>bool</td>
+        <td>True if running as Host (server + client simultaneously)</td>
+      </tr>
+      <tr>
+        <td><code>Owner</code></td>
+        <td>NetworkConnection</td>
+        <td>The connection that owns this object (can be null for server-owned)</td>
+      </tr>
+      <tr>
+        <td><code>OwnerId</code></td>
+        <td>int</td>
+        <td>Integer ID of the owning connection (-1 for server-owned)</td>
+      </tr>
+      <tr>
+        <td><code>ObjectId</code></td>
+        <td>int</td>
+        <td>Unique network ID for this object (like Quantum's EntityRef)</td>
+      </tr>
+      <tr>
+        <td><code>TimeManager</code></td>
+        <td>TimeManager</td>
+        <td>Access to the tick clock, TickDelta, OnTick events</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <h2>Key Takeaways</h2>
     <ul>
-      <li>Use <code>NetworkBehaviour</code> for custom logic.</li>
-      <li>Replace <code>Start()</code> with <code>OnStartNetwork()</code> when dealing with multiplayer initialization.</li>
-      <li>Clients ask the Server to do things via <code>[ServerRpc]</code>.</li>
-      <li>Servers tell Clients about physical events via <code>[ObserversRpc]</code>.</li>
-      <li>Use <code>SyncVar</code> for state, RPCs for events.</li>
+      <li><strong>Every networked GameObject needs a NetworkObject.</strong> It's the network identity. Custom scripts inherit from <code>NetworkBehaviour</code>, not <code>MonoBehaviour</code>.</li>
+      <li><strong>Never initialize network state in Start() or Awake().</strong> Use <code>OnStartNetwork()</code> for shared init, <code>OnStartServer()</code> for server-only, <code>OnStartClient()</code> for client-only.</li>
+      <li><strong>[ServerRpc] = Client asking the server to do something.</strong> Always validate on the server side — never trust client input.</li>
+      <li><strong>[ObserversRpc] = Server telling all clients about an event.</strong> Use for ephemeral VFX, sounds, notifications.</li>
+      <li><strong>SyncVars are for persistent state</strong> (health, door state, team). RPCs are for ephemeral events (explosions, sounds). Ask: "Does a late-joiner need this?"</li>
+      <li><strong>Zenject's [Inject] fires before OnStartNetwork().</strong> Cache references in Construct(), but don't use network features until OnStartNetwork().</li>
+      <li><strong>Spawn objects on the server with Spawn(obj, conn).</strong> The second argument assigns ownership, controlling which client can send ServerRpcs for that object.</li>
     </ul>
 
     <div class="lesson-nav">

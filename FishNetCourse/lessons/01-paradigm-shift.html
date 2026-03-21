@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lesson 1: FishNet vs Quantum | FishNet for Quantum Vets</title>
+  <title>Lesson 1: FishNet vs Quantum & Server Topologies | FishNet for Quantum Vets</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
@@ -21,49 +21,411 @@
     <div class="lesson-header">
       <div class="lesson-number">Lesson 01</div>
       <h1>FishNet vs Quantum & Server Topologies</h1>
-      <p class="lesson-subtitle">Bridging the gap from deterministic lockstep to server-authoritative state replication.</p>
+      <p class="lesson-subtitle">Bridging the gap from deterministic lockstep to server-authoritative state replication — and understanding the network topology that will power your co-op Prince of Persia.</p>
     </div>
 
-    <h2>Introduction</h2>
-    <p>As a senior technical artist comfortable with Photon Quantum, you are accustomed to a very specific set of rules: perfect determinism, separation of input/simulation/view, and lockstep rollbacks. FishNet represents a fundamentally different paradigm that is more closely aligned with traditional Unity development but comes with its own networking challenges.</p>
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ The Core Paradigm Shift</div>
+      <p>In Quantum, every client runs <strong>the exact same deterministic simulation</strong>. If any client deviates by a single floating-point bit, the game desyncs and breaks. In FishNet, clients are allowed to be <strong>wrong</strong>. They predict, they guess, they drift — and the server periodically corrects them. This is fundamentally different. Everything you know about Quantum's precision and determinism must be replaced with a tolerance-based, correction-driven mental model.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Two Philosophies of Multiplayer</h2>
+    <p>Before diving into FishNet's specifics, let's clearly map the two paradigms side-by-side. You already know one of these perfectly — the point is to show exactly where the differences lie:</p>
+
+    <table>
+      <tr>
+        <th>Dimension</th>
+        <th>Photon Quantum (What You Know)</th>
+        <th>FishNet (What You're Learning)</th>
+      </tr>
+      <tr>
+        <td><strong>Core Model</strong></td>
+        <td>Deterministic Lockstep / Rollback</td>
+        <td>Server-Authoritative State Replication</td>
+      </tr>
+      <tr>
+        <td><strong>Math Types</strong></td>
+        <td>Fixed-point (FP, FPVector3) — no floats allowed</td>
+        <td>Standard Unity floats, Vector3, Quaternion</td>
+      </tr>
+      <tr>
+        <td><strong>Simulation</strong></td>
+        <td>Every client runs the full simulation identically</td>
+        <td>Server runs the authoritative sim; clients predict locally</td>
+      </tr>
+      <tr>
+        <td><strong>Latency Handling</strong></td>
+        <td>Input delay + rollback of the global state</td>
+        <td>Client-Side Prediction + per-object reconciliation</td>
+      </tr>
+      <tr>
+        <td><strong>View Separation</strong></td>
+        <td>Strict: Quantum Systems (logic) vs Unity View (visuals)</td>
+        <td>Flexible: NetworkBehaviour handles both, but best practice separates them</td>
+      </tr>
+      <tr>
+        <td><strong>Physics</strong></td>
+        <td>Custom deterministic physics engine</td>
+        <td>Unity's built-in PhysX (non-deterministic)</td>
+      </tr>
+      <tr>
+        <td><strong>Input Handling</strong></td>
+        <td>Polled per frame into a Quantum Input struct</td>
+        <td>Polled per tick into an IReplicateData struct</td>
+      </tr>
+      <tr>
+        <td><strong>State Authority</strong></td>
+        <td>Shared — all clients own the truth</td>
+        <td>Centralized — one server owns the truth</td>
+      </tr>
+      <tr>
+        <td><strong>Adding a New Client</strong></td>
+        <td>Full state snapshot transfer + rollback catch-up</td>
+        <td>Server spawns objects and SyncVars auto-sync current values</td>
+      </tr>
+      <tr>
+        <td><strong>Prototyping Speed</strong></td>
+        <td>Slower — everything must be deterministic</td>
+        <td>Faster — use standard Unity APIs</td>
+      </tr>
+    </table>
 
     <div class="callout callout-concept">
-      <div class="callout-title">🧠 Key Concept: Server-Authoritative State</div>
-      <p>Instead of relying on every client playing the exact same simulation perfectly in sync (Quantum), FishNet relies on a single authority (the Server) simulating the true state, and broadcasting that state to "dumb" clients who try to interpolate or predict the result.</p>
+      <div class="callout-title">🧠 The Mental Model Shift</div>
+      <p>In Quantum, you think: "Every client must execute identical math." In FishNet, you think: <strong>"The server is the boss. Everyone else is guessing, and the boss corrects them."</strong> This means you can use Unity's standard Transform, Rigidbody, and CharacterController APIs directly — because the server will fix any float-precision drift via reconciliation.</p>
     </div>
 
-    <h2>The Paradigm Shift</h2>
-    <p>In Quantum, logic must use fixed mathematical types (FP, FPVector3) and strictly avoid Unity's transform API or float-based physics to ensure determinism. In FishNet, <strong>you can use Unity's built-in physics and math</strong> because the server enforces the truth. If a client simulates something slightly different due to a float precision error, the server's update will eventually correct it (reconciliation).</p>
-    
-    <p>This makes prototyping significantly faster, but it means dealing with <em>network conditions</em> differently. In Quantum, latency is handled by delaying input and rolling back the deterministic state. In FishNet, latency is handled by <strong>Client-Side Prediction (CSP)</strong> and <strong>Interpolation</strong>.</p>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Server Topologies: Who Runs the Authority?</h2>
+    <p>In Quantum, there's typically a Photon Cloud relay that synchronizes inputs, but every client runs the same simulation — there is no "server" in the traditional sense. In FishNet, someone <strong>must</strong> run the authoritative server logic. You have three main options:</p>
 
-    <h2>Server Topologies</h2>
-    <p>When running a FishNet instance for a cooperative game like your Prince of Persia sandbox, you have two main architecture choices:</p>
+    <h3>Option A: Dedicated Server</h3>
+    <p>A headless Unity instance runs in the cloud. No player has a zero-ping advantage. It's the gold standard for competitive games.</p>
 
-    <h3>1. Dedicated Server (Authoritative)</h3>
-    <p>The game server runs as a headless Unity instance in the cloud. No player has a zero-ping advantage. It's secure and highly reliable, but it costs money to host.</p>
+    <h3>Option B: Host Mode (Player-as-Server)</h3>
+    <p>One player's Unity instance runs both the Client and the Server simultaneously. Other players connect to this Host. This is the most common pattern for co-op games because it requires <strong>zero infrastructure costs</strong>.</p>
 
-    <h3>2. Host Mode (Peer-to-Peer / Relay-Backed)</h3>
-    <p>One player acts as both a Client and the Server (the "Host"). The other players connect to the Host.</p>
+    <h3>Option C: Relay-Backed Host Mode (What Slop-Box Uses)</h3>
+    <p>Same as Host Mode, but connections are routed through a relay service (like Unity Relay, Steam Networking, or Photon Realtime). The relay handles NAT punchthrough so players don't need to port-forward their routers. <strong>The Host still runs the server logic</strong> — the relay is just a dumb packet bouncer.</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                       SERVER TOPOLOGY COMPARISON                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─ DEDICATED SERVER ─────────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │   Player A ──┐                                                      │  │
+│  │              ├──→ [ Cloud Server (headless Unity) ] ←──┤            │  │
+│  │   Player B ──┘         Authoritative Sim               │            │  │
+│  │                                                  Player C           │  │
+│  │   ✅ Fair (equal ping)   ✅ Secure   ❌ Costs money                │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌─ HOST MODE ────────────────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │   Player A (HOST) ─── runs Server + Client (0ms latency)           │  │
+│  │        │                                                            │  │
+│  │        ├──→ Player B (CLIENT, 50ms ping)                            │  │
+│  │        └──→ Player C (CLIENT, 80ms ping)                            │  │
+│  │                                                                     │  │
+│  │   ✅ Free   ✅ Simple   ⚠️ Host has 0ms advantage                  │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌─ RELAY-BACKED HOST ────────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │   Player A (HOST) ──→ [ Relay Service ] ←── Player B               │  │
+│  │       ↑                  (dumb pipe)         ↓                      │  │
+│  │       └── still runs Server logic ───────────┘                      │  │
+│  │                                                                     │  │
+│  │   Host sends packets TO the relay, relay bounces to clients.        │  │
+│  │   Relay does NOT run game logic. Host still has 0ms authority.      │  │
+│  │                                                                     │  │
+│  │   ✅ No port-forwarding   ✅ Easy NAT traversal                    │  │
+│  │   ⚠️ Adds ~10-30ms relay hop   ⚠️ Host still has 0ms advantage   │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+    </div>
+
     <div class="callout callout-warning">
-      <div class="callout-title">⚠️ Common Pitfall: Host Advantage</div>
-      <p>In Host mode, the hosting player has 0ms of latency and doesn't experience rubberbanding, while remote clients do. Co-op games often use Relay services (like Unity Relay or Steam lobbies) to bypass port forwarding, but the architecture remains Host-Client. A Relay is essentially a dumb pipe bouncing packets, but the <i>Host</i> is still running the server logic.</p>
+      <div class="callout-title">⚠️ The Relay Misconception</div>
+      <p>A common mistake: people think using a Relay service means "nobody is the server." <strong>That's wrong.</strong> The Relay only handles packet routing and NAT punchthrough. The Host player's Unity instance still runs the <code>ServerManager</code>, executes all authoritative <code>[Replicate]</code> logic, and broadcasts <code>[Reconcile]</code> states. The Relay is a postal service — it delivers letters but doesn't read or write them.</p>
     </div>
 
-    <h3>Why Networked Physics Can Feel "Slow"</h3>
-    <p>When you use basic networked physics (like a Rigidbody synced over a NetworkTransform), remote clients are watching a delayed feed of the host's simulation. If a client presses "Jump", that input travels to the host, the host jumps, and the result travels back to the client. This results in sluggish, delayed controls.</p>
-    
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Latency Impact by Topology</h2>
+    <p>Understanding ping distribution is critical for a platformer where frame-perfect jumps and responsive movement matter:</p>
+
+    <table>
+      <tr>
+        <th>Topology</th>
+        <th>Host Player Latency</th>
+        <th>Remote Player Latency</th>
+        <th>Best For</th>
+      </tr>
+      <tr>
+        <td><strong>Dedicated Server</strong></td>
+        <td>20-60ms (datacenter ping)</td>
+        <td>20-60ms (same)</td>
+        <td>Competitive PvP, large lobbies</td>
+      </tr>
+      <tr>
+        <td><strong>Host Mode</strong></td>
+        <td>0ms (local)</td>
+        <td>30-150ms (peer-to-peer)</td>
+        <td>Small co-op (2-4 players)</td>
+      </tr>
+      <tr>
+        <td><strong>Relay-Backed Host</strong></td>
+        <td>0ms (local)</td>
+        <td>40-180ms (peer + relay hop)</td>
+        <td>Co-op when NAT traversal needed</td>
+      </tr>
+    </table>
+
     <div class="callout callout-tip">
-      <div class="callout-title">💡 Pro Tip: The Solution</div>
-      <p>To get instantaneous, responsive physics (like in Quantum), we must employ <strong>Client-Side Prediction (CSP)</strong>, which allows the client to immediately move its local Rigidbody/CharacterController, and only accept corrections from the server if it made a mistake. We'll cover this deeply in Lesson 3.</p>
+      <div class="callout-title">💡 Slop-Box Relevance</div>
+      <p>For your Prince of Persia co-op game with 2 players, <strong>Host Mode</strong> (optionally relay-backed) is the correct choice. The Host player will experience perfect, zero-latency controls. The remote player will experience 30-80ms of latency — which is where Client-Side Prediction (Lesson 3) becomes essential. In a co-op game, the Host advantage is less problematic than in PvP because you're on the same team.</p>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. What Happens When You Press Jump: Quantum vs FishNet</h2>
+    <p>Let's trace a single button press through both systems to see where the experience diverges:</p>
+
+    <h3>In Quantum (What You Know)</h3>
+    <pre><code>Frame 100: Player presses Jump
+  → Input is polled into Quantum's Input struct
+  → Quantum's deterministic simulation advances Frame 100 locally
+  → Input is sent to Photon Cloud
+  → Other clients receive the input, also advance Frame 100
+  → If any input arrived late, ALL clients rollback to the
+     earliest unconfirmed frame and re-simulate forward
+  → Result: every client has identical state, always</code></pre>
+
+    <h3>In FishNet (What You're Learning)</h3>
+    <pre><code>Tick 100: Player presses Jump
+  → Input is polled into a MoveData struct
+  → CLIENT immediately executes [Replicate] locally (PREDICTION)
+     → Character jumps instantly on screen — zero perceived latency
+  → Input is sent to SERVER via unreliable channel
+  → SERVER receives input, executes [Replicate] authoritatively
+  → SERVER fires [Reconcile] back to client with the TRUE state
+  → CLIENT compares its predicted position to the server's state
+     → If close enough: no visible correction
+     → If diverged: snap to server state, replay all unacked inputs
+  → Result: client FEELS instant, server ENFORCES truth</code></pre>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Key Difference</div>
+      <p>In Quantum, correctness is <strong>guaranteed by design</strong> — identical math produces identical results. In FishNet, correctness is <strong>enforced by correction</strong> — the server periodically tells clients "you're wrong, here's where you actually are." The client's job is to be wrong as <em>rarely</em> as possible, so corrections are invisible.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Why Networked Physics "Feels Slow" Without CSP</h2>
+    <p>If you use FishNet's built-in <code>NetworkTransform</code> component to sync a Rigidbody, without Client-Side Prediction, here's the experience for a remote player:</p>
+
+    <div class="diagram">
+┌──────────────────────────────────────────────────────────────────────┐
+│             NAIVE NETWORKED PHYSICS (NO CSP)                          │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Timeline (Remote Player pressing "Jump"):                            │
+│                                                                       │
+│  t=0ms    Player presses Jump                                         │
+│  t=0ms    Input sent to Host as [ServerRpc]                           │
+│           ⏳ (nothing happens locally — waiting for server)           │
+│  t=60ms   Host receives input                                         │
+│  t=60ms   Host applies jump force to Rigidbody                        │
+│  t=60ms   Host syncs new position via NetworkTransform                │
+│           ⏳ (network transit back to client)                         │
+│  t=120ms  Client receives updated position                            │
+│  t=120ms  Character visually jumps on screen                          │
+│                                                                       │
+│  TOTAL INPUT DELAY: ~120ms (feels like input lag)                     │
+│                                                                       │
+│  For a platformer requiring frame-perfect timing,                     │
+│  this is UNACCEPTABLE.                                                │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <p>This is why naive networked physics — using <code>NetworkTransform</code> to sync Rigidbody positions — feels terrible for players. There's a full round-trip delay (RTT) between pressing a button and seeing a result. For a Prince of Persia game with wall-running, double-jumps, and grab-ledge mechanics, 120ms of input delay would make the game unplayable.</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 The Solution: CSP</div>
+      <p>Client-Side Prediction (CSP) eliminates this delay by letting the client <strong>immediately execute the jump locally</strong>, then verifying with the server afterwards. From the player's perspective, the jump happens at t=0ms. We'll build this system in detail in Lesson 3.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. FishNet's Transport Layer</h2>
+    <p>In Quantum, the transport is handled by Photon's cloud infrastructure. In FishNet, you choose your transport:</p>
+
+    <table>
+      <tr>
+        <th>Transport</th>
+        <th>Protocol</th>
+        <th>Use Case</th>
+      </tr>
+      <tr>
+        <td><strong>Tugboat</strong> (Default)</td>
+        <td>UDP</td>
+        <td>LAN, direct connections, development</td>
+      </tr>
+      <tr>
+        <td><strong>FishyUnityTransport</strong></td>
+        <td>Unity Transport (UDP/DTLS)</td>
+        <td>Unity Relay integration, production co-op</td>
+      </tr>
+      <tr>
+        <td><strong>FishySteamworks</strong></td>
+        <td>Steam Networking</td>
+        <td>Steam-based games with built-in relay</td>
+      </tr>
+      <tr>
+        <td><strong>Bayou</strong></td>
+        <td>WebSocket (TCP)</td>
+        <td>WebGL builds, browser games</td>
+      </tr>
+    </table>
+
+    <p>The transport sits beneath the <code>NetworkManager</code> and is swappable — your game logic doesn't care which transport you use. For Slop-Box with a co-op Prince of Persia game, you'd likely start with <strong>Tugboat</strong> for local development and switch to <strong>FishyUnityTransport + Unity Relay</strong> or <strong>FishySteamworks</strong> for production.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Setting Up a Minimal FishNet Project</h2>
+    <p>Here's the minimal scene setup to get a FishNet host running — the equivalent of setting up a Quantum Runner in Quantum:</p>
+
+    <h3>Scene Hierarchy</h3>
+    <pre><code>Scene
+├── NetworkManager          ← FishNet's NetworkManager component
+│   ├── Component: NetworkManager
+│   ├── Component: Tugboat (Transport)
+│   └── Component: ObserverManager
+├── NetworkBootstrap        ← Your custom auto-start script
+│   └── Component: NetworkAutoStart
+└── SpawnPoint
+    └── (empty transform marking where players appear)</code></pre>
+
+    <h3>C#: Minimal Auto-Start Host Script</h3>
+    <div class="code-block">
+      <h3>C#: NetworkAutoStart.cs — Boots FishNet in Host Mode</h3>
+      <pre><code class="language-csharp">using FishNet;
+using FishNet.Managing;
+using FishNet.Transporting;
+using UnityEngine;
+
+/// &lt;summary&gt;
+/// Automatically starts FishNet as a Host (Server + Client) on scene load.
+/// In production, you'd replace this with a lobby/matchmaking flow.
+/// &lt;/summary&gt;
+public class NetworkAutoStart : MonoBehaviour
+{
+    [Header("Configuration")]
+    [SerializeField] private NetworkManager _networkManager;
+    [SerializeField] private bool _startAsHost = true;
+
+    [Header("Connection")]
+    [SerializeField] private string _address = "localhost";
+    [SerializeField] private ushort _port = 7770;
+
+    private void Start()
+    {
+        if (_networkManager == null)
+            _networkManager = InstanceFinder.NetworkManager;
+
+        if (_networkManager == null)
+        {
+            Debug.LogError("[NetworkAutoStart] No NetworkManager found!");
+            return;
+        }
+
+        // Configure the transport address/port
+        Transport transport = _networkManager.TransportManager.Transport;
+        if (transport is FishNet.Transporting.Tugboat.Tugboat tugboat)
+        {
+            tugboat.SetClientAddress(_address);
+            tugboat.SetPort(_port);
+        }
+
+        if (_startAsHost)
+        {
+            // Start as Host = Server + Client simultaneously
+            _networkManager.ServerManager.StartConnection();
+            _networkManager.ClientManager.StartConnection();
+            Debug.Log($"[NetworkAutoStart] Started HOST on {_address}:{_port}");
+        }
+        else
+        {
+            // Start as Client only (connecting to a remote host)
+            _networkManager.ClientManager.StartConnection();
+            Debug.Log($"[NetworkAutoStart] Connecting to {_address}:{_port}");
+        }
+    }
+}</code></pre>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Host = Server + Client</div>
+      <p>Notice how starting as a Host requires <strong>two</strong> calls: <code>ServerManager.StartConnection()</code> and <code>ClientManager.StartConnection()</code>. The Host player is simultaneously a server (running authoritative game logic) and a client (rendering the game and processing local input). In Quantum terms, this is similar to how every Quantum client runs the full simulation — but in FishNet, only the Host runs the server simulation.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>8. The Architecture Decision for Slop-Box</h2>
+    <p>Given what we now know, here's how the topology decision maps to your co-op Prince of Persia game:</p>
+
+    <table>
+      <tr>
+        <th>Requirement</th>
+        <th>Decision</th>
+        <th>Rationale</th>
+      </tr>
+      <tr>
+        <td>Player count</td>
+        <td>2 players (co-op)</td>
+        <td>Host mode is ideal for small player counts</td>
+      </tr>
+      <tr>
+        <td>Competitive fairness</td>
+        <td>Not critical (co-op, same team)</td>
+        <td>Host's 0ms advantage is acceptable</td>
+      </tr>
+      <tr>
+        <td>Infrastructure cost</td>
+        <td>Zero (no dedicated server)</td>
+        <td>Host mode is free to run</td>
+      </tr>
+      <tr>
+        <td>NAT traversal</td>
+        <td>Use Unity Relay or Steam</td>
+        <td>Players shouldn't need to port-forward</td>
+      </tr>
+      <tr>
+        <td>Physics responsiveness</td>
+        <td>CSP required (Lesson 3)</td>
+        <td>Platformer needs frame-perfect input</td>
+      </tr>
+      <tr>
+        <td>Transport</td>
+        <td>Tugboat (dev) → FishyUnityTransport (prod)</td>
+        <td>Swap at ship time without code changes</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Why Not Quantum for This Project?</div>
+      <p>If you already know Quantum, you might wonder: "Why not just use Quantum for this game?" The answer is <strong>prototyping speed</strong>. With FishNet, you can use Unity's standard CharacterController, Rigidbody, and Physics APIs directly. You don't need to rewrite your movement system in fixed-point math. For a co-op PvE game where perfect determinism isn't critical, FishNet lets you iterate 3-5x faster during prototyping. If the game later needs competitive PvP or rollback netcode, Quantum would be the better choice.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <h2>Key Takeaways</h2>
     <ul>
-      <li>Quantum = Deterministic Lockstep. FishNet = Server-Authoritative State Replication.</li>
-      <li>FishNet allows standard Unity floats and Physics, trusting the server to correct discrepancies.</li>
-      <li>For a co-op game, Host mode (often backed by a Relay to avoid port forwarding) is standard, but you must account for host ping advantage.</li>
-      <li>Raw networked physics feels delayed without Client-Side Prediction (CSP).</li>
+      <li><strong>Quantum = Deterministic Lockstep.</strong> Every client runs identical math. Correctness is guaranteed by design. FishNet = Server-Authoritative State. One boss enforces the truth; clients predict and get corrected.</li>
+      <li><strong>FishNet uses standard Unity APIs.</strong> Floats, Vector3, Rigidbody, CharacterController — all safe to use because the server corrects any drift.</li>
+      <li><strong>Host Mode is ideal for 2-player co-op.</strong> Free, simple, and the Host advantage doesn't matter when you're on the same team.</li>
+      <li><strong>A Relay is not a server.</strong> It's a packet bouncer for NAT traversal. The Host still runs all authoritative logic.</li>
+      <li><strong>Naive networked physics introduces a full RTT of input delay.</strong> For a platformer, this is unacceptable — Client-Side Prediction (Lesson 3) is mandatory.</li>
+      <li><strong>Transports are swappable.</strong> Use Tugboat for dev, switch to FishyUnityTransport or FishySteamworks for production without changing game code.</li>
     </ul>
 
     <div class="lesson-nav">
