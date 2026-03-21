@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 4: Slop-Box Case Study | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 04</div>
+      <h1>Slop-Box Architecture Case Study</h1>
+      <p class="lesson-subtitle">Analyzing NetworkMovement.cs and decoupling visual simulation from the networking layer.</p>
+    </div>
+
+    <h2>Introduction</h2>
+    <p>Let's look closely at your existing project, <code>Slop-Box</code>. The core of your networking logic exists inside <code>SlopBox.Core.Movement.NetworkMovement</code>. You have chosen an excellent architectural pattern: wrapping a separate simulation script.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Architecture: Decoupling Simulation from Network</div>
+      <p>The <code>NetworkMovement.cs</code> script handles purely the network data (Client-Side Prediction, Inputs, RPCs, SyncVars). It passes data into <code>CharacterMovement.cs</code>, which handles the actual rigidbodies and math. This is highly analogous to Quantum's System vs View logic.</p>
+    </div>
+
+    <h2>Reviewing the Implementation</h2>
+    <p>Inside <code>NetworkMovement.cs</code>, you properly use the FishNet `TimeManager` to hook into the Tick system:</p>
+    
+    <pre><code>public override void OnStartNetwork() {
+    base.OnStartNetwork();
+    TimeManager.OnTick += TimeManager_OnTick;
+    TimeManager.OnPostTick += TimeManager_OnPostTick;
+}</code></pre>
+
+    <p>This guarantees that input collection and physics execution happens in sync with the server's expected clock step, avoiding the float precision errors typical of <code>Update()</code> loops.</p>
+
+    <h3>The Replicate Data Collection</h3>
+    <p>In your <code>TimeManager_OnTick()</code>, you collect local hardware input constraints (checking `CursorLockMode`) and assemble your <code>MoveData</code> struct. The simulation is correctly driven purely by this structure.</p>
+
+    <h3>Pitch and Yaw Replicating</h3>
+    <p>Your implementation of updating Camera Pitch independently of physics via `SyncVar` is a clever solution to a common problem:</p>
+    <pre><code>private readonly SyncVar&lt;float&gt; _replicatedPitch = new();</code></pre>
+    <p>Because camera rotation (where the player is looking) often diverges from the physics orientation (where the body is facing), decoupling the Yaw for the simulation and the Pitch via a simple SyncVar saves massive bandwidth over sending full Quaternions in the Replicate data.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Potential Pitfall: Reconcile Depth</div>
+      <p>Inside <code>CreateReconcile()</code>, you ensure properties like <code>JumpTimer</code> and <code>StaggerTimer</code> are captured. If these variables are somehow modified inside Update() inside <code>CharacterMovement.cs</code> rather than explicitly via Replicate ticks, CSP will eventually fail and clients will vibrate as they continually mispredict logic based on variable framerates. Always ensure timers run off `TimeManager.TickDelta`, just like Quantum's deterministic frames.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Your wrap-around architecture (NetworkLogic &rarr; View/Simulation) is the correct path for clean, testable code.</li>
+      <li>Hooking into <code>TimeManager.OnTick</code> ensures CSP inputs align with sever clock rates.</li>
+      <li>Ensure every single variable that can affect a player's physical position is encapsulated inside the Reconcile struct to prevent client-side desyncs.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="03-networked-physics-csp.html">
+        <span class="label">← Back to</span>
+        <span class="title">Previous Lesson</span>
+      </a>
+      <a href="../cheatsheet.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Cheat Sheet</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
