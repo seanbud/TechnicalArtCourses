@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 8: Lag Compensation | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 08</div>
+      <h1>Lag Compensation</h1>
+      <p class="lesson-subtitle">Collider rollback for instant-hit weapons, state synchronization for server-only events, and predicted projectiles that align across all clients.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Where We Are</div>
+      <p>Prediction (Lessons 05–07) keeps the <em>local player</em> feeling responsive. Lag compensation is the other side of the coin — it ensures that <em>actions aimed at other players</em> (shooting, abilities, status effects) feel fair despite network latency. This lesson covers all three of FishNet's lag compensation systems.</p>
+    </div>
+
+    <div class="overview">
+      <h2>What You'll Learn</h2>
+      <ul>
+        <li>What <strong>lag compensation (collider rollback)</strong> is and why it matters</li>
+        <li>How to synchronize <strong>server-only states</strong> (stuns, EMPs, debuffs) with prediction using tick-based scheduling</li>
+        <li>How to implement <strong>raycast-based lag compensation</strong> with the RollbackManager (Pro Feature)</li>
+        <li>How to build <strong>predicted projectiles</strong> that visually align across all clients — without networking them</li>
+      </ul>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. The Problem: Time Disagreement</h2>
+
+    <p>In a server-authoritative architecture, there's a fundamental timing problem. When a player fires a shot, by the time the input reaches the server, the target has already moved. Without compensation, the server would check the raycast against the target's <em>current</em> position — not where the target was when the player actually fired. The result: shots that clearly hit on the client's screen miss on the server.</p>
+
+    <p>FishNet addresses this with three complementary systems:</p>
+
+    <table>
+      <tr>
+        <th>System</th>
+        <th>Use Case</th>
+        <th>Requires Pro?</th>
+      </tr>
+      <tr>
+        <td><strong>States</strong></td>
+        <td>Synchronizing server-only effects (stuns, EMPs, debuffs) so they fire at the same tick on all clients</td>
+        <td>No</td>
+      </tr>
+      <tr>
+        <td><strong>Raycast Rollback</strong></td>
+        <td>Rewinding colliders to historical positions for accurate hitscan weapons</td>
+        <td><strong>Yes</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Predicted Projectiles</strong></td>
+        <td>Non-networked projectiles that visually align using time-based acceleration</td>
+        <td>No</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. State Synchronization</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/lag-compensation/states" target="_blank">States</a></em></p>
+
+    <p>Sometimes only the server knows when a state change should happen — an EMP that disables movement, a stun from a trap, or a speed debuff from a zone. If the server applies the effect immediately too, the owning client won't know about it until the next reconcile, causing a desync.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">⚠️ Ideal Approach vs. This Workaround</div>
+      <p>FishNet's official guidance: <strong>ideally clients and server should run the same simulation</strong>. If both sides can detect the same condition (e.g., a trigger zone), do that instead — it's simpler and more robust. The tick-scheduling pattern below is for cases where <em>only the server knows</em> about the event.</p>
+    </div>
+
+    <h3>The Pattern: Schedule a Future Tick</h3>
+    <p>Instead of applying the state immediately, the server picks a tick slightly in the future (giving the RPC time to reach clients) and broadcasts it. All clients — and the server — then activate the state at that exact tick.</p>
+
+    <h4>Step 1: Server Detects and Broadcasts</h4>
+    <pre><code class="language-csharp">private void TimeManager_OnTick()
+{
+    // Server-only check — pretend ApplyEMP() is some
+    // server-side condition detection.
+    if (base.IsServer && ApplyEMP())
+    {
+        // Schedule 50ms into the future — enough time for
+        // the RPC to reach clients before the tick fires.
+        uint futureTicks = base.TimeManager.TimeToTicks(
+            0.05f, TickRounding.RoundUp);
+
+        ObserversSetEMPTick(
+            base.TimeManager.LocalTick + futureTicks);
+    }
+}
+
+// RunLocally = true → server also sets its own EMP tick.
+[ObserversRpc(RunLocally = true)]
+private void ObserversSetEMPTick(uint serverTick)
+{
+    // Convert server tick to this client's local tick.
+    _empStartTick = base.TimeManager.TickToLocalTick(serverTick);
+    // EMP lasts 1 second.
+    _empEndTick = _empStartTick + base.TimeManager.TimeToTicks(
+        1f, TickRounding.RoundUp);
+}</code></pre>
+
+    <h4>Step 2: Replicate Checks the Tick Range</h4>
+    <pre><code class="language-csharp">private uint _empStartTick = uint.MaxValue;
+private uint _empEndTick = uint.MaxValue;
+
+[Replicate]
+private void Replicate(MotorData md, ReplicateState state = ...)
+{
+    uint localTick = base.TimeManager.LocalTick;
+
+    // If we're inside the EMP window, block movement.
+    if (localTick >= _empStartTick && localTick <= _empEndTick)
+    {
+        // Don't reset _empStartTick/_empEndTick here!
+        // These values must persist through replays.
+        return;
+    }
+
+    // Normal motor logic here...
+}</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 Critical: Don't Reset Tick Values During Replay</div>
+      <p>If you clear <code>_empStartTick</code> after the EMP ends, replays won't see the correct values and the EMP will be skipped during reconcile → desync. Tick-based ranges naturally expire — they don't need cleanup.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 The Trade-Off</div>
+      <p>This pattern introduces a small delay (~50ms) before the state takes effect. In practice this is acceptable — the alternative (immediate application) causes visible desync. The delay is typically less than one frame at 30fps.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Raycast Lag Compensation (Pro Feature)</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/lag-compensation/raycast" target="_blank">Raycast</a></em></p>
+
+    <p>For instant-hit weapons (hitscan guns, melee swings, beam attacks), FishNet Pro provides the <strong>RollbackManager</strong> — a system that rewinds all registered colliders to their historical positions, performs a standard <code>Physics.Raycast()</code>, and then restores them. From your code's perspective, raycasting "just works" against where targets were when the client fired.</p>
+
+    <h3>Setup Checklist</h3>
+    <ol>
+      <li><strong>Add hitbox colliders</strong> as children of animated bones (head, body, etc.). Each hitbox must be on its own child GameObject with only a collider — any collider type works.</li>
+      <li><strong>Add <code>ColliderRollback</code></strong> to the NetworkObject (typically root). Drag all hitbox GameObjects into its <code>Collider Parents</code> collection.
+        <p class="tip-inline">Tip: Name hitbox objects with a "Hitbox" suffix, lock the inspector on ColliderRollback, search "Hitbox", and drag them all in at once.</p>
+      </li>
+      <li><strong>Add <code>RollbackManager</code></strong> to your NetworkManager GameObject. Configure its settings (rollback frames, additional ticks for TickSmoother alignment).</li>
+    </ol>
+
+    <div class="callout callout-important">
+      <div class="callout-title">⚠️ TickSmoother Compatibility</div>
+      <p>If using a <a href="https://fish-networking.gitbook.io/docs/fishnet-building-blocks/components/tick-smoothers" target="_blank">Tick Smoother</a>, place hitbox colliders on the <strong>target objects</strong> — not on smoothed objects (the object with the smoother or its children). The RollbackManager handles its own interpolation during rollback, so local smoothing on hitboxes is unnecessary. Set the smoother's <code>Flat Interpolation</code> value to match <code>Additional Ticks</code> in the RollbackManager.</p>
+    </div>
+
+    <h3>Performing the Rollback</h3>
+    <pre><code class="language-csharp">[Client]
+private void Fire()
+{
+    // Capture the precise tick at the moment of firing.
+    PreciseTick pt = base.TimeManager.GetPreciseTick(
+        TickType.LastPacketTick);
+
+    // Send to server with the tick.
+    ServerFire(pt);
+}
+
+[ServerRpc]
+private void ServerFire(PreciseTick pt)
+{
+    // Rewind all registered colliders to where they were
+    // at the client's firing tick.
+    base.RollbackManager.Rollback(
+        pt,
+        RollbackManager.PhysicsType.Physics,
+        base.IsOwner  // Whether to also rollback self
+    );
+
+    // Perform a standard raycast — colliders are now
+    // in their historical positions.
+    if (Physics.Raycast(transform.position,
+        transform.forward, out RaycastHit hit))
+    {
+        // Process hit normally.
+        var target = hit.collider.GetComponentInParent&lt;Health&gt;();
+        target?.TakeDamage(25f);
+    }
+
+    // CRITICAL: Restore colliders to current positions.
+    base.RollbackManager.Return();
+}</code></pre>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 What's Happening Under the Hood</div>
+      <p>The RollbackManager stores position snapshots for every registered hitbox at every tick. When <code>Rollback()</code> is called, it moves all hitbox colliders back in time, interpolating between snapshots for sub-tick accuracy using the <code>PreciseTick</code>. After your raycast, <code>Return()</code> moves everything back. This is why you use <code>PreciseTick</code> instead of a raw tick — it captures the fractional position between ticks.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Predicted Projectiles</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/lag-compensation/projectiles" target="_blank">Projectiles</a></em></p>
+
+    <p>For weapons that fire visible, traveling projectiles (rockets, arrows, plasma bolts), FishNet provides a pattern that <strong>does not require networking the projectile at all</strong>. Instead, each peer spawns the projectile locally and accelerates it to compensate for latency — resulting in visual alignment across all clients.</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Why Not Network the Projectile?</div>
+      <p>A networked projectile would require a <code>NetworkObject</code> + spawn/despawn calls + per-tick state synchronization. For fast-moving projectiles, that's enormous bandwidth and CPU cost for minimal gameplay benefit. Instead, each client runs the projectile locally with a slight speed boost, and the server resolves hits authoritatively.</p>
+    </div>
+
+    <h3>The Flow</h3>
+    <ol>
+      <li><strong>Owner fires</strong>: Spawns the projectile locally with 0 passed time (no catch-up needed). Sends an RPC to the server with the current tick.</li>
+      <li><strong>Server receives</strong>: Calculates how much time has passed since the client ticked, spawns the projectile with that passed time, then forwards to spectators.</li>
+      <li><strong>Spectators receive</strong>: Calculate passed time from the original tick, spawn and accelerate.</li>
+    </ol>
+
+    <h3>Step 1: Client Fires + Server Receives</h3>
+    <pre><code class="language-csharp">[SerializeField] private PredictedProjectile _projectile;
+
+// Max latency we'll compensate for — limits griefing from
+// extremely laggy players.
+private const float MAX_PASSED_TIME = 0.3f;
+
+// Called locally when the player clicks fire.
+private void ClientFire()
+{
+    Vector3 position = transform.position;
+    Vector3 direction = transform.forward;
+
+    // Spawn locally with 0 passed time — this is the
+    // firing client, no catch-up needed.
+    SpawnProjectile(position, direction, 0f);
+
+    // Tell the server, including our current tick.
+    ServerFire(position, direction, base.TimeManager.Tick);
+}
+
+[ServerRpc]
+private void ServerFire(Vector3 position,
+    Vector3 direction, uint tick)
+{
+    // Calculate how long it took for this RPC to arrive.
+    float passedTime = (float)base.TimeManager
+        .TimePassed(tick, false);
+
+    // Cap at half the max — server's projectile doesn't need
+    // as much catch-up as spectators.
+    passedTime = Mathf.Min(MAX_PASSED_TIME / 2f, passedTime);
+
+    SpawnProjectile(position, direction, passedTime);
+
+    // Forward to spectators (everyone except the owner).
+    ObserversFire(position, direction, tick);
+}
+
+[ObserversRpc(ExcludeOwner = true)]
+private void ObserversFire(Vector3 position,
+    Vector3 direction, uint tick)
+{
+    float passedTime = (float)base.TimeManager
+        .TimePassed(tick, false);
+
+    // Spectators get the full max — they're the farthest
+    // behind the original firing moment.
+    passedTime = Mathf.Min(MAX_PASSED_TIME, passedTime);
+
+    SpawnProjectile(position, direction, passedTime);
+}
+
+private void SpawnProjectile(Vector3 position,
+    Vector3 direction, float passedTime)
+{
+    PredictedProjectile pp = Instantiate(
+        _projectile, position, Quaternion.identity);
+    pp.Initialize(direction, passedTime);
+}</code></pre>
+
+    <h3>Step 2: The PredictedProjectile Script</h3>
+    <p>This is a <strong>plain MonoBehaviour</strong> — not a NetworkBehaviour! It has no NetworkObject. It's instantiated locally on each peer and destroyed independently.</p>
+
+    <pre><code class="language-csharp">// NOT a NetworkBehaviour — just MonoBehaviour.
+public class PredictedProjectile : MonoBehaviour
+{
+    private Vector3 _direction;
+    private float _passedTime = 0f;
+    private const float MOVE_RATE = 5f;
+
+    public void Initialize(Vector3 direction, float passedTime)
+    {
+        _direction = direction;
+        _passedTime = passedTime;
+    }
+
+    private void Update()
+    {
+        Move();
+    }
+
+    private void Move()
+    {
+        float delta = Time.deltaTime;
+        float passedTimeDelta = 0f;
+
+        if (_passedTime > 0f)
+        {
+            // Exponential catch-up — fast at start, slow at end.
+            // 8% of remaining per frame. Feels like smooth damp.
+            float step = _passedTime * 0.08f;
+            _passedTime -= step;
+
+            // If remaining time is negligible, consume it all.
+            if (_passedTime <= delta / 2f)
+            {
+                step += _passedTime;
+                _passedTime = 0f;
+            }
+
+            passedTimeDelta = step;
+        }
+
+        // Move using base rate + catch-up delta.
+        transform.position += _direction *
+            (MOVE_RATE * (delta + passedTimeDelta));
+    }
+}</code></pre>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 The Acceleration Curve</div>
+      <p>Using <code>passedTime * 0.08f</code> per frame creates an exponential decay curve — the projectile moves fastest right after spawning (when it has the most time to make up) and gradually returns to normal speed. This mimics a smooth damp and prevents the jarring "teleport then slow down" effect a flat catch-up rate would cause.</p>
+    </div>
+
+    <h3>Step 3: Collision Handling</h3>
+    <p>Since projectiles are local-only, collision logic must account for which peer is running:</p>
+
+    <pre><code class="language-csharp">private void OnCollisionEnter(Collision collision)
+{
+    // Client: show VFX, play audio.
+    if (InstanceFinder.IsClient)
+    {
+        // Spawn impact particles, play hit sound
+    }
+
+    // Server: apply damage (authoritative).
+    if (InstanceFinder.IsServer)
+    {
+        var target = collision.gameObject
+            .GetComponent&lt;Health&gt;();
+        if (target != null)
+            target.TakeDamage(50f);
+    }
+
+    // Pool or destroy (both sides).
+    Destroy(gameObject);
+}</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 Accuracy Caveat</div>
+      <p>Because projectiles are not networked, there's a very small chance of alignment divergence between peers — especially at extremely high latencies or with fast-moving targets. In practice, these differences are visually insignificant and don't affect authoritative hit resolution (which happens on the server).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Choosing the Right Approach</h2>
+
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Approach</th>
+        <th>Why</th>
+      </tr>
+      <tr>
+        <td>Hitscan weapons (rifles, beams)</td>
+        <td>Raycast Rollback (Pro)</td>
+        <td>Instant hits need collider rewind — no visible projectile to accelerate.</td>
+      </tr>
+      <tr>
+        <td>Visible projectiles (rockets, arrows)</td>
+        <td>Predicted Projectiles</td>
+        <td>No networking overhead, visual alignment via acceleration. Works with free FishNet.</td>
+      </tr>
+      <tr>
+        <td>Server-only effects (stuns, EMPs)</td>
+        <td>State Synchronization</td>
+        <td>Tick-based scheduling ensures all peers activate the effect at the same simulation time.</td>
+      </tr>
+      <tr>
+        <td>Trigger-based effects (zones, AoE)</td>
+        <td>Shared simulation (best) or States (fallback)</td>
+        <td>If both sides can detect the same condition, let them — no special compensation needed.</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>State synchronization</strong> uses tick-based scheduling to align server-only events across all peers. Schedule effects slightly in the future and never reset tick values during replay.</li>
+      <li><strong>Raycast rollback</strong> (Pro) rewinds hitbox colliders to historical positions using <code>PreciseTick</code>. Always call <code>Return()</code> after your raycast.</li>
+      <li><strong>Predicted projectiles</strong> are non-networked GameObjects that use time-based acceleration to visually align across peers. Server handles hit resolution authoritatively.</li>
+      <li>The <strong>exponential catch-up</strong> pattern (<code>passedTime * 0.08f</code> per frame) produces smooth acceleration that decays naturally — no abrupt speed changes.</li>
+      <li>When possible, <strong>run the same simulation on both client and server</strong> rather than using lag compensation. Compensation is the fallback for server-only knowledge.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="07-prediction-advanced.html">
+        <span class="label">← Back to</span>
+        <span class="title">Lesson 07: Advanced Prediction</span>
+      </a>
+      <a href="../index.html">
+        <span class="label">Back to →</span>
+        <span class="title">Course Index</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
