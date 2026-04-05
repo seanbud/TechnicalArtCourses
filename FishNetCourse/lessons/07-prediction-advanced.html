@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 7: Advanced Prediction | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 07</div>
+      <h1>Advanced Prediction</h1>
+      <p class="lesson-subtitle">PredictionRigidbody in depth, NetworkCollider/NetworkTrigger for prediction-safe physics events, and Custom Comparers for complex data types.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Where We Are</div>
+      <p>By now you can write full <code>[Replicate]</code>/<code>[Reconcile]</code> loops for controlled and non-controlled objects. This lesson covers three systems that sit <em>around</em> the core loop — the wrapper that makes rigidbody forces replay correctly, the components that give you prediction-safe collision events, and the mechanism for handling unsupported data types in your prediction structs.</p>
+    </div>
+
+    <div class="overview">
+      <h2>What You'll Learn</h2>
+      <ul>
+        <li><strong>PredictionRigidbody</strong> — the complete API: AddForce, Velocity, AddVelocity, AngularVelocity, and Simulate</li>
+        <li>How to apply <strong>outside forces</strong> from bumpers, hazards, and world objects — and the critical rule about where <code>Simulate()</code> may be called</li>
+        <li><strong>NetworkCollision</strong> and <strong>NetworkTrigger</strong> — FishNet's prediction-safe collision/trigger replacements</li>
+        <li>How to handle <strong>one-time effects</strong> (audio, VFX) during collisions without replaying them during reconcile</li>
+        <li><strong>Custom Comparers</strong> — when they're needed and how to write them</li>
+      </ul>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. PredictionRigidbody Deep Dive</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/predictionrigidbody" target="_blank">PredictionRigidbody</a></em></p>
+
+    <p><code>PredictionRigidbody</code> wraps Unity's <code>Rigidbody</code> and queues all force changes so they can be replayed deterministically during reconcile. You've already used <code>AddForce()</code> and <code>Simulate()</code> in Lesson 06 — here we'll tour the full API and cover the rules you need to know for production use.</p>
+
+    <h3>Initialization & Lifecycle</h3>
+    <pre><code class="language-csharp">public PredictionRigidbody PredictionRigidbody;
+
+private void Awake()
+{
+    // Retrieve from FishNet's internal pool to avoid allocations.
+    PredictionRigidbody =
+        ObjectCaches&lt;PredictionRigidbody&gt;.Retrieve();
+    PredictionRigidbody.Initialize(GetComponent&lt;Rigidbody&gt;());
+}
+
+private void OnDestroy()
+{
+    // Return to pool.
+    ObjectCaches&lt;PredictionRigidbody&gt;
+        .StoreAndDefault(ref PredictionRigidbody);
+}</code></pre>
+
+    <h3>Key API Methods</h3>
+    <table>
+      <tr>
+        <th>Method</th>
+        <th>Description</th>
+        <th>When to Use</th>
+      </tr>
+      <tr>
+        <td><code>AddForce(Vector3, ForceMode)</code></td>
+        <td>Queues a force to apply during Simulate. Works identically to <code>Rigidbody.AddForce()</code>.</td>
+        <td>Movement, jumps, knockback — anywhere you'd normally call <code>rb.AddForce()</code>.</td>
+      </tr>
+      <tr>
+        <td><code>Velocity(Vector3)</code></td>
+        <td>Sets the velocity directly (overrides any existing velocity).</td>
+        <td>Teleport-like instant speed changes, dash abilities.</td>
+      </tr>
+      <tr>
+        <td><code>AddVelocity(Vector3)</code></td>
+        <td>Adds to the current velocity without overriding it.</td>
+        <td>Gentle nudges, wind effects, additive boosts.</td>
+      </tr>
+      <tr>
+        <td><code>AngularVelocity(Vector3)</code></td>
+        <td>Sets the angular velocity directly.</td>
+        <td>Spinning objects, rotation corrections.</td>
+      </tr>
+      <tr>
+        <td><code>Simulate()</code></td>
+        <td>Processes all queued forces and applies them to the underlying <code>Rigidbody</code>.</td>
+        <td><strong>Must be called at the end of your [Replicate] method</strong> — and <em>only</em> there.</td>
+      </tr>
+      <tr>
+        <td><code>Reconcile(PredictionRigidbody)</code></td>
+        <td>Restores the rigidbody to the reconcile snapshot.</td>
+        <td>Called inside your <code>[Reconcile]</code> method.</td>
+      </tr>
+    </table>
+
+    <h3>Setting Velocity Directly</h3>
+    <p>Some controllers set velocity explicitly rather than applying forces. <code>PredictionRigidbody</code> supports this — you still call <code>Simulate()</code> at the end:</p>
+
+    <pre><code class="language-csharp">[Replicate]
+private void RunInputs(ReplicateData data, ReplicateState state = ...)
+{
+    Vector3 velocity = new Vector3(data.Horizontal, 0f, 0f) * _moveRate;
+    PredictionRigidbody.Velocity(velocity);
+
+    // Simulate() is required regardless of how velocities are set.
+    PredictionRigidbody.Simulate();
+}</code></pre>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Applying Forces From Outside Scripts</h2>
+
+    <p>This is the pattern you'll use most in real games — bumpers, hazards, wind zones, elevators, and anything in the world that pushes a player around.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 The Simulate() Rule</div>
+      <p><strong>Never call <code>PredictionRigidbody.Simulate()</code> from outside the owning object's <code>[Replicate]</code> method.</strong> External scripts should only queue forces — the player's own replicate method processes them during <code>Simulate()</code>. This ensures forces are replayed correctly during reconcile.</p>
+    </div>
+
+    <h3>Example: World Bumper Using NetworkTrigger</h3>
+    <pre><code class="language-csharp">// On the bumper object in the world — NOT on the player.
+public class Bumper : NetworkBehaviour
+{
+    [SerializeField] private float _launchForce = 15f;
+    private NetworkTrigger _networkTrigger;
+
+    private void Awake()
+    {
+        _networkTrigger = GetComponent&lt;NetworkTrigger&gt;();
+        _networkTrigger.OnEnter += OnPlayerEnter;
+    }
+
+    private void OnDestroy()
+    {
+        if (_networkTrigger != null)
+            _networkTrigger.OnEnter -= OnPlayerEnter;
+    }
+
+    private void OnPlayerEnter(Collider other)
+    {
+        // Get the player's prediction component.
+        if (other.TryGetComponent&lt;RigidbodyPlayer&gt;(out var player))
+        {
+            // Queue force — do NOT call Simulate() here.
+            player.PredictionRigidbody.AddForce(
+                Vector3.up * _launchForce, ForceMode.Impulse);
+        }
+    }
+}</code></pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Why This Works</div>
+      <p>When a reconcile fires, FishNet replays the player's replicate method for every tick from the reconcile point forward. At each replayed tick, the physics step runs, the bumper trigger fires again during replay, <code>AddForce()</code> queues the impulse again, and the player's <code>Simulate()</code> processes it — identical to the original execution. That's deterministic replay.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. NetworkColliders — Prediction-Safe Collision Events</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/using-networkcolliders" target="_blank">Using NetworkColliders</a></em></p>
+
+    <p>Unity's built-in <code>OnCollisionEnter</code>/<code>OnTriggerEnter</code> callbacks have a fundamental problem with prediction: during reconcile replay, Unity doesn't re-fire Enter/Exit events for collisions that happened in the past. FishNet solves this with four drop-in replacement components:</p>
+
+    <table>
+      <tr>
+        <th>Component</th>
+        <th>Unity Equivalent</th>
+        <th>Returns</th>
+      </tr>
+      <tr>
+        <td><code>NetworkCollision</code></td>
+        <td><code>OnCollisionEnter/Stay/Exit</code></td>
+        <td><code>Collider</code></td>
+      </tr>
+      <tr>
+        <td><code>NetworkCollision2D</code></td>
+        <td><code>OnCollisionEnter2D/Stay2D/Exit2D</code></td>
+        <td><code>Collider2D</code></td>
+      </tr>
+      <tr>
+        <td><code>NetworkTrigger</code></td>
+        <td><code>OnTriggerEnter/Stay/Exit</code></td>
+        <td><code>Collider</code></td>
+      </tr>
+      <tr>
+        <td><code>NetworkTrigger2D</code></td>
+        <td><code>OnTriggerEnter2D/Stay2D/Exit2D</code></td>
+        <td><code>Collider2D</code></td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 FishNet Exclusive</div>
+      <p>FishNet is the only networking framework that accurately simulates Enter/Exit events during prediction replay — not even Fusion does this. This is critical for any game with physics-based hazards, pickups, or trigger zones.</p>
+    </div>
+
+    <h3>The Three Callbacks</h3>
+    <p>All four components expose the same three events:</p>
+    <ul>
+      <li><code>OnEnter</code> — Invoked when this collider first intersects another collider's bounds.</li>
+      <li><code>OnStay</code> — Invoked while this collider remains in contact with another. <em>Note: returns <code>Collider</code>, not <code>Collision</code>, to avoid hot-path allocations. If you need the <code>Collision</code> object, use Unity's native <code>OnCollisionStay</code> instead — it works correctly with prediction.</em></li>
+      <li><code>OnExit</code> — Invoked when this collider leaves another collider's bounds.</li>
+    </ul>
+
+    <h3>Full Example: Player Collision Handler</h3>
+    <pre><code class="language-csharp">// Placed on the player object alongside NetworkCollision component.
+public class PlayerCollisionHandler : NetworkBehaviour
+{
+    [SerializeField] private AudioSource _hitSound;
+    private NetworkCollision _networkCollision;
+
+    private void Awake()
+    {
+        _networkCollision = GetComponent&lt;NetworkCollision&gt;();
+        _networkCollision.OnEnter += OnCollisionEnter;
+        _networkCollision.OnStay += OnCollisionStay;
+        _networkCollision.OnExit += OnCollisionExit;
+    }
+
+    private void OnDestroy()
+    {
+        if (_networkCollision != null)
+        {
+            _networkCollision.OnEnter -= OnCollisionEnter;
+            _networkCollision.OnStay -= OnCollisionStay;
+            _networkCollision.OnExit -= OnCollisionExit;
+        }
+    }
+
+    private void OnCollisionEnter(Collider other)
+    {
+        // Guard one-time effects against reconcile replays.
+        if (!base.PredictionManager.IsReconciling)
+            _hitSound.Play();
+
+        // Forces ALWAYS apply — even during reconcile.
+        // This ensures deterministic replay.
+        PlayerMover pm = GetComponent&lt;PlayerMover&gt;();
+        Vector3 dir = (transform.position -
+            other.gameObject.transform.position).normalized;
+        pm.PredictionRigidbody.AddForce(
+            dir * 50f, ForceMode.Impulse);
+    }
+
+    private void OnCollisionStay(Collider other)
+    {
+        // Continuous contact logic here.
+    }
+
+    private void OnCollisionExit(Collider other)
+    {
+        // Cleanup logic, deactivate VFX, etc.
+    }
+}</code></pre>
+
+    <div class="callout callout-important">
+      <div class="callout-title">⚠️ The Two-Rule Pattern</div>
+      <p>This is the universal pattern for collision callbacks in predicted code:</p>
+      <ol>
+        <li><strong>Physics forces → always apply</strong>, including during reconcile replays. If you skip them during replay, determinism breaks.</li>
+        <li><strong>One-time effects (audio, particles, UI) → guard with <code>IsReconciling</code></strong>. Otherwise the sound plays dozens of times per second during replays.</li>
+      </ol>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Custom Comparers</h2>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/custom-comparers" target="_blank">Custom Comparers</a></em></p>
+
+    <p>FishNet auto-generates equality comparers for your <code>IReplicateData</code> and <code>IReconcileData</code> structs to perform internal optimizations (e.g., skip sending identical inputs). Most types work automatically, but certain types <strong>cannot</strong> have comparers generated — specifically <strong>generics</strong> and <strong>arrays</strong>.</p>
+
+    <h3>When You'll See the Error</h3>
+    <p>If your struct contains an array or generic type, you'll get a console error like:</p>
+    <pre><code>// This struct will produce a console error:
+public struct MoveData : IReplicateData
+{
+    public Vector2 MoveDirection;
+    public byte[] CustomData;  // ← byte[] needs a custom comparer
+    // ...
+}</code></pre>
+
+    <h3>Writing a Custom Comparer</h3>
+    <p>The fix is simple: create a <code>static</code> method with the <code>[CustomComparer]</code> attribute. It takes two parameters of the type you're comparing and returns <code>bool</code>.</p>
+
+    <pre><code class="language-csharp">// Can be placed in any class — just needs to be static.
+[CustomComparer]
+public static bool CompareByteArray(byte[] a, byte[] b)
+{
+    bool aNull = (a is null);
+    bool bNull = (b is null);
+
+    // Both null → equal
+    if (aNull && bNull) return true;
+    // One null, other not → not equal
+    if (aNull != bNull) return false;
+    // Different lengths → not equal
+    if (a.Length != b.Length) return false;
+
+    // Compare each byte
+    for (int i = 0; i < a.Length; i++)
+    {
+        if (a[i] != b[i]) return false;
+    }
+
+    return true;
+}</code></pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 Performance Consideration</div>
+      <p>FishNet <em>requires</em> you to write your own comparer for these types because auto-generated byte-by-byte comparison might be expensive. You know your data — maybe you can compare a hash or length first. Keep comparers fast; they run every tick on the hot path.</p>
+    </div>
+
+    <h3>When You Don't Need a Custom Comparer</h3>
+    <p>Primitive types (<code>float</code>, <code>int</code>, <code>bool</code>), Unity value types (<code>Vector3</code>, <code>Quaternion</code>), and <code>PredictionRigidbody</code> all have auto-generated comparers. You only need custom comparers when the console tells you to.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Putting It All Together: Hazard Zone Example</h2>
+    <p>Let's combine everything from Lessons 06 and 07 into a realistic scenario — a lava zone that damages and repels players with prediction-safe collisions:</p>
+
+    <pre><code class="language-csharp">// On the hazard zone object — has a NetworkTrigger + IsTrigger collider.
+public class LavaZone : NetworkBehaviour
+{
+    [SerializeField] private float _repelForce = 20f;
+    private NetworkTrigger _networkTrigger;
+
+    private void Awake()
+    {
+        _networkTrigger = GetComponent&lt;NetworkTrigger&gt;();
+        _networkTrigger.OnEnter += OnPlayerEnter;
+    }
+
+    private void OnDestroy()
+    {
+        if (_networkTrigger != null)
+            _networkTrigger.OnEnter -= OnPlayerEnter;
+    }
+
+    private void OnPlayerEnter(Collider other)
+    {
+        if (!other.TryGetComponent&lt;PlayerMover&gt;(out var player))
+            return;
+
+        // 1. Apply knockback force — ALWAYS (replays too).
+        Vector3 awayDir = (other.transform.position -
+            transform.position).normalized;
+        awayDir.y = 0.5f;  // Slight upward arc
+        player.PredictionRigidbody.AddForce(
+            awayDir.normalized * _repelForce, ForceMode.Impulse);
+
+        // 2. Damage — only on non-replay ticks (server handles health).
+        if (base.IsServerInitialized && !base.PredictionManager.IsReconciling)
+        {
+            player.GetComponent&lt;Health&gt;()?.TakeDamage(10f);
+        }
+
+        // 3. VFX — only on first real execution.
+        if (!base.PredictionManager.IsReconciling)
+        {
+            PlayBurnEffect(other.transform.position);
+        }
+    }
+}</code></pre>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>PredictionRigidbody</strong> wraps all force application for deterministic replay. Use it exclusively — never modify <code>Rigidbody.velocity</code> directly.</li>
+      <li><strong>Simulate()</strong> must be called <strong>only</strong> inside <code>[Replicate]</code> — external scripts queue forces but never call Simulate.</li>
+      <li><strong>NetworkCollision/NetworkTrigger</strong> replace Unity's collision callbacks with prediction-safe versions that correctly re-fire during reconcile replay.</li>
+      <li>In collision handlers: <strong>forces always apply</strong>, <strong>one-time effects guard with <code>IsReconciling</code></strong>.</li>
+      <li><strong>Custom comparers</strong> are only needed for arrays and generics — the console will tell you. Keep them fast.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="06-prediction-code.html">
+        <span class="label">← Back to</span>
+        <span class="title">Lesson 06: Writing Prediction Code</span>
+      </a>
+      <a href="08-lag-compensation.html">
+        <span class="label">Next →</span>
+        <span class="title">Lesson 08: Lag Compensation</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

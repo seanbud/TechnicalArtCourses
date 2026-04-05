@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 5: Prediction Setup &amp; Configuration | FishNet for Quantum Vets</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">FishNet for Quantum Vets</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 05</div>
+      <h1>Prediction Setup &amp; Configuration</h1>
+      <p class="lesson-subtitle">Everything you need to configure in the Unity Inspector before writing a single line of prediction code — PredictionManager, TimeManager, NetworkObject, and the interpolation pipeline.</p>
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Why This Lesson Matters</div>
+      <p>FishNet's prediction system is powerful, but it's distributed across <strong>three separate components</strong> — each with inspector settings that interact in non-obvious ways. Get the configuration wrong and your code will compile but produce jitter, rubber-banding, or silent desync. This lesson gives you a complete, annotated walkthrough of every prediction-related setting, so when you write prediction code in the next lesson, you'll have a solid foundation.</p>
+    </div>
+
+    <div class="overview">
+      <h2>What You'll Learn</h2>
+      <ul>
+        <li>What Client-Side Prediction (CSP) actually is — and how it differs from other server-authoritative patterns</li>
+        <li>How to configure the <strong>PredictionManager</strong> for interpolation and replicate queue management</li>
+        <li>Why the <strong>TimeManager</strong> must own physics and how to enable it</li>
+        <li>Every prediction-related setting on the <strong>NetworkObject</strong> inspector — state forwarding, graphical smoothing, and adaptive interpolation</li>
+        <li>How to handle <strong>Offline Rigidbodies</strong> in prediction scenes</li>
+        <li>The critical difference between <strong>PredictionManager interpolation</strong> and <strong>NetworkObject interpolation</strong></li>
+      </ul>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>1. What Is Client-Side Prediction?</h2>
+    <p>Client-Side Prediction (CSP) is a technique that lets the owning client execute actions <strong>immediately</strong> — without waiting for the server — while the server still retains full authority over the game state. The client "predicts" the outcome of its own input, and the server corrects it later if the prediction was wrong.</p>
+
+    <p>This is different from a naive server-authoritative approach where the client sends input, waits for the server to process it, and then receives the result. That pattern introduces latency equal to the full round-trip time (RTT), which makes movement feel sluggish — especially above 80ms.</p>
+
+    <div class="comparison-grid">
+      <div class="card bad">
+        <h3>❌ Naive Server-Authoritative</h3>
+        <p>Client sends input → waits for server → receives result → moves.</p>
+        <p><strong>Latency:</strong> Full RTT before any visual movement. Feels unresponsive at >50ms.</p>
+      </div>
+      <div class="card good">
+        <h3>✅ Client-Side Prediction (CSP)</h3>
+        <p>Client sends input + immediately predicts result → server validates → client reconciles if wrong.</p>
+        <p><strong>Latency:</strong> Zero perceived input lag. Server corrections are invisible when prediction is accurate.</p>
+      </div>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 CSP vs "Server Authoritative Movement"</div>
+      <p>You'll hear both terms used interchangeably, but they're not the same. <strong>Server-authoritative movement</strong> is the broad category — it just means the server has final say. CSP is a <em>specific implementation</em> of server-authoritative movement where the client predicts ahead. FishNet's prediction system gives you CSP out of the box with <code>[Replicate]</code> and <code>[Reconcile]</code> attributes.</p>
+    </div>
+
+    <h3>The CSP Tick Loop</h3>
+    <p>Here's what happens on each network tick when CSP is active:</p>
+
+    <div class="diagram">
+CLIENT (Owner)                           SERVER
+━━━━━━━━━━━━━━━━━━                       ━━━━━━━━━━━━━━━━━━━━
+1. Collect input (MoveData)
+2. Run [Replicate] locally (prediction)
+3. Send input to server ───────────────→ 4. Receive input
+                                         5. Run [Replicate] authoritatively
+                                         6. CreateReconcile() → MoveState
+                                    ←─── 7. Send reconcile to client
+8. Receive reconcile
+9. Compare predicted state vs server state
+10. If different → rollback to server
+    state and replay all inputs since
+    </div>
+
+    <p>Steps 9-10 are the <strong>reconciliation loop</strong> — FishNet handles this automatically. If the client's prediction was correct (which it usually is for simple movement), steps 9-10 are effectively a no-op and the player never notices.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>2. Configuring the PredictionManager</h2>
+    <p>The <code>PredictionManager</code> is a component on the NetworkManager GameObject. It controls <strong>global</strong> prediction settings that apply to all predicted objects in the scene. You don't strictly need to add it — FishNet will use defaults — but adding it lets you fine-tune two critical systems.</p>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/configuring-predictionmanager" target="_blank">Configuring PredictionManager</a></em></p>
+
+    <h3>2.1 Interpolation (Input Buffer)</h3>
+    <p>This is <strong>not</strong> graphical smoothing — it's how many ticks of input the system holds in a queue before running them. Think of it as a shock absorber for network jitter.</p>
+
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>What It Controls</th>
+        <th>Recommended Values</th>
+      </tr>
+      <tr>
+        <td><strong>Client Interpolation</strong></td>
+        <td>How many ticks of server/other-client input are buffered before running.</td>
+        <td><code>1</code> for fast-paced games. <code>2-3</code> for casual games where stability matters more than latency.</td>
+      </tr>
+      <tr>
+        <td><strong>Server Interpolation</strong></td>
+        <td>How many ticks the server buffers received client inputs before executing them.</td>
+        <td>Usually lower than client — <code>0-1</code> is typical. Higher values add server-side input lag.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-important">
+      <div class="callout-title">⚠️ Interpolation = Added Latency</div>
+      <p>Every 1 point of interpolation adds latency equal to <code>interpolation × TickDelta</code>. At 60 ticks/sec (TickDelta ≈ 16.7ms), an interpolation of 2 adds ~33ms of delay. This is the trade-off: more interpolation means fewer situations where input isn't available (preventing "future prediction"), but it adds delay to when those inputs actually run.</p>
+    </div>
+
+    <h3>2.2 Excessive Replicate Dropping</h3>
+    <p>The server's input queue should normally contain <code>ServerInterpolation ±1</code> entries. But if a client has network issues and sends inputs in bursts, the queue could spike to 5+ entries at once.</p>
+
+    <p>When the queue exceeds the maximum, FishNet drops the oldest values. This serves two purposes:</p>
+    <ul>
+      <li><strong>Security:</strong> Prevents allocation attacks (malicious clients flooding the queue)</li>
+      <li><strong>Anti-cheat:</strong> Prevents extra inputs from being processed (which could be used to speed-hack)</li>
+    </ul>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 Don't Disable Replicate Dropping</div>
+      <p>You <em>can</em> disable excessive replicate dropping in the inspector, but doing so opens your game to cheating — multiple replicates will run per tick on the server to consume the extras. FishNet still has a hard-coded maximum as a safety net, but this is a last resort, not a feature you should rely on.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>3. Configuring the TimeManager</h2>
+    <p>The <code>TimeManager</code> component on the NetworkManager controls timing for the entire network session. For prediction, there is one <strong>critical</strong> setting you must change.</p>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/configuring-timemanager" target="_blank">Configuring TimeManager</a></em></p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 Mandatory: Set Physics Mode to "Time Manager"</div>
+      <p>By default, Unity manages its own physics timing via <code>FixedUpdate</code>. When using FishNet prediction, <strong>you must switch physics control to the TimeManager</strong>. This ensures that physics steps happen at the network tick rate rather than Unity's default fixed timestep, which is essential for deterministic replay during reconciliation.</p>
+    </div>
+
+    <h3>Setup Steps</h3>
+    <ol>
+      <li>Select your <strong>NetworkManager</strong> GameObject in the scene</li>
+      <li>Ensure the <code>TimeManager</code> component is present (add it if missing)</li>
+      <li>Change <strong>Physics Mode</strong> from <code>Unity</code> to <code>Time Manager</code></li>
+    </ol>
+
+    <p>That's it. This single setting change is easy to miss but will cause subtle, hard-to-debug physics desync if forgotten. The symptom: movement works in editor (where the host has 0ms latency) but drifts on remote clients.</p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>4. Configuring the NetworkObject</h2>
+    <p>The <code>NetworkObject</code> component is where prediction settings are configured <strong>per-object</strong>. This is the most complex inspector in the prediction pipeline, with settings that control how the object is predicted, how it smooths, and how non-owners see it.</p>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/configuring-networkobject" target="_blank">Configuring NetworkObject</a></em></p>
+
+    <h3>4.1 Enable Prediction</h3>
+    <p>The first step is checking <strong>Enable Prediction</strong> on the NetworkObject inspector. Without this, prediction methods (<code>[Replicate]</code>, <code>[Reconcile]</code>) won't function on scripts attached to this object.</p>
+
+    <p>Next, set the <strong>Prediction Type</strong>:</p>
+    <table>
+      <tr>
+        <th>Prediction Type</th>
+        <th>Use When</th>
+      </tr>
+      <tr>
+        <td><code>Rigidbody</code></td>
+        <td>The object uses a <code>Rigidbody</code> for physics (forces, velocity, collisions)</td>
+      </tr>
+      <tr>
+        <td><code>Rigidbody2D</code></td>
+        <td>The object uses a <code>Rigidbody2D</code> (2D physics)</td>
+      </tr>
+      <tr>
+        <td><code>Other</code></td>
+        <td>Non-physics movement — <code>CharacterController</code>, transform-based, or custom simulation</td>
+      </tr>
+    </table>
+
+    <h3>4.2 State Forwarding</h3>
+    <p>This is one of the most important architectural decisions for your predicted objects.</p>
+
+    <div class="comparison-grid">
+      <div class="card good">
+        <h3>✅ State Forwarding: Enabled</h3>
+        <p>All clients run the same inputs as the server. Non-owners keep a state buffer and reconcile just like the owner. This means every player sees identical simulation logic running on their machine.</p>
+        <p><strong>Pros:</strong> Easier coding, more reliable simulation, identical behaviour on all clients.</p>
+        <p><strong>Cons:</strong> Higher CPU cost (every client maintains a buffer and reconciles).</p>
+      </div>
+      <div class="card bad">
+        <h3>⚠️ State Forwarding: Disabled</h3>
+        <p>Only the owner and server run inputs. Non-owners see nothing by default — you must manually forward information via <code>NetworkAnimator</code>, RPCs, or <code>NetworkTransform</code>.</p>
+        <p><strong>Pros:</strong> Lower CPU. Fine for simple scenarios.</p>
+        <p><strong>Cons:</strong> You manually relay all visual information to spectators. Easy to miss things.</p>
+      </div>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💡 When In Doubt, Enable State Forwarding</div>
+      <p>State forwarding is the most commonly preferred approach because it lets all clients and the server run identical logic. You lose some CPU to the per-client buffers, but you gain a much simpler programming model where you don't have to think about "what does the spectator see?" — they see the same thing the owner sees, just with interpolation delay.</p>
+    </div>
+
+    <h3>4.3 Graphical Object</h3>
+    <p>This is the child transform that holds your visual representation — the mesh, sprite, particle systems, and anything rendered. FishNet uses this reference to apply <strong>tick-based smoothing</strong> separate from the physics root.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">🚨 Don't Put Gameplay Colliders on the Graphical Object</div>
+      <p>During a network tick, FishNet runs your <code>[Replicate]</code> method using <code>TickDelta</code>. If your graphical object is being smoothed (rolled back and interpolated), any colliders on it will be in the wrong position during the physics step. Keep gameplay colliders (<code>CapsuleCollider</code>, triggers that affect state) on the same GameObject as the <code>NetworkObject</code> — or at least <em>outside</em> the graphical hierarchy.</p>
+    </div>
+
+    <h4>Attached vs Detached Graphical</h4>
+    <table>
+      <tr>
+        <th>Mode</th>
+        <th>Behaviour</th>
+        <th>Best For</th>
+      </tr>
+      <tr>
+        <td><strong>Attached</strong> (default)</td>
+        <td>Graphical object rolls back to its pre-tick transform, then smooths to the post-tick result over the tick duration.</td>
+        <td>Most setups. Works well when you have no third-party assets that fight for transform control.</td>
+      </tr>
+      <tr>
+        <td><strong>Detached</strong></td>
+        <td>Graphical object exists in world space and smoothly moves toward the goal position. No rollback.</td>
+        <td>When animation systems, cameras, or third-party assets don't handle the rollback-then-smooth pattern gracefully. Often the better choice in practice.</td>
+      </tr>
+    </table>
+
+    <h3>4.4 Smoothing Options</h3>
+    <p>The smoothing settings only appear when you've assigned a graphical object. They control <em>what</em> gets smoothed and <em>how aggressively</em>.</p>
+
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td><strong>Smoothed Properties (Owner)</strong></td>
+        <td>Which transform properties (position, rotation, scale) are smoothed for the owning client. Untick rotation if you're self-managing it (e.g., mouse-look).</td>
+      </tr>
+      <tr>
+        <td><strong>Smoothed Properties (Spectator)</strong></td>
+        <td>Same as above but for non-owners watching this object. Often you want all three smoothed here.</td>
+      </tr>
+      <tr>
+        <td><strong>Adaptive Interpolation (Spectator)</strong></td>
+        <td>Controls the level of visual interpolation on spectated objects. Lower = less delay but desyncs are more visible. Higher = smoother but more visual lag.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Smoothing ≠ Prediction</div>
+      <p>Changing smoothing settings has <strong>no effect on prediction accuracy</strong>. Smoothing is purely visual — it controls how the graphical child moves between ticks. The prediction, reconcile, and replay loop that keeps the physics root in sync with the server is completely separate. If you see jitter, tuning smoothing might hide it visually, but the real fix is almost always in your reconcile state completeness (see Lesson 06).</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>5. Offline Rigidbodies</h2>
+    <p>If your scene has <strong>non-networked rigidbodies</strong> (props, debris, physics objects that aren't synced), they need special handling when prediction is active.</p>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/offline-rigidbodies" target="_blank">Offline Rigidbodies</a></em></p>
+
+    <p>When prediction runs its replay loop during reconciliation, it re-simulates physics. Any rigidbody in the scene will be affected by this re-simulation — even ones that aren't networked. Without the <code>OfflineRigidbody</code> component, these objects will jitter, teleport, or behave erratically because they're being rolled back and replayed as part of the global physics step.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">⚠️ Rule: Every Non-Networked Rigidbody Needs OfflineRigidbody</div>
+      <p>Add the <code>OfflineRigidbody</code> component to <strong>any rigidbody in your scene that doesn't have a NetworkObject</strong>. This tells FishNet's prediction system to exclude them from the replay loop. Common targets: decorative physics props, breakable objects, ragdolls, loose crates. See the <a href="https://fish-networking.gitbook.io/docs/fishnet-building-blocks/components/prediction/offlinerigidbody" target="_blank">component documentation</a> for details.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>6. Understanding the Two Interpolation Systems</h2>
+    <p>This is one of the most commonly confused aspects of FishNet's prediction. There are <strong>two completely different interpolation systems</strong>, and they serve different purposes.</p>
+
+    <p><em>Official Docs: <a href="https://fish-networking.gitbook.io/docs/guides/features/prediction/interpolations" target="_blank">Interpolations</a></em></p>
+
+    <table>
+      <tr>
+        <th></th>
+        <th>PredictionManager Interpolation</th>
+        <th>NetworkObject / TickSmoother Interpolation</th>
+      </tr>
+      <tr>
+        <td><strong>What it does</strong></td>
+        <td>Holds states in a <strong>queue</strong> before running them. Buffers input to handle network jitter.</td>
+        <td>Smooths the <strong>graphical object</strong> between tick positions. Purely visual.</td>
+      </tr>
+      <tr>
+        <td><strong>Where it's set</strong></td>
+        <td>PredictionManager component on NetworkManager</td>
+        <td>NetworkObject inspector (Smoothing section) or <a href="https://fish-networking.gitbook.io/docs/fishnet-building-blocks/components/tick-smoothers/networkticksmoother" target="_blank">NetworkTickSmoother</a> component</td>
+      </tr>
+      <tr>
+        <td><strong>Affects</strong></td>
+        <td>When states are executed (adds delay)</td>
+        <td>How smooth movement looks between ticks (no effect on simulation)</td>
+      </tr>
+      <tr>
+        <td><strong>Trade-off</strong></td>
+        <td>More buffer = more resilience to packet loss, but more input lag</td>
+        <td>More smoothing = less visual jitter on spectated objects, but slightly behind "true" position</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Stacking Example</div>
+      <p>If your PredictionManager has <code>ClientInterpolation = 1</code> and a spectated object's TickSmoother has <code>SpectatorInterpolation = 2</code>, the spectator sees the object's graphical representation <strong>3 ticks behind real-time</strong>: 1 tick of queue delay + 2 ticks of visual smoothing. At 60 ticks/sec, that's ~50ms — perfectly acceptable for most games.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>7. Scene Setup Checklist</h2>
+    <p>Before writing any prediction code, make sure every item on this list is checked:</p>
+
+    <table>
+      <tr>
+        <th>#</th>
+        <th>Item</th>
+        <th>Location</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td><strong>TimeManager</strong> Physics Mode set to <code>Time Manager</code></td>
+        <td>NetworkManager → TimeManager component</td>
+        <td style="color: var(--accent-green);">Required ✅</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>PredictionManager</strong> added with appropriate interpolation values</td>
+        <td>NetworkManager → PredictionManager component</td>
+        <td style="color: var(--accent-orange);">Recommended ⚠️</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>Enable Prediction</strong> checked on all predicted NetworkObjects</td>
+        <td>Player prefab → NetworkObject inspector</td>
+        <td style="color: var(--accent-green);">Required ✅</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><strong>Prediction Type</strong> set correctly (Rigidbody / Other)</td>
+        <td>Player prefab → NetworkObject inspector</td>
+        <td style="color: var(--accent-green);">Required ✅</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><strong>State Forwarding</strong> enabled (if spectators need to run logic)</td>
+        <td>Player prefab → NetworkObject inspector</td>
+        <td style="color: var(--accent-orange);">Recommended ⚠️</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><strong>Graphical Object</strong> assigned (if using tick smoothing)</td>
+        <td>Player prefab → NetworkObject inspector</td>
+        <td style="color: var(--accent-orange);">Recommended ⚠️</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><strong>OfflineRigidbody</strong> on all non-networked rigidbodies</td>
+        <td>Any physics prop without a NetworkObject</td>
+        <td style="color: var(--accent-green);">Required ✅</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Gameplay colliders <strong>NOT</strong> on the graphical object child</td>
+        <td>Player prefab hierarchy</td>
+        <td style="color: var(--accent-green);">Required ✅</td>
+      </tr>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>CSP lets the client move immediately</strong> while the server retains authority. If the client's prediction matches the server, the player never perceives any correction.</li>
+      <li><strong>PredictionManager interpolation buffers input</strong> — it's not graphical smoothing. Higher values = more resilience to jitter, but more input lag.</li>
+      <li><strong>TimeManager must own physics.</strong> Switch Physics Mode to <code>Time Manager</code> or prediction replay will use the wrong delta and produce silent desync.</li>
+      <li><strong>NetworkObject is where per-object prediction lives.</strong> Enable prediction, choose the right type, consider state forwarding, and set up your graphical object hierarchy carefully.</li>
+      <li><strong>OfflineRigidbody is mandatory</strong> for any non-networked rigidbody in a prediction scene. Without it, props will jitter during reconciliation replay.</li>
+      <li><strong>Two interpolation systems exist</strong> — PredictionManager (queue buffer) and NetworkObject/TickSmoother (visual smoothing). They stack. Understand both to tune your game's feel.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="04-slop-box-casestudy.html">
+        <span class="label">← Back to</span>
+        <span class="title">Lesson 04: Slop-Box Case Study</span>
+      </a>
+      <a href="06-prediction-code.html">
+        <span class="label">Next →</span>
+        <span class="title">Lesson 06: Writing Prediction Code</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
