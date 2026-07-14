@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 4: AI Agent Automation with OpenClaw | ComfyUI for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">ComfyUI for TAs</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 04</div>
+      <h1>AI Agent Automation with OpenClaw</h1>
+      <p class="lesson-subtitle">Connecting Slack, Discord, and Local File Systems to ComfyUI background nodes using autonomous agents</p>
+    </div>
+
+    <h2>The Big Picture</h2>
+    <p>In Lesson 2, we looked at enqueuing prompts headlessly via direct Python requests. That works well for automated cron jobs or version control hooks, but what if an artist needs to interact with the pipeline dynamically? Writing custom CLI tools for every artistic team is slow, and requiring them to open terminal environments is a recipe for support tickets.</p>
+
+    <p>This is where <strong>OpenClaw</strong> enters the pipeline. OpenClaw is an open-source, autonomous AI agent framework designed to run locally or on studio servers. Instead of acting as a simple chatbot, OpenClaw can run 24/7, monitor messaging apps (Slack, Teams, Discord), read/write files in local repositories, run shell processes, and orchestrate third-party APIs (like ComfyUI).</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: The AI Orchestration Loop</div>
+      <p>OpenClaw acts as the "brain" or dispatch controller of your pipeline. It listens to a chat channel (e.g. Slack), interprets unstructured artist requests (e.g., "give me a dirty version of this jersey texture"), writes code to modify the ComfyUI API JSON, monitors the GPU nodes, submits the resulting image to the game depot, and posts a preview back to the artist.</p>
+    </div>
+
+    <h2>OpenClaw Pipeline Architecture</h2>
+    <p>In a large company environment, OpenClaw bridges the gap between messaging interfaces, local directories, version control, and GPU rendering nodes:</p>
+
+    <div class="diagram">
+┌─────────────────┐       Slack Request        ┌─────────────────┐       Trigger JSON        ┌─────────────────┐
+│     Artist      ├───────────────────────────>│    OpenClaw     ├──────────────────────────>│  Headless GPU   │
+│ (Slack/Discord) │<───────────────────────────┤   Agent Hub     │<──────────────────────────┤ (ComfyUI Node)  │
+└─────────────────┘        Styled Asset        └────────┬────────┘       WebSocket State     └─────────────────┘
+                                                        │
+                                                        │ Auto-Submit
+                                                        ▼
+                                               ┌─────────────────┐
+                                               │ Perforce/Git    │
+                                               │ (Game Asset)    │
+                                               └─────────────────┘
+    </div>
+
+    <h2>Writing a Custom OpenClaw Skill for ComfyUI</h2>
+    <p>OpenClaw agents run on Python. To extend OpenClaw to support ComfyUI, a Technical Artist writes a custom **Skill** (a Python class decorated with OpenClaw's action runner). Here is a complete script demonstrating how an OpenClaw agent registers a ComfyUI prompt-generation skill:</p>
+
+    <pre><code># openclaw/skills/comfy_dispatch.py
+from openclaw.sdk import Skill, action
+import urllib.request
+import json
+
+class ComfyUISkill(Skill):
+    """Allows the AI agent to trigger ComfyUI workflows and retrieve visual assets."""
+
+    def __init__(self, agent_context):
+        super().__init__(agent_context)
+        self.server_ip = "127.0.0.1:8188"
+
+    @action(name="generate_game_asset", description="Generates a styled texture based on a text prompt.")
+    def generate_game_asset(self, prompt_text: str, output_prefix: str) -> str:
+        # Load baseline API JSON
+        with open("workflows/jersey_template.json", "r") as f:
+            workflow = json.load(f)
+
+        # Dynamically inject the prompt text into node 6 (CLIPTextEncode)
+        workflow["6"]["inputs"]["text"] = prompt_text
+        workflow["9"]["inputs"]["filename_prefix"] = output_prefix
+
+        # Post request to enque prompt
+        p = {"prompt": workflow}
+        data = json.dumps(p).encode('utf-8')
+        req = urllib.request.Request(f"http://{self.server_ip}/prompt", data=data)
+        
+        try:
+            response = urllib.request.urlopen(req)
+            res_json = json.loads(response.read().decode('utf-8'))
+            prompt_id = res_json["prompt_id"]
+            return f"Job queued successfully! Prompt ID: {prompt_id}. Awaiting GPU rendering."
+        except Exception as e:
+            return f"Failed to connect to ComfyUI server: {str(e)}"
+</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Common Pitfall: Agent Tool Looping</div>
+      <p>When writing skills for autonomous agents, you must ensure your tool definitions return precise, structured text. If a tool output is vague or silent, OpenClaw might enter a loop, calling the same API endpoint repeatedly, which can freeze the ComfyUI queue for other users.</p>
+    </div>
+
+    <h2>Interactive Visualizer: OpenClaw Workflow</h2>
+    <!-- Interactive OpenClaw Console -->
+    <div style="margin: 2rem 0; border: 1px solid var(--border-color); border-radius: 8px; background: #0b0e14; overflow: hidden; font-family: 'JetBrains Mono', monospace; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+      <div style="background: var(--bg-secondary); padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-red); border-radius: 50%;"></span>
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-orange); border-radius: 50%;"></span>
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%;"></span>
+          openclaw --verbose
+        </span>
+        <button id="clawBtn" onclick="runClawSim()" style="background: var(--bg-tertiary); color: var(--accent-blue); border: 1px solid var(--border-color); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">▶ Launch Agent</button>
+      </div>
+      <div id="clawLog" style="padding: 1rem; height: 180px; overflow-y: auto; font-size: 0.85rem; line-height: 1.5; color: var(--text-muted);">
+        Click "Launch Agent" to watch OpenClaw orchestrate a Slack request...
+      </div>
+    </div>
+    
+    <script>
+      function runClawSim() {
+        const log = document.getElementById("clawLog");
+        const btn = document.getElementById("clawBtn");
+        log.innerHTML = "";
+        btn.disabled = true;
+        btn.style.opacity = 0.5;
+        
+        const lines = [
+          { text: "[AGENT] OpenClaw initialized. Listening to channel: #art-pipelines", delay: 0, color: "var(--text-primary)" },
+          { text: "[CHAT] @artist: /generate gold trim decals for the soccer kits", delay: 800, color: "var(--accent-orange)" },
+          { text: "[AGENT] Message parsed. Intent: Asset Generation. Prompt: 'gold trim decals, vector style'", delay: 1600, color: "var(--text-secondary)" },
+          { text: "[AGENT] Calling tool: generate_game_asset('gold trim decals, vector style', 'Slack_Decal')", delay: 2400, color: "var(--accent-blue)" },
+          { text: "[TOOL] HTTP POST enqueued prompt_id: 3c921-b842", delay: 3200, color: "var(--accent-green)" },
+          { text: "[AGENT] Monitoring WebSocket progress... GPU completed steps.", delay: 4200, color: "var(--text-secondary)" },
+          { text: "[AGENT] Executing local tool: submit_to_perforce('output/Slack_Decal_0001.png', '//depot/Art/Decals/')", delay: 5000, color: "var(--accent-blue)" },
+          { text: "[TOOL] Perforce submit success. Change list: 182743", delay: 5800, color: "var(--accent-green)" },
+          { text: "[CHAT] @openclaw: ✅ Done! Generated decal submitted to Perforce (CL:182743). Preview below.", delay: 6500, color: "var(--accent-green)" }
+        ];
+
+        lines.forEach((line, index) => {
+          setTimeout(() => {
+            const p = document.createElement("div");
+            p.style.color = line.color;
+            p.textContent = line.text;
+            log.appendChild(p);
+            log.scrollTop = log.scrollHeight;
+            if (index === lines.length - 1) {
+              btn.disabled = false;
+              btn.style.opacity = 1;
+            }
+          }, line.delay);
+        });
+      }
+    </script>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 Enterprise Implementation Tip</div>
+      <p>By connecting OpenClaw to chat systems, you democratize AI asset creation. Production directors, game designers, and UI artists can request styled decals or textures on Slack without needing to understand node configurations, GPU allocations, or version control commands.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>OpenClaw</strong> is an autonomous AI agent framework that runs background loops to orchestrate files, processes, and APIs.</li>
+      <li>TAs can write custom **OpenClaw Skills** in Python to map natural language requests to direct ComfyUI enqueuing scripts.</li>
+      <li>The agent can listen to chat interfaces (Slack, Discord), query the GPU node, submit the assets to version control, and output updates back to the chat.</li>
+      <li>Precise, structured tool feedback is required to prevent agents from entering recursive loops that crash background rendering systems.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="03-multimodal-assets.html">
+        <span class="label">← Previous</span>
+        <span class="title">Multi-Modality & Assets</span>
+      </a>
+      <a href="../index.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Back to Index</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

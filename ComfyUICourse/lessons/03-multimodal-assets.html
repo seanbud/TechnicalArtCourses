@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 3: Multi-Modality & Game Asset Workflows | ComfyUI for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">ComfyUI for TAs</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="lesson-content">
+    <h1>Lesson 03: Multi-Modality & Game Asset Workflows</h1>
+
+    <section class="overview">
+      <h2>The Multi-Modal Game Pipeline</h2>
+      <p>Technical Artists aren't restricted to generating static 2D images. Modern game production requires multi-modality: generating video backdrops, animating spritesheets, synthesizing textures, and scripting audio. ComfyUI is the primary engine for this, acting as a visual orchestrator for Stable Video Diffusion (SVD), ControlNet, and multi-modal models.</p>
+    </section>
+
+    <section>
+      <h2>ControlNet: Forcing Spatial Invariance</h2>
+      <p>One of the biggest issues with standard AI generators is the lack of structural control. If you prompt "a soccer player kicking a ball," you get a random pose, a random angle, and random lighting. This is useless for game assets where spritesheets or card portraits must match precise 3D configurations or animations.</p>
+
+      <p><strong>ControlNet</strong> solves this by adding an auxiliary conditioning network. Instead of just steering the model with text (CLIP), we feed in a structural image to enforce boundaries. The most common ControlNet preprocessors for technical artists are:</p>
+
+      <ul>
+        <li><strong>Depth Maps</strong>: Extracted from raw 3D mesh renders in Unity or Blender, forcing the AI to preserve exact depth structures.</li>
+        <li><strong>OpenPose</strong>: Extracted from skeletal rigs or motion capture files, forcing the AI to match specific characters' bone joints and orientations.</li>
+        <li><strong>Canny / Lineart</strong>: Tracing sharp edges of wireframes, forcing the AI to preserve fine mesh details or silhouettes.</li>
+      </ul>
+
+      <div class="diagram">
+┌────────────────────────┐      ┌────────────────────────┐
+│     3D engine asset    │      │    Skeletal Rig Pose   │
+│   (e.g., Depth Pass)   │      │    (e.g., OpenPose)    │
+└───────────┬────────────┘      └───────────┬────────────┘
+            │                               │
+            ▼                               ▼
+┌────────────────────────┐      ┌────────────────────────┐
+│   ControlNet (Depth)   │      │   ControlNet (Pose)    │
+└───────────┬────────────┘      └───────────┬────────────┘
+            │                               │
+            └───────────────┬───────────────┘
+                            │ (Combines Structure)
+                            ▼
+                ┌───────────────────────┐
+                │       KSampler        │ <─── Text prompt / CLIP
+                └───────────┬───────────┘
+                            │
+                            ▼
+                ┌───────────────────────┐
+                │      Final Asset      │ (Style aligned,
+                │   (Styled character)  │  exact pose preserved)
+                └───────────────────────┘
+      </div>
+
+      <!-- Interactive ControlNet Previewer -->
+      <div style="margin: 2rem 0; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--bg-secondary); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        <div style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); padding: 0.5rem 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button id="tab1" onclick="switchTab(1)" style="background: var(--accent-blue); color: var(--bg-primary); font-weight: 600; border: none; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">1. Raw 3D Pose</button>
+          <button id="tab2" onclick="switchTab(2)" style="background: var(--bg-primary); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">2. Depth Preprocessor</button>
+          <button id="tab3" onclick="switchTab(3)" style="background: var(--bg-primary); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">3. AI Output</button>
+        </div>
+        <div style="padding: 2rem; display: flex; justify-content: center; align-items: center; background: #0b0e14; min-height: 200px;">
+          <div id="previewCard" style="width: 140px; height: 180px; border-radius: 8px; border: 1px solid var(--border-color); position: relative; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <!-- Pose View -->
+            <div id="poseView" style="display: flex; flex-direction: column; align-items: center; gap: 5px; opacity: 1;">
+              <div style="width: 24px; height: 24px; border: 2px solid var(--text-primary); border-radius: 50%;"></div>
+              <div style="width: 2px; height: 50px; background: var(--text-primary);"></div>
+              <div style="display: flex; gap: 30px; margin-top: -50px;">
+                <div style="width: 2px; height: 40px; background: var(--text-primary); transform: rotate(15deg); transform-origin: top;"></div>
+                <div style="width: 2px; height: 40px; background: var(--text-primary); transform: rotate(-15deg); transform-origin: top;"></div>
+              </div>
+              <div style="display: flex; gap: 20px; margin-top: 10px;">
+                <div style="width: 2px; height: 45px; background: var(--text-primary); transform: rotate(10deg); transform-origin: top;"></div>
+                <div style="width: 2px; height: 45px; background: var(--text-primary); transform: rotate(-10deg); transform-origin: top;"></div>
+              </div>
+            </div>
+            <!-- Depth View -->
+            <div id="depthView" style="display: none; flex-direction: column; align-items: center; gap: 5px; opacity: 0; filter: drop-shadow(0 0 8px var(--accent-blue));">
+              <div style="width: 24px; height: 24px; background: var(--accent-blue); border-radius: 50%;"></div>
+              <div style="width: 12px; height: 52px; background: linear-gradient(to bottom, var(--accent-blue), #0d2c54); border-radius: 4px;"></div>
+              <div style="display: flex; gap: 24px; margin-top: -52px;">
+                <div style="width: 8px; height: 40px; background: linear-gradient(to bottom, var(--accent-blue), #0d2c54); border-radius: 2px; transform: rotate(15deg); transform-origin: top;"></div>
+                <div style="width: 8px; height: 40px; background: linear-gradient(to bottom, var(--accent-blue), #0d2c54); border-radius: 2px; transform: rotate(-15deg); transform-origin: top;"></div>
+              </div>
+              <div style="display: flex; gap: 14px; margin-top: 12px;">
+                <div style="width: 8px; height: 45px; background: linear-gradient(to bottom, var(--accent-blue), #0b1a30); border-radius: 2px; transform: rotate(10deg); transform-origin: top;"></div>
+                <div style="width: 8px; height: 45px; background: linear-gradient(to bottom, var(--accent-blue), #0b1a30); border-radius: 2px; transform: rotate(-10deg); transform-origin: top;"></div>
+              </div>
+            </div>
+            <!-- AI View -->
+            <div id="aiView" style="display: none; flex-direction: column; align-items: center; justify-content: center; opacity: 0; text-align: center; padding: 10px;">
+              <div style="font-size: 1.8rem; margin-bottom: 5px;">🤖</div>
+              <div style="font-size: 0.8rem; font-weight: bold; color: var(--accent-orange);">EA SPORTS CARD</div>
+              <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 5px;">Styled Footballer Avatar</div>
+              <div style="font-size: 0.65rem; color: var(--accent-green); border: 1px solid var(--accent-green); border-radius: 3px; padding: 1px 4px; margin-top: 5px;">OVR 99</div>
+            </div>
+          </div>
+        </div>
+        <div style="background: var(--bg-tertiary); padding: 0.75rem 1rem; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+          <span id="explainText"><strong>Stage 1</strong>: The artist inputs the raw 3D mesh joint locations (stick skeleton pose).</span>
+        </div>
+      </div>
+
+      <script>
+        function switchTab(num) {
+          const t1 = document.getElementById("tab1");
+          const t2 = document.getElementById("tab2");
+          const t3 = document.getElementById("tab3");
+          const v1 = document.getElementById("poseView");
+          const v2 = document.getElementById("depthView");
+          const v3 = document.getElementById("aiView");
+          const card = document.getElementById("previewCard");
+          const explain = document.getElementById("explainText");
+
+          // Reset buttons
+          [t1, t2, t3].forEach(t => {
+            t.style.background = "var(--bg-primary)";
+            t.style.color = "var(--text-secondary)";
+            t.style.border = "1px solid var(--border-color)";
+          });
+
+          // Reset views
+          [v1, v2, v3].forEach(v => {
+            v.style.display = "none";
+            v.style.opacity = "0";
+          });
+
+          if (num === 1) {
+            t1.style.background = "var(--accent-blue)";
+            t1.style.color = "var(--bg-primary)";
+            t1.style.border = "none";
+            v1.style.display = "flex";
+            setTimeout(() => v1.style.opacity = "1", 50);
+            card.style.background = "transparent";
+            card.style.borderColor = "var(--border-color)";
+            explain.innerHTML = "<strong>Stage 1 (3D Rig)</strong>: The raw skeletal rig pose is exported from the animation system (e.g. FBX bones).";
+          } else if (num === 2) {
+            t2.style.background = "var(--accent-blue)";
+            t2.style.color = "var(--bg-primary)";
+            t2.style.border = "none";
+            v2.style.display = "flex";
+            setTimeout(() => v2.style.opacity = "1", 50);
+            card.style.background = "#050d18";
+            card.style.borderColor = "var(--accent-blue)";
+            explain.innerHTML = "<strong>Stage 2 (Preprocessor)</strong>: ControlNet converts the coordinates into a structural depth map or joint guide mask.";
+          } else if (num === 3) {
+            t3.style.background = "var(--accent-green)";
+            t3.style.color = "var(--bg-primary)";
+            t3.style.border = "none";
+            v3.style.display = "flex";
+            setTimeout(() => v3.style.opacity = "1", 50);
+            card.style.background = "linear-gradient(135deg, #1b120c 0%, #161b22 100%)";
+            card.style.borderColor = "var(--accent-orange)";
+            explain.innerHTML = "<strong>Stage 3 (AI Render)</strong>: KSampler colors the design, matching the spatial constraints perfectly to fit the UI template.";
+          }
+        }
+      </script>
+    </section>
+
+    <section>
+      <h2>Spritesheets and Asset Pipelines</h2>
+      <p>Creating style-consistent asset sequences (like 2D spritesheets or animation frames) requires forcing both <strong>style consistency</strong> and <strong>temporal consistency</strong> across frames.</p>
+
+      <div class="comparison-grid">
+        <div class="card bad">
+          <h3>The Naive Way (Individual Generation)</h3>
+          <p>Generating frames one-by-one with standard prompts causes high noise variance. Each frame's colors, lighting, and shape details drift, resulting in massive visual flickering and unusable animations.</p>
+        </div>
+        <div class="card good">
+          <h3>The Pipeline Way (ControlNet + IP-Adapter)</h3>
+          <p>Generate all frames as a single, wide grid. Feed in a depth-map spritesheet rendered from Unity, and use an IP-Adapter (Image Prompt Adapter) to lock the style to a reference portrait. This enforces absolute structural and style consistency.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Beyond Images: Video and Audio</h2>
+      <p>ComfyUI has evolved into a complete multi-modal platform. TAs leverage these nodes for complex audio-visual assets:</p>
+
+      <h3>1. Video Backdrops & Loops</h3>
+      <p>Using models like **Stable Video Diffusion (SVD)** or **AnimateDiff** in ComfyUI, TAs can generate dynamic background loops for game menus, stadium billboards, or UI backdrops. By looping the latent noise, ComfyUI can output perfectly tileable video assets without visual jump-cuts.</p>
+
+      <h3>2. Lip-Sync & Face Animation</h3>
+      <p>By integrating audio nodes (like Bark or AudioLDM) alongside face-mapping nodes (like SadTalker or LivePortrait), a single ComfyUI pipeline can take a static player portrait, feed in a raw commentator audio file, and output an animated, talking player avatar for menu interfaces or broadcast overlays.</p>
+
+      <div class="note good">
+        <p><strong>Case Study: Stadium Billboards in EA Sports</strong>: To populate dynamic video advertisements inside virtual stadiums, TAs can run a daily cron script that fetches current brand logos, feeds them through a headless ComfyUI depth-mask workflow with AnimateDiff, and automatically creates animated, futuristic stadium billboards matching the team's styling.</p>
+      </div>
+    </section>
+
+    <section class="key-takeaways">
+      <h2>Key Takeaways</h2>
+      <ol>
+        <li><strong>ControlNet</strong> provides spatial guidance, letting TAs drive AI generations using 3D depth passes, silhouettes (Canny), or skeletal structures (OpenPose).</li>
+        <li><strong>Temporal Consistency</strong> in spritesheets is achieved by generating frames in a single grid layout, relying on depth-maps and IP-Adapters to lock down shapes and styles.</li>
+        <li><strong>AnimateDiff & SVD</strong> allow TAs to generate dynamic, looping video backgrounds directly inside the node graph.</li>
+        <li><strong>Audio Integration</strong> combined with face-mapping nodes enables complex multi-modal behaviors, such as auto-generating talking menu avatars from voice files.</li>
+        <li>By mastering these workflows, a Technical Artist transitions from standard asset creator to the architect of automated, multi-modal asset production loops.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="lesson-footer">
+    <a href="02-headless-api.html">← Previous: Headless Automation & APIs</a>
+    <a href="../index.html">Back to Lessons Index →</a>
+  </footer>
+</body>
+</html>

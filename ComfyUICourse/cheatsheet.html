@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Cheat Sheet | ComfyUI for Technical Artists</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Cheat sheet specific compact styles */
+    .cheat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    
+    .cheat-section {
+      margin: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    
+    .cheat-section h3 {
+      font-size: 1rem;
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+      color: var(--accent-blue);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.3rem;
+    }
+    
+    .cheat-section ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+    
+    .cheat-section li {
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    
+    .cheat-section li strong {
+      color: var(--text-primary);
+    }
+    
+    .mini-table {
+      font-size: 0.85rem;
+      margin: 1rem 0;
+    }
+    
+    .mini-table th, .mini-table td {
+      padding: 0.4rem 0.6rem;
+    }
+    
+    .quick-ref {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+      border-left: 4px solid var(--accent-orange);
+    }
+    
+    .quick-ref code {
+      font-size: 0.85rem;
+    }
+    
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    
+    .checklist-item {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    
+    .checklist-item strong {
+      color: var(--text-primary);
+    }
+    
+    .checklist-checkbox {
+      color: var(--accent-green);
+      font-weight: bold;
+    }
+    
+    @media print {
+      body { background: white; color: black; }
+      .nav { display: none; }
+      .cheat-section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="index.html" class="nav-brand">ComfyUI for TAs</a>
+      <div class="nav-links">
+        <a href="index.html">Lessons</a>
+        <a href="cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <h1>Master Cheat Sheet</h1>
+      <p class="lesson-subtitle">All key concepts and workflows at a glance for your Technical Art interview</p>
+    </div>
+
+    <!-- SECTION 1: Latent Space & Diffusion -->
+    <h2>1. Latent Space & Diffusion Basics</h2>
+    <div class="quick-ref">
+      <strong>Core Pipeline:</strong> VAE Encode (RGB Image → Latent) → CLIP Encode (Text Prompt → Conditioning) → KSampler (Denoises Latent Noise guided by Conditioning) → VAE Decode (Latent → RGB Image)
+    </div>
+    
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>Latent Space & VAE</h3>
+        <ul>
+          <li><strong>Latent Space</strong> — A compressed mathematical tensor representation of an image, typically 48x smaller than pixel space.</li>
+          <li><strong>VAE Encoder</strong> — Compresses pixel space (e.g. 512x512x3) into latent space (64x64x4) to save VRAM and execution time.</li>
+          <li><strong>VAE Decoder</strong> — Decodes latent tensors back to visual RGB pixel spaces.</li>
+          <li><strong>VAE Mismatch</strong> — Blur/static/color drift happens if VAE file does not match checkpoint architecture (SD1.5 vs SDXL).</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>CLIP & KSampler</h3>
+        <ul>
+          <li><strong>CLIP Text Encoder</strong> — Translates prompt tokens into vectors used as steering guides (Conditioning).</li>
+          <li><strong>Conditioning</strong> — Tells KSampler what content, lighting, or styles to pull out of the random noise.</li>
+          <li><strong>KSampler</strong> — Chips away random noise over multiple steps (Euler, Karras) using UNet/Transformer models.</li>
+          <li><strong>Denoise Value</strong> — At 1.0, replaces input with pure noise. At &lt;1.0, performs img2img, preserving parts of the input shape.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2: Headless Automation -->
+    <h2>2. Headless API & Automation</h2>
+    <div class="quick-ref">
+      <strong>Headless Lifecycle:</strong> Open WebSocket <code>/ws</code> (Progress/Listen) → HTTP POST <code>/prompt</code> (Submit API JSON) → Monitor execution → HTTP GET <code>/history</code> (Get filenames) → Fetch Assets
+    </div>
+
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>ComfyUI API Architecture</h3>
+        <ul>
+          <li><strong>Dev Mode Options</strong> — Enable in gear menu to unlock "Save (API Format)" button.</li>
+          <li><strong>API JSON</strong> — Strips visual layout coordinates. Contains only node class names, inputs, and linkage maps.</li>
+          <li><strong>Headless Server</strong> — Bypasses Web UI entirely, running ComfyUI as a command-line script on background GPU cluster servers.</li>
+          <li><strong>Python urllib Dispatch</strong> — Posts the JSON workflow payload to <code>http://[ip]:8188/prompt</code> to queue runs.</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Version Control Hooks (EA Pipeline)</h3>
+        <ul>
+          <li><strong>Artist Commit</strong> — Artist submits base mesh/texture draft to Git or Perforce.</li>
+          <li><strong>CI Trigger</strong> — Server post-commit hook triggers background Python script.</li>
+          <li><strong>Headless Run</strong> — Script edits API JSON inputs, runs it on headless GPU, and fetches styled preview.</li>
+          <li><strong>Auto-Submit</strong> — finalized styled card/avatar assets are committed back to the depot automatically.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 3: Multi-Modality -->
+    <h2>3. Multi-Modality & Asset Pipelines</h2>
+    <div class="quick-ref">
+      <strong>Consistency Strategy:</strong> 3D Engine Depth/Pose Pass → ControlNet Auxiliary Conditioning → IP-Adapter Style Lock → Single Grid Generation (Spritesheets)
+    </div>
+
+    <div class="cheat-grid">
+      <div class="cheat-section">
+        <h3>ControlNet Preprocessors</h3>
+        <ul>
+          <li><strong>Depth Maps</strong> — Extracted from engine camera, forces AI to preserve exact 3D geometry structure.</li>
+          <li><strong>OpenPose</strong> — Extracted from skeletal rigs/mocap files, forces character pose consistency.</li>
+          <li><strong>Canny / Lineart</strong> — Detects hard outlines, forcing the AI to preserve fine details, wireframes, or decals.</li>
+        </ul>
+      </div>
+      <div class="cheat-section">
+        <h3>Spritesheets & Video Loops</h3>
+        <ul>
+          <li><strong>Temporal Consistency</strong> — Naive frame-by-frame generation causes flickering. Prevent this by rendering all frames as a single wide grid.</li>
+          <li><strong>IP-Adapter</strong> — Feeds reference image style vectors into the UNet, locking down the output identity.</li>
+          <li><strong>AnimateDiff / SVD</strong> — Generates video frames by wrapping noise coordinates, creating seamless loops.</li>
+          <li><strong>Lip Sync / Avatar</strong> — Combined audio generation and face mapping (SadTalker) to animate player portraits on the fly.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 4: Interview Checklist -->
+    <h2>4. Enterprise TA Interview Cram Checklist</h2>
+    <div class="checklist-grid">
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Explain Latent Space:</strong> "It is a 48x compressed mathematical representation of image data where diffusion occurs, saving processing costs compared to pixel-by-pixel rendering."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Describe VAE role:</strong> "The VAE Encoder compresses visual RGB pixels to latents; the VAE Decoder unzips latents back to visible RGB files. Muddy colors or static mean a VAE architecture mismatch."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Web UI vs. ComfyUI:</strong> "ComfyUI separates VAE, CLIP, and models, allowing programmatic pipeline integration. Workflows export to JSON, enabling headless scripting."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Headless client loop:</strong> "Establish WebSocket connection, POST prompt workflow JSON to <code>/prompt</code>, poll WebSocket for completion events, and fetch output via HTTP GET."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>ControlNet utility:</strong> "Allows spatial guidelines. Depth maps prevent shape drift; OpenPose locks mocap poses; Canny preserves wireframe meshes."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Spritesheet temporal lock:</strong> "Generate frames on a single grid sheet. Feed in an engine depth pass and use IP-Adapter to inject reference character style vectors."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Multi-modality in engines:</strong> "SVD/AnimateDiff for stadium backdrop animations; SadTalker/LivePortrait Lip-syncing to automate commentary video generation."</div>
+      </div>
+      <div class="checklist-item">
+        <span class="checklist-checkbox">✓</span>
+        <div><strong>Corporate scale cost saving:</strong> "Running workflows on headless GPU rendering farms via Perforce hooks removes the need for high-end AI workstations at every artist desk."</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 2: Headless Automation & Command-line Pipelines | ComfyUI for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">ComfyUI for TAs</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 02</div>
+      <h1>Headless Automation & APIs</h1>
+      <p class="lesson-subtitle">Running ComfyUI as a Headless Background Engine in Corporate Environments</p>
+    </div>
+
+    <h2>The Big Picture</h2>
+    <p>In a standard creative environment, artists sit in front of the ComfyUI browser tab, dragging wires and clicking the "Queue Prompt" button. In an enterprise-scale game studio like EA, this manual step is a bottleneck. We need to run workflows headlessly—without a UI, triggered automatically by file changes, asset ingestion scripts, or CI/CD pipelines.</p>
+
+    <p>Fortunately, ComfyUI was designed from the ground up as a client-server application. The web browser is just a front-end UI. Under the hood, ComfyUI is a Python server that executes tasks based on a JSON graph description. As a Technical Artist, you can export this JSON, bypass the browser, and run workflows programmatically.</p>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: API Format vs. Saved Format</div>
+      <p>By default, ComfyUI saves workflows in a format that stores node visual layout metadata (coordinates, sizes, colors). The <strong>API format</strong> strips away all visual fluff, leaving only a lean JSON object containing the node inputs, outputs, and connections. This API JSON is what the Python server executes.</p>
+    </div>
+
+    <h2>The Headless Execution Pipeline</h2>
+    <p>To run ComfyUI programmatically, the workflow follows a client-server request cycle over HTTP and WebSockets. Here is how an automated script interacts with the ComfyUI backend:</p>
+
+    <div class="diagram">
+┌─────────────────┐             HTTP POST /prompt              ┌─────────────────┐
+│                 ├───────────────────────────────────────────>│                 │
+│                 │  Sends workflow JSON + Client ID           │                 │
+│                 │                                            │  ComfyUI Server │
+│  Python Script  │             WebSocket /ws                  │ (Headless GPU)  │
+│  (CI/CD Runner) │<───────────────────────────────────────────┤                 │
+│                 │  Receives progress and execution states    │                 │
+│                 │                                            │                 │
+│                 │             HTTP GET /history              │                 │
+│                 |<───────────────────────────────────────────┤                 │
+│                 │  Fetches metadata and generated filenames  │                 │
+└─────────────────┘                                            └─────────────────┘
+    </div>
+
+    <p>1. <strong>Connect to WebSocket</strong>: The script opens a WebSocket connection to receive live progress updates (e.g., sampler steps completed).</p>
+    <p>2. <strong>POST the Prompt</strong>: The script sends the JSON workflow to the <code>/prompt</code> endpoint. The server queues the task and returns a unique prompt ID.</p>
+    <p>3. <strong>Listen for Completion</strong>: The script monitors the WebSocket for execution messages. When it receives the completion message for the prompt ID, it proceeds.</p>
+    <p>4. <strong>Retrieve Assets</strong>: The script requests the final assets from the server using the image names returned in the prompt history.</p>
+
+    <!-- Interactive WebSocket Console Simulator -->
+    <div style="margin: 2rem 0; border: 1px solid var(--border-color); border-radius: 8px; background: #0b0e14; overflow: hidden; font-family: 'JetBrains Mono', monospace; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+      <div style="background: var(--bg-secondary); padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-red); border-radius: 50%;"></span>
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-orange); border-radius: 50%;"></span>
+          <span style="display:inline-block; width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%;"></span>
+          headless_client.py
+        </span>
+        <button id="runBtn" onclick="runSim()" style="background: var(--bg-tertiary); color: var(--accent-green); border: 1px solid var(--border-color); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">▶ Run Dispatch</button>
+      </div>
+      <div id="consoleLog" style="padding: 1rem; height: 180px; overflow-y: auto; font-size: 0.85rem; line-height: 1.5; color: var(--text-muted);">
+        Click "Run Dispatch" to simulate WebSocket enqueuing & API execution...
+      </div>
+    </div>
+    
+    <script>
+      function runSim() {
+        const log = document.getElementById("consoleLog");
+        const btn = document.getElementById("runBtn");
+        log.innerHTML = "";
+        btn.disabled = true;
+        btn.style.opacity = 0.5;
+        
+        const lines = [
+          { text: "$ python3 headless_client.py --workflow jersey_style.json", delay: 0, color: "var(--text-primary)" },
+          { text: "[HTTP POST] Connecting to http://127.0.0.1:8188/prompt...", delay: 600, color: "var(--accent-blue)" },
+          { text: "[HTTP 200] Queue Success! Prompt ID: f82d96-e2a1-4322", delay: 1200, color: "var(--accent-green)" },
+          { text: "[WS] Connected to WebSocket channel. Listening for events...", delay: 1800, color: "var(--text-secondary)" },
+          { text: "[WS] KSampler starting execution...", delay: 2400, color: "var(--accent-orange)" },
+          { text: "[WS] Step 5/20 - Denoising latents...", delay: 3000, color: "var(--text-secondary)" },
+          { text: "[WS] Step 10/20 - Denoising latents...", delay: 3500, color: "var(--text-secondary)" },
+          { text: "[WS] Step 15/20 - Denoising latents...", delay: 4000, color: "var(--text-secondary)" },
+          { text: "[WS] Step 20/20 - Denoising complete. Decoding VAE...", delay: 4500, color: "var(--accent-orange)" },
+          { text: "[HTTP GET] Querying history for prompt ID...", delay: 5200, color: "var(--accent-blue)" },
+          { text: "[SUCCESS] Saved file: output/EA_Asset_Injest_0001.png (PNG 512x512)", delay: 6000, color: "var(--accent-green)" }
+        ];
+
+        lines.forEach((line, index) => {
+          setTimeout(() => {
+            const p = document.createElement("div");
+            p.style.color = line.color;
+            p.textContent = line.text;
+            log.appendChild(p);
+            log.scrollTop = log.scrollHeight;
+            if (index === lines.length - 1) {
+              btn.disabled = false;
+              btn.style.opacity = 1;
+            }
+          }, line.delay);
+        });
+      }
+    </script>
+
+    <h2>Python API Script Integration</h2>
+    <p>Here is a production-ready Python script showing how to send an exported API JSON payload to a local or remote ComfyUI instance:</p>
+
+    <pre><code>import urllib.request
+import json
+
+# Define the server address and prompt payload
+server_address = "127.0.0.1:8188"
+prompt_workflow = {
+    "3": {
+        "inputs": {
+            "seed": 42,
+            "steps": 20,
+            "cfg": 7.0,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+            "model": ["4", 0],
+            "positive": ["6", 0],
+            "negative": ["7", 0],
+            "latent_image": ["5", 0]
+        },
+        "class_type": "KSampler"
+    },
+    "4": {
+        "inputs": {
+            "ckpt_name": "v1-5-pruned-emaonly.ckpt"
+        },
+        "class_type": "CheckpointLoaderSimple"
+    },
+    "5": {
+        "inputs": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage"
+    },
+    "6": {
+        "inputs": {
+            "text": "styled sports jersey pattern, tileable vector art",
+            "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode"
+    },
+    "7": {
+        "inputs": {
+            "text": "blurry, low quality, photorealistic",
+            "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode"
+    },
+    "8": {
+        "inputs": {
+            "samples": ["3", 0],
+            "vae": ["4", 2]
+        },
+        "class_type": "VAEDecode"
+    },
+    "9": {
+        "inputs": {
+            "filename_prefix": "EA_Asset_Injest",
+            "images": ["8", 0]
+        },
+        "class_type": "SaveImage"
+    }
+}
+
+def queue_prompt(prompt):
+    p = {"prompt": prompt}
+    data = json.dumps(p).encode('utf-8')
+    req = urllib.request.Request(f"http://{server_address}/prompt", data=data)
+    response = urllib.request.urlopen(req)
+    return json.loads(response.read().decode('utf-8'))
+
+# Send prompt to headless ComfyUI server
+response_data = queue_prompt(prompt_workflow)
+print(f"Prompt queued successfully! ID: {response_data['prompt_id']}")
+</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Common Pitfall: How to Enable Dev Mode</div>
+      <p>By default, the ComfyUI web interface only exports standard visual workflows. To export the API JSON, you must open the ComfyUI settings (gear icon) and check <strong>"Enable Dev Mode Options"</strong>. This adds a "Save (API Format)" button to the main toolbar.</p>
+    </div>
+
+    <h2>Industrial Production Pipeline: Perforce & CI/CD Hooks</h2>
+    <p>How does this play out in a real studio pipeline? Imagine a game team creating styled jerseys or custom logos for a sports game like EA Sports FC.</p>
+    
+    <p>Instead of hiring an artist to manually run images through ComfyUI, the process is built directly into the version control pipeline:</p>
+
+    <div class="diagram">
+┌─────────────────┐   Submit Texture   ┌──────────────────┐  Trigger Workflow  ┌─────────────────┐
+│  Artist Workstation │─────────────────>│ Perforce Server  │─────────────────>│  CI/CD Runner   │
+│  (Blender/Maya)  │                  │  (Depot / git)   │                  │ (Python Script) │
+└─────────────────┘                    └──────────────────┘                    ────────┬─────────┘
+                                                                                       │ Runs
+                                                                                       ▼
+┌─────────────────┐   Output Asset     ┌──────────────────┐  Retrieve Outputs  ┌─────────────────┐
+│ Artist Workstation │<─────────────────│ Perforce Server  │<─────────────────│ Headless GPU    │
+│  (Styled Jersey) │   (Auto-Submit)  │  (Depot / git)   │                  │ (ComfyUI Node)  │
+└─────────────────┘                    └──────────────────┘                    └─────────────────┘
+    </div>
+
+    <p>1. **Submit Draft**: An artist models a basic 3D jersey pattern and submits the flat texture blockout to Perforce.</p>
+    <p>2. **CI Trigger**: The Perforce commit trigger fires a Python script on a build runner machine equipped with a high-end GPU.</p>
+    <p>3. **Headless Execution**: The Python script parses the texture path, modifies the ComfyUI API JSON inputs to point to the submitted image, and posts the workflow to the headless ComfyUI server.</p>
+    <p>4. **Result Verification**: The server runs the diffusion model to stylize the texture, generates a preview, and automatically commits the processed, production-ready asset back to the Perforce depot under the target folder.</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 Enterprise Scalability Tip</div>
+      <p>By shifting generation to a central headless GPU server, you eliminate the need to purchase expensive AI GPUs for every artist workstation. Artists can run basic textures on entry-level laptops, relying on the central build server to render high-fidelity variations overnight.</p>
+    </div>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Headless ComfyUI</strong> runs without a visual browser window, executing node workflows completely via API calls and JSON dicts.</li>
+      <li>To generate API payloads, you must enable <strong>Dev Mode</strong> in the settings to export visual graphs into the execution-friendly API JSON.</li>
+      <li>Python scripts communicate with ComfyUI via <code>HTTP POST</code> to enqueue prompts and <code>WebSockets</code> to track sampler progress and return files.</li>
+      <li>Automated triggers can hook into version control systems (like Perforce or Git) to run assets through ComfyUI background servers upon check-in.</li>
+      <li>Centralizing ComfyUI runs on dedicated GPU farm nodes cuts hardware costs and keeps workflows consistent across the entire project.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="01-latent-space.html">
+        <span class="label">← Previous</span>
+        <span class="title">Demystifying Latent Space</span>
+      </a>
+      <a href="03-multimodal-assets.html">
+        <span class="label">Next Lesson →</span>
+        <span class="title">Multi-Modality & Assets</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
