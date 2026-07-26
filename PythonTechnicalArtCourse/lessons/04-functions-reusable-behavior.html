@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 04: Functions, Calls, and Reusable Behavior | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 04</div><h1>Functions, Calls, and Reusable Behavior</h1><p class="lesson-subtitle">Arguments, callbacks, closures, context managers, and decorators</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>A reusable function is a small tool with an input contract and an output behavior. In a technical-art pipeline, one function may normalize a path, another may validate a record, and a third may run an external converter. Python lets you pass those functions around, wrap them, and manage resources with syntax that looks simple but encodes precise behavior.</p>
+    <div class="diagram">
+┌───────────────┐     call arguments      ┌──────────────────┐
+│ caller        │ ─────────────────────→  │ function         │
+│ values + names│                         │ parameters       │
+└───────────────┘                         └────────┬─────────┘
+                                                   │
+                         return value ←───────────┘
+                                                   │
+                           function may be passed onward
+                                                   ▼
+                                      callback / closure / wrapper
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: Behavior is a value</div><p>Python functions are objects. You can store a function in a variable, put it in a dictionary, pass it to another function, or return it. This is the bridge from ordinary calls to callbacks, closures, and decorators.</p></div>
+
+    <h2>Arguments and Call Shape</h2>
+    <p>Python supports positional arguments, named keyword arguments, defaults, and variable argument groups:</p>
+    <pre><code>def export_asset(path, output_dir="build", *, compress=False):
+    return {
+        "path": path,
+        "output_dir": output_dir,
+        "compress": compress,
+    }
+
+export_asset("hero.fbx")
+export_asset("hero.fbx", output_dir="web", compress=True)</code></pre>
+    <p>The <code>*</code> in the parameter list makes <code>compress</code> keyword-only. That can make a tool call self-documenting. A leading <code>*args</code> gathers extra positional arguments into a tuple; <code>**kwargs</code> gathers extra keyword arguments into a dictionary:</p>
+    <pre><code>def log_steps(label, *steps, **metadata):
+    return {"label": label, "steps": steps, "metadata": metadata}
+
+summary = log_steps("export", "validate", "convert", owner="TA")</code></pre>
+    <p>This resembles C# overloads, optional parameters, and <code>params</code>, but Python resolves one function signature at runtime rather than selecting among multiple overload declarations. Named arguments also make call sites readable, especially for tools with many configuration options.</p>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: Default values are evaluated once</div><p>Do not use a mutable list or dictionary as a default argument when you expect a fresh value per call. Use <code>None</code> as the sentinel and create the collection inside the function instead.</p></div>
+
+    <h2>First-Class Functions, Callbacks, and Closures</h2>
+    <p>Python functions can be passed to a generic operation. The <code>key</code> argument of <code>sorted</code> is a callback: Python calls it for each item to obtain its comparison key.</p>
+    <pre><code>def extension(path):
+    return path.rsplit(".", 1)[-1].lower()
+
+paths = ["TREE.FBX", "hero.gltf", "camera.FBX"]
+ordered = sorted(paths, key=extension)
+
+def apply_rule(records, rule):
+    return [record for record in records if rule(record)]</code></pre>
+    <p>A <strong>closure</strong> is a function that remembers values from the surrounding scope:</p>
+    <pre><code>def minimum_lod(required):
+    def accepts(record):
+        return record["lod"] &gt;= required
+    return accepts
+
+web_rule = minimum_lod(2)
+web_rule({"lod": 3})  # True</code></pre>
+    <p>The returned function carries the value <code>required</code> with it. C# developers can compare this to a lambda capturing a local variable, but Python's nested function syntax and name lookup are the mechanics to learn. Be mindful of late binding when creating closures inside loops; bind the intended value explicitly rather than assuming each closure receives a snapshot.</p>
+
+    <h2>Methods, <code>self</code>, and Binding</h2>
+    <p>Lesson 2 introduced <code>self</code>. Here the important connection is that attribute lookup can turn a plain function stored on a class into a bound method:</p>
+    <pre><code>class Manifest:
+    def add(self, path):
+        self.paths.append(path)
+
+manifest = Manifest()
+manifest.paths = []
+manifest.add("tree.fbx")
+
+# Roughly: Manifest.add(manifest, "tree.fbx")</code></pre>
+    <p>The instance is supplied automatically when you call <code>manifest.add(...)</code>; it is explicit as <code>self</code> in the definition. This is related to a C# instance method receiving <code>this</code>, but Python exposes the first parameter in the function signature.</p>
+
+    <h2>Context Managers and <code>with</code></h2>
+    <p>A context manager owns a setup-and-cleanup boundary. The <code>with</code> statement enters that context, runs the indented block, and performs the manager's exit behavior even when the block raises an exception.</p>
+    <div class="diagram">
+┌──────────────────────┐
+│ enter context        │  acquire file, lock, temp resource
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│ with-block           │  do work; may raise
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│ exit context         │  close / release / rollback policy
+└──────────────────────┘
+    </div>
+    <pre><code>from pathlib import Path
+
+with Path("manifest.json").open(encoding="utf-8") as stream:
+    text = stream.read()
+
+# stream is closed here, including when reading raises</code></pre>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: <code>with</code> is about a lifecycle</div><p><code>with</code> is not an import statement and is not limited to files. It can manage locks, temporary directories, database transactions, network sessions, and custom resources. Imports make names available; context managers control entry and exit around a block.</p></div>
+
+    <h2>Decorators and Wrappers</h2>
+    <p>A decorator is a function that receives a function and returns a replacement function, often a wrapper that adds behavior before or after the original call.</p>
+    <pre><code>from functools import wraps
+
+def announce(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print(f"starting {func.__name__}")
+        result = func(*args, **kwargs)
+        print(f"finished {func.__name__}")
+        return result
+    return wrapper
+
+@announce
+def build_index(paths):
+    return {path: path.rsplit(".", 1)[-1] for path in paths}</code></pre>
+    <p>The <code>@announce</code> line is equivalent to rebinding <code>build_index = announce(build_index)</code>. Wrappers are useful for cross-cutting behavior such as timing, logging, retries, authorization, or consistent tracing. <code>functools.wraps</code> preserves useful metadata such as the wrapped function's name and documentation.</p>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>Decorators can add timing and structured logging to conversion steps without editing every step. Prefer a normal helper function when the behavior is local, when control flow becomes opaque, or when a wrapper would hide important asset-state changes from the next artist.</p></div>
+
+    <h2>Short Drills</h2>
+    <ol><li>Design a function with one required path, one named output option, and one keyword-only safety flag. Call it both positionally and by name.</li><li>Write a callback that keeps records above a chosen LOD, then create that callback with a closure.</li><li>Use <code>with</code> for a file and explain what cleanup happens. Then name a non-file resource that could use the same lifecycle pattern.</li><li>Write a decorator that reports a function's name and returns its result. Decide whether it makes the wrapped tool clearer or more opaque.</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Call shape</strong>: positional, named, default, <code>*args</code>, and <code>**kwargs</code> express different contracts.</li><li><strong>First-class behavior</strong>: callbacks and closures let data-driven tools carry rules as values.</li><li><strong>Binding</strong>: instance access supplies <code>self</code> to a method.</li><li><strong>Lifecycle</strong>: <code>with</code> manages setup and cleanup for many resources; it is not an import or file-only feature.</li><li><strong>Decorators</strong>: wrappers add cross-cutting behavior, but should be used only when the abstraction remains visible.</li></ul>
+    <div class="lesson-nav"><a href="03-collections-transformations.html"><span class="label">← Previous</span><span class="title">Collections and Pythonic Data Transformations</span></a><a href="05-classes-contracts-composition.html"><span class="label">Next Lesson →</span><span class="title">Classes, Contracts, and Composition-First Design</span></a></div>
+  </div>
+</body>
+</html>

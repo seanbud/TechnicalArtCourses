@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 01: How Python Runs and How Projects Start | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Python for Technical Artists</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../PLAN.md">Course Plan</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 01</div>
+      <h1>How Python Runs and How Projects Start</h1>
+      <p class="lesson-subtitle">From source files and environments to predictable command-line tools</p>
+    </div>
+
+    <h2>The Big Picture</h2>
+    <p>As a C# or Java developer, you already know that source code is not normally executed as raw text. Python has the same broad shape, but its vocabulary and defaults are different. A Python program is source text that an implementation such as CPython compiles to bytecode and executes in a Python virtual machine. A project also needs a repeatable environment and an explicit process contract.</p>
+
+    <div class="diagram">
+┌──────────────────┐     ┌──────────────────┐     ┌────────────────────┐
+│ .py source files │ ──→ │ compiler         │ ──→ │ Python bytecode     │
+│ modules/packages │     │ (often implicit) │     │ cached when useful  │
+└──────────────────┘     └──────────────────┘     └─────────┬──────────┘
+                                                            │
+                                                            ▼
+                                                   ┌────────────────────┐
+                                                   │ Python VM/runtime   │
+                                                   │ names, imports, I/O │
+                                                   └─────────┬──────────┘
+                                                             ▼
+                                                   operating-system process
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: Implementation, not mythology</div>
+      <p>This lesson describes the common CPython model. “Python” is a language specification with multiple implementations; bytecode details and execution strategies are implementation details, not promises that every Python implementation must share.</p>
+    </div>
+
+    <h2>Source, Bytecode, and the Runtime</h2>
+    <p>When CPython imports a module, it parses the source, compiles it to an internal bytecode form, and executes that bytecode. CPython may cache imported-module bytecode in <code>__pycache__</code> to reduce repeated compilation, but you should not treat a <code>.pyc</code> file as a portable executable or as a stable public format. The important mental model is that Python manages compilation and execution for you at runtime.</p>
+
+    <table>
+      <tr><th>C# / Java idea</th><th>Python analogue</th><th>Practical distinction</th></tr>
+      <tr><td>Source code</td><td><code>.py</code> modules</td><td>Usually run directly through a Python command.</td></tr>
+      <tr><td>Assembly / classpath unit</td><td>Package or distribution</td><td>A package is importable code; a distribution is an installable project artifact.</td></tr>
+      <tr><td>CLR / JVM</td><td>Python implementation and runtime</td><td>The runtime owns compilation details and process startup.</td></tr>
+      <tr><td><code>Main</code> method</td><td>Module guard or console entry point</td><td>Python gives you conventions rather than one mandatory method signature.</td></tr>
+    </table>
+
+    <h2>Scripts, Modules, Packages, and Distributions</h2>
+    <p>A <strong>script</strong> is a Python file you invoke as a program. A <strong>module</strong> is an importable Python file. The same file can serve both roles when it keeps reusable definitions at module scope and puts program startup behind a guard:</p>
+
+    <pre><code>def build_manifest(source_dir):
+    """Return data for a later export step."""
+    return {"source": source_dir, "files": []}
+
+
+def main():
+    print(build_manifest("assets"))
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+    <p>Running <code>python manifest.py</code> sets <code>__name__</code> to <code>"__main__"</code>, so the startup code runs. Importing the module gives it its module name, so the startup code does not run automatically. A <strong>package</strong> is an import namespace formed from one or more modules. A <strong>distribution</strong> is what you install and publish; it can contain one or more import packages.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Python Surprise: Importing can execute code</div>
+      <p>Importing is not merely a header declaration. Python executes a module's top-level statements the first time it loads it in a process. Keep expensive work and command-line behavior behind functions and the <code>__main__</code> guard.</p>
+    </div>
+
+    <h2>Projects, Environments, and <code>pyproject.toml</code></h2>
+    <p>A virtual environment is an isolated installation context for a project. It keeps one project's interpreter and installed packages from silently changing another project's behavior. <code>uv</code> is a fast tool for creating environments, resolving dependencies, and running commands; it is a tool choice, not a language requirement.</p>
+
+    <pre><code>uv init asset-audit
+cd asset-audit
+uv venv
+uv add rich
+uv run python main.py
+uv run python -c "print('environment works')"</code></pre>
+
+    <p>The exact files created by <code>uv init</code> can vary with its options and version, but the project should have a <code>pyproject.toml</code> describing metadata and dependencies. Committing that declaration gives collaborators and automation a source of truth; the local <code>.venv</code> directory itself is normally not committed.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Important: Choose the interpreter explicitly</div>
+      <p>“It works on my machine” often means a different interpreter or dependency set. Prefer <code>uv run ...</code> (or an explicitly selected virtual-environment interpreter) when documenting commands for a pipeline tool.</p>
+    </div>
+
+    <h2>Command-Line Contracts: Streams and Exit Codes</h2>
+    <p>Every command-line process has three conventional streams: <strong>stdout</strong> for normal results, <strong>stderr</strong> for diagnostics, and an <strong>exit code</strong> for success or failure. A useful tool can be redirected or called by another process because it keeps those channels meaningful.</p>
+
+    <div class="diagram">
+┌────────────────────┐       stdout ───────→ results / next tool
+│ Python process     │
+│                    │       stderr ───────→ human-visible diagnostics
+│ return from main  │       exit code ─────→ 0 success, non-zero failure
+└────────────────────┘
+    </div>
+
+    <pre><code>import sys
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("usage: audit.py ROOT", file=sys.stderr)
+        return 2
+    print(f"Auditing {sys.argv[1]}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())</code></pre>
+
+    <p><code>raise SystemExit(code)</code> asks the process to finish with that status. This is the Python equivalent of returning a status from a C# or Java entry point, although Python's ordinary top-level script does not require a <code>Main</code> method.</p>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 Technical-Art Relevance</div>
+      <p>An asset validator, texture converter, or DCC bridge is easier to automate when it prints machine-readable results to stdout, explains failures on stderr, and returns non-zero on failure. That contract works from a terminal, CI job, editor button, or <code>subprocess</code> caller.</p>
+    </div>
+
+    <h2>Short Drills</h2>
+    <ol>
+      <li>Write a module with one reusable function and a <code>main()</code> guarded by <code>if __name__ == "__main__"</code>. Import it from a second module and verify that startup does not run during import.</li>
+      <li>Create a small <code>uv</code> project and run it with <code>uv run python -m ...</code>. Record which files describe the project and which local files are environment state.</li>
+      <li>Make a command that prints one normal result, one diagnostic to stderr, and exits with status <code>2</code> for invalid arguments.</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Runtime model</strong>: CPython commonly compiles source to bytecode and executes it in its runtime.</li>
+      <li><strong>Import model</strong>: modules are executable namespaces; use the main guard to separate reusable code from startup.</li>
+      <li><strong>Project model</strong>: virtual environments isolate dependencies, while <code>pyproject.toml</code> declares project metadata.</li>
+      <li><strong>Process contract</strong>: stdout, stderr, and exit codes make automation composable.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="../index.html"><span class="label">← Back to</span><span class="title">All Lessons</span></a>
+      <a href="02-names-objects-values.html"><span class="label">Next Lesson →</span><span class="title">Names, Objects, Values, and Types</span></a>
+    </div>
+  </div>
+</body>
+</html>
