@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 07: Reliable Tools and Automation | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 07</div><h1>Reliable Tools and Automation</h1><p class="lesson-subtitle">Exceptions, command-line contracts, subprocesses, and deliverable-minded packaging</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>An automation tool is a production worker: it receives inputs, performs steps, reports what happened, and leaves a result that another person or process can trust. Reliability does not mean catching every error and continuing. It means classifying failures, preserving useful context, using narrow recovery paths, and exposing a clear command-line contract.</p>
+    <div class="diagram">
+┌──────────────┐   parse inputs   ┌──────────────┐   external tool   ┌──────────────┐
+│ CLI process  │ ───────────────→ │ Python step  │ ────────────────→ │ child process│
+│ argv / env   │                  │ try/except   │                  │ DCC / build  │
+└──────┬───────┘                  └──────┬───────┘                  └──────┬───────┘
+       │ stdout / stderr / exit code     │ errors + cleanup                │ return code
+       └─────────────────────────────────┴──────────────────────────────────┘
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: Failure is part of the interface</div><p>A reliable tool makes invalid input, missing dependencies, conversion failure, and unexpected bugs distinguishable. Exceptions are for Python control flow; stdout, stderr, and exit codes are for the process boundary.</p></div>
+
+    <h2>Exceptions, Tracebacks, and Custom Errors</h2>
+    <p>An exception interrupts ordinary control flow and carries a traceback showing where the failure propagated. Catch the narrowest exception you can handle. A broad <code>except Exception</code> can be appropriate at a top-level boundary for logging and a non-zero exit, but it is a poor substitute for local recovery rules.</p>
+    <pre><code>class ConversionError(Exception):
+    """The source was readable but could not be converted."""
+
+
+def read_dimensions(record):
+    try:
+        width = int(record["width"])
+        height = int(record["height"])
+    except (KeyError, ValueError) as error:
+        raise ConversionError("invalid dimensions") from error
+    else:
+        return width, height
+    finally:
+        print("dimension lookup finished")</code></pre>
+    <p><code>else</code> runs only when the protected work succeeds. <code>finally</code> runs whether it succeeds or raises, so use it for cleanup or a small unconditional observation, not for accidentally hiding an original failure. <code>raise ... from error</code> preserves the cause while presenting a domain-specific error to the caller.</p>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: A catch can make failure invisible</div><p>Do not catch an exception, print “failed,” and return a successful result. Either recover deliberately, re-raise with useful context, or let the top-level boundary convert the failure into a non-zero process status.</p></div>
+
+    <h2>CLI Inputs, Streams, and Exit Status</h2>
+    <p><code>sys.argv</code> exposes raw command-line strings. It is useful for tiny scripts, but <code>argparse</code> provides named options, conversion, help text, and consistent invalid-argument behavior:</p>
+    <pre><code>import argparse
+import sys
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="convert one asset")
+    parser.add_argument("source")
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--dry-run", action="store_true")
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    print(f"source={args.source} output={args.output}")
+    if args.dry_run:
+        print("dry run", file=sys.stderr)
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())</code></pre>
+    <p><code>argparse</code> normally writes usage errors to stderr and exits with a non-zero status. For your own application failures, return a status from <code>main</code> and raise <code>SystemExit</code>. Keep normal results on stdout and diagnostics on stderr so a parent process can capture them separately.</p>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: Make the command composable</div><p>Document the required inputs, output location, exit statuses, and whether paths are relative to the current working directory. A tool that works interactively but cannot be called predictably by CI or an editor is not automation-ready.</p></div>
+
+    <h2>Subprocesses and External Tools</h2>
+    <p><code>subprocess.run</code> starts a child process and, by default, waits for it to finish. <code>Popen</code> gives you a handle for more involved interaction and returns before the child completes. The child has its own process state; it does not share Python objects with the parent.</p>
+    <pre><code>from pathlib import Path
+import subprocess
+
+command = ["converter", "--input", "tree.fbx", "--output", "build/tree.gltf"]
+completed = subprocess.run(
+    command,
+    cwd=Path("tools"),
+    capture_output=True,
+    text=True,
+    timeout=60,
+)
+
+if completed.returncode != 0:
+    raise RuntimeError(completed.stderr.strip() or "converter failed")
+print(completed.stdout)</code></pre>
+    <p>Passing an argument list avoids shell parsing and is the safer default. <code>shell=True</code> changes the command interpretation and should be reserved for a specific, understood shell requirement. A timeout stops waiting and raises <code>TimeoutExpired</code>; it does not guarantee that every descendant process in a tool's process tree has been terminated. Process-tree behavior and termination semantics vary by platform and by the child tool.</p>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>A DCC exporter or texture compiler is an external dependency, not a Python function call. Validate its executable, pass explicit paths, capture its output, check its return code, and preserve enough context to reproduce the failed command.</p></div>
+
+    <h2>Packaging and Platform Deliverables</h2>
+    <p>A deliverable includes more than the <code>.py</code> files: project metadata, dependency declarations, an invocation contract, configuration defaults, and platform assumptions. A <code>pyproject.toml</code> can declare a package and a console script entry point; a build tool can produce an installable wheel or source distribution. Whether you ship a wheel, a virtual environment, a standalone application, or a container depends on the target platform and deployment policy.</p>
+    <p>Do not promise that packaging removes every platform concern. Native libraries, DCC installations, licenses, environment variables, path conventions, permissions, and executable availability still need validation. A good release checklist runs the tool in a clean environment and records the exact interpreter and external tool versions.</p>
+
+    <h2>Short Drills</h2>
+    <ol><li>Define a custom error for a malformed manifest, catch only the parsing errors you can translate, and preserve the original cause.</li><li>Build an <code>argparse</code> command with a required source and output, then state what belongs on stdout, stderr, and the exit code.</li><li>Wrap a harmless external command with <code>subprocess.run</code>, capture its output, and describe what the parent knows if the child launches another process.</li><li>Write a deliverable checklist that includes Python version, dependencies, external executables, working directory, and platform assumptions.</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Exceptions</strong>: catch narrowly, add context with <code>raise ... from</code>, and keep cleanup in <code>finally</code> or a context manager.</li><li><strong>CLI boundary</strong>: <code>argparse</code>, stdout, stderr, and exit codes make tools composable.</li><li><strong>Subprocess</strong>: <code>run</code> waits by default; child and descendant lifecycle behavior is not magically uniform across platforms.</li><li><strong>Delivery</strong>: packaging must include dependencies and external-tool assumptions, not just source files.</li></ul>
+    <div class="lesson-nav"><a href="06-files-paths-streams-lazy-work.html"><span class="label">← Previous</span><span class="title">Files, Paths, Streams, and Lazy Work</span></a><a href="08-async-threads-processes-deployment.html"><span class="label">Next Lesson →</span><span class="title">Async, Threads, Processes, and Deployment Mental Models</span></a></div>
+  </div>
+</body>
+</html>
