@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 02: Names, Objects, Values, and Types | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="../index.html" class="nav-brand">Python for Technical Artists</a>
+      <div class="nav-links">
+        <a href="../index.html">Lessons</a>
+        <a href="../PLAN.md">Course Plan</a>
+        <a href="../cheatsheet.html">Cheat Sheet</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 02</div>
+      <h1>Names, Objects, Values, and Types</h1>
+      <p class="lesson-subtitle">The object model behind Python assignment, collections, and classes</p>
+    </div>
+
+    <h2>The Big Picture</h2>
+    <p>In C#, it is natural to explain a variable as a typed storage location. Python is easier to predict when you start with a different model: objects exist, and names are bindings that refer to objects. Assignment changes a binding; it does not inherently copy a value or permanently attach a type to the name.</p>
+
+    <div class="diagram">
+┌──────────────┐       binds to        ┌────────────────────────┐
+│ name: files  │ ───────────────────→  │ list object            │
+└──────────────┘                       │ type: list             │
+        │                              │ contents: ["a.fbx"]    │
+        │ rebinding                     └────────────────────────┘
+        ▼                                         ▲
+┌──────────────┐       old object unchanged       │
+│ name: files  │ ────────────────────────────────┘
+│ now points to│
+│ another list │
+└──────────────┘
+    </div>
+
+    <div class="callout callout-concept">
+      <div class="callout-title">🧠 Key Concept: Names are labels</div>
+      <p>Think of a name as a label on an object, not a box that owns a value. Multiple names can refer to one object, and a name can later be rebound to an object of another type.</p>
+    </div>
+
+    <h2>Binding, Rebinding, and Mutation</h2>
+    <pre><code>files = ["hero.fbx"]
+alias = files                 # two names, one list
+alias.append("tree.fbx")      # mutates that shared list
+files = ["camera.fbx"]        # rebinds only the name files
+
+print(alias)                   # ['hero.fbx', 'tree.fbx']
+print(files)                   # ['camera.fbx']</code></pre>
+
+    <p><strong>Mutation</strong> changes an existing object. <strong>Rebinding</strong> makes a name refer to another object. In C#, a reference-type variable can also refer to a shared object, but Python makes the distinction central and does not require a declaration such as <code>List&lt;string&gt; files</code> before the first assignment.</p>
+
+    <table>
+      <tr><th>Python value family</th><th>Mutable?</th><th>Typical technical-art use</th></tr>
+      <tr><td><code>str</code></td><td>No</td><td>Asset paths, labels, identifiers</td></tr>
+      <tr><td><code>tuple</code></td><td>No</td><td>Fixed records or coordinates</td></tr>
+      <tr><td><code>list</code></td><td>Yes</td><td>Ordered work queues and collected results</td></tr>
+      <tr><td><code>dict</code></td><td>Yes</td><td>Named metadata and configuration</td></tr>
+      <tr><td><code>set</code></td><td>Yes</td><td>Unique extensions or membership checks</td></tr>
+    </table>
+
+    <p>Immutable objects cannot be changed in place. An operation that appears to modify a string creates a new string and returns it:</p>
+    <pre><code>label = "hero"
+upper = label.upper()     # new string; label remains "hero"
+coordinates = (10, 20)    # tuple cannot be changed in place</code></pre>
+
+    <h2>None, Truthiness, Identity, and Equality</h2>
+    <p><code>None</code> is Python's singleton value for “no value” or “not present.” It is not the same as an empty string, zero, or an empty collection. Python conditionals also use <strong>truthiness</strong>: <code>False</code>, <code>None</code>, numeric zero, and empty built-in collections are falsey; most other objects are truthy.</p>
+
+    <pre><code>result = find_asset("missing.fbx")
+if result is None:
+    print("not found")
+
+if not files:
+    print("there are no files")</code></pre>
+
+    <p>Use <code>==</code> to ask whether two objects compare equal by value. Use <code>is</code> for object identity, most notably <code>value is None</code>. Identity is about whether two references point to the same object; equality is about the objects' comparison result.</p>
+
+    <div class="callout callout-important">
+      <div class="callout-title">💡 Important: Use <code>is None</code></div>
+      <p>Do not replace a missing-value check with <code>== None</code>. The identity form communicates the intended singleton check and cannot be customized by an object's equality method.</p>
+    </div>
+
+    <h2>Dynamic Typing and Type Hints</h2>
+    <p>Python is dynamically typed: the runtime checks whether an operation is valid when the code executes, and a name can be rebound to another type. Type hints document intended use and enable editor support and optional static analyzers, but ordinary Python does not enforce them automatically.</p>
+
+    <pre><code>def scale_count(count: int, factor: float) -> float:
+    return count * factor
+
+value: str = "lod_0"
+# A type checker can flag: value = 3
+# Python itself will still execute the assignment.</code></pre>
+
+    <p>This is similar to using C# types as a design contract, but without making the annotation the runtime's universal gatekeeper. Built-ins such as <code>int</code>, <code>float</code>, <code>str</code>, <code>list</code>, <code>dict</code>, and <code>bool</code> are objects too, and every object has a type available through <code>type(value)</code>.</p>
+
+    <h2>First Classes: Instances, Attributes, and Methods</h2>
+    <p>A class creates a blueprint-like object that can produce instances. An instance carries per-object state. A method is a function defined on the class; when accessed through an instance, Python supplies that instance as the first argument by conventionally naming it <code>self</code>.</p>
+
+    <pre><code>class AssetRecord:
+    category = "unclassified"       # class attribute
+
+    def __init__(self, path: str):
+        self.path = path              # instance attribute
+        self.tags = []                # each instance gets its own list
+
+    def add_tag(self, tag: str) -> None:
+        self.tags.append(tag)
+
+
+record = AssetRecord("assets/tree.fbx")
+record.add_tag("environment")
+print(record.path)
+print(record.category)</code></pre>
+
+    <p><code>AssetRecord("...")</code> creates an instance and calls <code>__init__</code> to initialize it. <code>record.add_tag("environment")</code> is conceptually like a C# instance call, but the method's <code>self</code> is explicit in the function definition. The class attribute is shared as a lookup default; assigning <code>record.category = "hero"</code> creates an instance attribute that shadows it for that one record.</p>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Python Surprise: Never use a mutable class attribute for per-instance state</div>
+      <p><code>tags = []</code> at class scope would create one shared list for every instance. Put mutable per-instance state in <code>__init__</code>, where each object receives a fresh list.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">💚 Technical-Art Relevance</div>
+      <p>Names and mutability explain many pipeline bugs: two tools may unexpectedly share a metadata dictionary, while a copied list may be intentionally independent. Make ownership and mutation visible before parallelizing asset work.</p>
+    </div>
+
+    <h2>Short Drills</h2>
+    <ol>
+      <li>Predict the output of a two-name list example, then run it and explain which line mutates and which line rebinds.</li>
+      <li>Write a function that distinguishes “missing” (<code>None</code>) from “present but empty” (<code>[]</code>) without using equality to <code>None</code>.</li>
+      <li>Create two <code>AssetRecord</code> instances, add a tag to one, and verify that the other does not receive it.</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>Binding</strong>: assignment changes which object a name refers to; mutation changes an object.</li>
+      <li><strong>Mutability</strong>: strings and tuples are immutable; lists, dictionaries, and sets are mutable.</li>
+      <li><strong>Checks</strong>: use <code>is None</code> for the singleton and <code>==</code> for value equality.</li>
+      <li><strong>Classes</strong>: <code>self</code> names the instance, instance attributes hold per-object state, and class attributes are shared defaults.</li>
+    </ul>
+
+    <div class="lesson-nav">
+      <a href="01-python-runs.html"><span class="label">← Previous</span><span class="title">How Python Runs and How Projects Start</span></a>
+      <a href="03-collections-transformations.html"><span class="label">Next Lesson →</span><span class="title">Collections and Pythonic Data Transformations</span></a>
+    </div>
+  </div>
+</body>
+</html>

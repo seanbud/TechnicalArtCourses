@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 08: Async, Threads, Processes, and Deployment Mental Models | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 08</div><h1>Async, Threads, Processes, and Deployment Mental Models</h1><p class="lesson-subtitle">Formal grounding for coroutine scheduling, shared-state workers, process isolation, and deployment</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>Imagine one technical artist coordinating three kinds of work: waiting for a network response, processing a CPU-heavy mesh, and updating a desktop UI. “Concurrent” means work overlaps in time; “parallel” means work executes simultaneously on different execution resources. Async tasks, threads, and processes create those overlaps differently. Choosing one because it sounds fast is how pipelines become unreliable.</p>
+    <div class="diagram">
+┌──────────────────┐     cooperative await      ┌──────────────────────┐
+│ event-loop thread│ ─────────────────────────→ │ task A: waiting I/O  │
+│                  │ ←───────────────────────── │ task B: ready        │
+│ runs one task    │     resume another task    └──────────────────────┘
+└──────────────────┘
+
+┌──────────────┐       shared memory       ┌──────────────┐
+│ main thread  │ ◄──── lock / queue ─────► │ worker thread│
+└──────────────┘                           └──────────────┘
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: Scheduling is not parallelism</div><p>An event loop can interleave waiting tasks on one thread. Threads can overlap work while sharing a process. Processes have separate memory and can provide stronger isolation. None of these labels alone guarantees faster CPU-bound execution.</p></div>
+
+    <h2>Coroutines, <code>await</code>, Tasks, and the Event Loop</h2>
+    <p>An <code>async def</code> function is a coroutine function. Calling it creates a coroutine object; it does not run the body to completion. Awaiting that coroutine runs it until it returns or reaches an awaitable suspension point. A task schedules a coroutine on an event loop so other tasks can run while it awaits I/O.</p>
+    <pre><code>import asyncio
+
+async def fetch_manifest(name):
+    await asyncio.sleep(0.01)  # stand-in for non-blocking I/O
+    return {"name": name, "ok": True}
+
+async def main():
+    first = fetch_manifest("hero")       # coroutine object; not finished
+    result = await first                  # run and receive its result
+    tasks = [
+        asyncio.create_task(fetch_manifest(name))
+        for name in ("tree", "camera")
+    ]
+    return result, await asyncio.gather(*tasks)
+
+asyncio.run(main())</code></pre>
+    <p><code>await</code> is an expression that produces the coroutine's result; it is not a background-thread command. <code>create_task</code> asks the running loop to schedule work. Cooperative suspension means a coroutine must reach an await point; a blocking file operation or long CPU loop can still freeze every task sharing that event-loop thread.</p>
+
+    <h2>Concurrency, Parallelism, and CPU Work</h2>
+    <p>Async is excellent for many operations that spend time waiting: network requests, timers, or an API that provides an async interface. It does not make a CPU-heavy mesh decimator parallel by itself. Standard CPython builds use a global interpreter lock (GIL) that limits simultaneous execution of Python bytecode in multiple threads; free-threaded builds exist, but they are not the assumption to make for a portable course or pipeline.</p>
+    <table><tr><th>Model</th><th>Best mental model</th><th>Common fit</th><th>Main risk</th></tr><tr><td>asyncio</td><td>one coordinator interleaves tasks at await points</td><td>many I/O waits</td><td>blocking one task blocks the loop</td></tr><tr><td>threads</td><td>workers share one process memory</td><td>I/O or APIs that release the GIL</td><td>races and unsafe libraries</td></tr><tr><td>processes</td><td>independent Python processes</td><td>CPU-heavy work and isolation</td><td>serialization and IPC overhead</td></tr></table>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: <code>async</code> does not move work to another thread</div><p>Declaring a coroutine does not create a worker. It creates a schedulable operation whose progress depends on an event loop and explicit suspension points. Use an executor or a process strategy when blocking or CPU-heavy work must leave the loop.</p></div>
+
+    <h2>Threads, Shared State, Locks, and Queues</h2>
+    <p>Threads live in one process and can read the same objects. That makes communication cheap, but it also creates races: one thread can observe a partially updated state or two threads can overwrite each other's changes. The GIL does not make a multi-step business operation automatically atomic, and it does not make every library thread-safe.</p>
+    <pre><code>from queue import Queue
+from threading import Thread
+
+def worker(jobs, results):
+    while True:
+        job = jobs.get()
+        if job is None:
+            jobs.task_done()
+            return
+        results.put(job.upper())
+        jobs.task_done()
+
+jobs = Queue()
+results = Queue()
+thread = Thread(target=worker, args=(jobs, results))
+thread.start()
+jobs.put("tree.fbx")
+jobs.put(None)
+jobs.join()
+thread.join()</code></pre>
+    <p>A lock protects a critical section when shared mutation is necessary. A queue is often clearer: the main thread owns orchestration, workers receive messages, and results return through another queue. In a desktop tool, keep UI calls on the thread required by the UI framework and send data back rather than touching controls from arbitrary workers.</p>
+
+    <h2>Processes, Private Memory, and IPC</h2>
+    <p>A process has its own interpreter state and private address space. A child process does not automatically see the parent's Python objects. Data must cross an inter-process communication boundary, such as a pipe, queue, socket, or serialized file. That boundary costs time, but it also isolates crashes and can enable true parallel CPU work.</p>
+    <div class="diagram">
+┌─────────────────────┐     serialize / IPC     ┌─────────────────────┐
+│ parent process      │ ──────────────────────→ │ worker process      │
+│ orchestration/UI    │ ←────────────────────── │ CPU-heavy operation │
+└─────────────────────┘       result / error    └─────────────────────┘
+       private memory                                  private memory
+    </div>
+    <p>Use a process pool when jobs are independent and their inputs and outputs can be serialized. Avoid assuming that a large in-memory scene graph will be cheap to send to every worker. The process start method and external libraries also matter, so test the deployment platform rather than relying on a desktop-only experiment.</p>
+
+    <h2>Servers and Desktop Deployment</h2>
+    <p>A Python server is a long-lived process that accepts requests, performs work, and returns responses. An async server can use an event loop for many I/O-bound connections; a worker model may use threads or processes for blocking or CPU-heavy work. A desktop automation tool has a different contract: it needs a launch command, configuration location, logging, external executable discovery, and a clean shutdown path.</p>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: Deployment preserves the mental model</div><p>Package the same decisions you made locally: which interpreter runs, which dependencies are installed, whether work is async/I/O-bound or CPU-bound, how workers communicate, and how errors reach the operator. A server framework or executable wrapper cannot remove those architectural choices.</p></div>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>Use async for concurrent service calls, threads for carefully bounded I/O or UI-adjacent work, and processes for isolated CPU-heavy conversions. Send records across boundaries, not shared assumptions about objects, and measure before choosing a model.</p></div>
+
+    <h2>Short Drills</h2>
+    <ol><li>Label each example as async concurrency, threaded work, or process isolation: waiting on three HTTP calls, updating a UI from a worker, and decimating four large meshes.</li><li>Write down the difference between creating a coroutine object, awaiting it, and scheduling it with <code>create_task</code>.</li><li>Draw the memory boundary between a parent and process worker. Name one IPC format suitable for a small asset record.</li><li>Identify a shared-state race in a threaded asset queue and redesign it around a lock or message queue.</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Coroutine</strong>: calling <code>async def</code> creates an object; <code>await</code> runs it to a result, and a task schedules it.</li><li><strong>Event loop</strong>: cooperative suspension enables I/O concurrency, not automatic CPU parallelism.</li><li><strong>Threads</strong>: share memory, so protect shared state and respect thread-unsafe APIs.</li><li><strong>Processes</strong>: isolate memory and communicate through explicit IPC, trading overhead for isolation and CPU scaling.</li><li><strong>Deployment</strong>: package the interpreter, dependencies, worker model, configuration, and shutdown/error contract together.</li></ul>
+    <div class="lesson-nav"><a href="07-reliable-tools-automation.html"><span class="label">← Previous</span><span class="title">Reliable Tools and Automation</span></a><a href="../index.html"><span class="label">Course Complete →</span><span class="title">All Lessons</span></a></div>
+  </div>
+</body>
+</html>

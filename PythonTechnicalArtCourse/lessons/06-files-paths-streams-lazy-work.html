@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 06: Files, Paths, Streams, and Lazy Work | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 06</div><h1>Files, Paths, Streams, and Lazy Work</h1><p class="lesson-subtitle">Separating filesystem locations from open handles, then processing data incrementally</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>For a file-processing tool, three ideas are easy to blur together: where a file is, the open object used to access it, and the current position within that access stream. Python's <code>pathlib</code> makes locations expressive; file objects represent active access; iterators and generators let the tool consume records without loading everything at once.</p>
+    <div class="diagram">
+┌─────────────────────┐   open()   ┌─────────────────────────────┐
+│ Path                │ ─────────→ │ file object / stream         │
+│ "assets/take.fbx"  │             │ mode, encoding, cursor       │
+└─────────────────────┘             └──────────────┬──────────────┘
+                                                   │ read / iterate
+                                                   ▼
+                                      bytes or decoded text records
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: A path is not a file pointer</div><p>A <code>Path</code> is a value describing a filesystem location. An open file object is a live resource with a mode, buffering behavior, and cursor. You can have a path without opening anything, and one path can be opened by multiple independent streams.</p></div>
+
+    <h2>Paths with <code>pathlib</code></h2>
+    <pre><code>from pathlib import Path
+
+root = Path("assets")
+for source in root.rglob("*.fbx"):
+    output = source.with_suffix(".gltf")
+    print(source, "-&gt;", output)
+
+manifest = root / "manifest.json"
+print(manifest.exists())</code></pre>
+    <p><code>Path</code> operations construct and inspect locations without opening files. The <code>/</code> operator joins path components in a platform-aware way. <code>glob</code> and <code>rglob</code> find paths; they do not read file contents. This is analogous to using <code>System.IO.Path</code> and directory enumeration in C#, but <code>Path</code> is an object with convenient methods rather than a collection of static string helpers.</p>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: A path string does not read anything</div><p><code>Path("asset.fbx")</code> does not prove that the file exists, open it, or reserve a handle. Use path queries for filesystem metadata and <code>open()</code> when you need a stream.</p></div>
+
+    <h2>File Objects, Modes, Cursors, and Buffering</h2>
+    <p>Opening a path creates a file object. Text mode decodes bytes into strings using an encoding; binary mode returns bytes. Common modes include <code>"r"</code> for reading, <code>"w"</code> for truncating and writing, and <code>"a"</code> for appending. Be explicit about encoding for text files.</p>
+    <pre><code>from pathlib import Path
+
+with Path("manifest.txt").open("r", encoding="utf-8") as stream:
+    first_line = stream.readline()
+    position_after_line = stream.tell()
+    stream.seek(0)
+    all_text = stream.read()
+
+with Path("texture.bin").open("rb") as binary_stream:
+    header = binary_stream.read(16)</code></pre>
+    <p>The cursor is the stream's current read or write position. <code>readline</code> advances it; <code>tell</code> reports a position; <code>seek</code> moves it. Buffering may mean Python reads a larger chunk from the operating system than the exact characters requested, but the file object's interface still presents a logical cursor. A C# comparison is <code>FileStream.Position</code> plus a reader or writer layered over the stream.</p>
+    <p>The <code>with</code> statement closes the resource at the end of the block, including when an exception escapes. It is the correct default for files. A path can be retained for later work; a file object should not be used after its context has closed it.</p>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: Keep resource lifetime local</div><p>Pass a <code>Path</code> when a function needs a location. Open a file inside the smallest scope that needs the stream, and let <code>with</code> own cleanup. This avoids handing a closed or accidentally shared cursor to another stage.</p></div>
+
+    <h2>Iterables, Iterators, and Generators</h2>
+    <p>An iterable can produce values for a <code>for</code> loop. An iterator is the stateful object that provides the next value and eventually raises <code>StopIteration</code>. A generator function uses <code>yield</code> to produce one value, suspend, and resume later:</p>
+    <pre><code>def nonempty_lines(path: Path):
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            cleaned = line.strip()
+            if cleaned:
+                yield cleaned
+
+for line in nonempty_lines(Path("events.log")):
+    print(line)</code></pre>
+    <p>Calling <code>nonempty_lines</code> does not read the file immediately; it returns a generator. Each loop step resumes execution until the next <code>yield</code>. This is similar to C# <code>IEnumerable&lt;T&gt;</code> with <code>yield return</code>, though Python's generator object is directly an iterator.</p>
+    <div class="diagram">
+┌──────────────┐   next()   ┌─────────────────────┐   yield   ┌──────────┐
+│ caller loop  │ ─────────→ │ generator suspended │ ───────→ │ one item │
+└──────────────┘            └──────────┬──────────┘           └────┬─────┘
+                                       │ resume                   │
+                                       └───────────────────────────┘
+                               stop early: no later records read
+    </div>
+    <p>Lazy iteration is valuable for large logs or directory scans. It reduces peak memory and can stop as soon as a match is found:</p>
+    <pre><code>match = next((line for line in nonempty_lines(Path("events.log"))
+              if "ERROR" in line), None)</code></pre>
+    <p>This does not make every operation faster; repeated disk access, expensive parsing, or a consumer that eventually needs every item can dominate. The benefit is deferred work, early exit, and bounded memory.</p>
+
+    <h2>JSON and CSV Records</h2>
+    <p>JSON maps naturally to Python dictionaries, lists, strings, numbers, booleans, and <code>None</code>. CSV is tabular text, so <code>csv.DictReader</code> presents each row as a dictionary whose values are strings until you convert them:</p>
+    <pre><code>import csv
+import json
+
+with Path("config.json").open(encoding="utf-8") as stream:
+    config = json.load(stream)
+
+with Path("assets.csv").open(newline="", encoding="utf-8") as stream:
+    rows = csv.DictReader(stream)
+    for row in rows:
+        width = int(row["width"])
+        print(row["path"], width)</code></pre>
+    <p>Do not assume that external JSON or CSV is valid, complete, or typed exactly as your model expects. Parsing is separate from validation. A technical-art importer should report which path or row failed rather than allowing a vague conversion error to appear many stages later.</p>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>Use paths for asset discovery, streams for controlled access, generators for large manifests, and JSON/CSV parsers at interchange boundaries. This separation lets a batch tool scan millions of records without loading every line or confusing a filename with an open handle.</p></div>
+
+    <h2>Short Drills</h2>
+    <ol><li>Write down the difference between <code>Path("take.json")</code>, <code>Path(...).open()</code>, and the stream's cursor after one <code>readline()</code>.</li><li>Build a generator that yields only files larger than a chosen byte count, and stop after the first match.</li><li>Read a CSV row and explicitly convert one numeric field. Explain why the CSV reader does not do that conversion for you.</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Path</strong>: a location value; it is not an open resource or cursor.</li><li><strong>File object</strong>: a live text or binary stream with mode, buffering, and position.</li><li><strong>With</strong>: owns cleanup for the stream's lifetime.</li><li><strong>Generator</strong>: yields values incrementally, enabling lazy scans and early exit.</li><li><strong>Structured data</strong>: JSON and CSV parsing produce data that still requires validation.</li></ul>
+    <div class="lesson-nav"><a href="05-classes-contracts-composition.html"><span class="label">← Previous</span><span class="title">Classes, Contracts, and Composition-First Design</span></a><a href="07-reliable-tools-automation.html"><span class="label">Next Lesson →</span><span class="title">Reliable Tools and Automation</span></a></div>
+  </div>
+</body>
+</html>

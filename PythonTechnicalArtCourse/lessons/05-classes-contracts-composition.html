@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 05: Classes, Contracts, and Composition-First Design | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 05</div><h1>Classes, Contracts, and Composition-First Design</h1><p class="lesson-subtitle">Inheritance, protocols, duck typing, and choosing flat designs before clever hierarchies</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>A class is useful when an object has state and behavior that belong together. A design becomes harder to change when every new behavior requires another level of inheritance. For technical-art tools, prefer small components with explicit contracts and compose them into a pipeline. Learn inheritance and multiple inheritance so you can read existing Python, but treat them as tools rather than the default architecture.</p>
+    <div class="diagram">
+┌─────────────────────┐       composition       ┌────────────────────────┐
+│ AssetExporter       │ ──────────────────────→  │ ExportPipeline          │
+│ - validator         │                          │ validator.validate()    │
+│ - converter         │                          │ converter.convert()     │
+└─────────────────────┘                          └───────────┬────────────┘
+                                                            │
+                                                            ▼
+                                                   result / diagnostics
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: Program to a behavior contract</div><p>A caller often needs “something with <code>convert(record)</code>,” not a specific base class. Python can express that expectation with a protocol or with duck typing, while composition lets you replace the implementation without changing the pipeline.</p></div>
+
+    <h2>Classes, Instances, and Overrides</h2>
+    <p>An instance carries data; a method provides behavior. Inheritance lets a subclass reuse a base implementation and override selected methods:</p>
+    <pre><code>class Exporter:
+    format_name = "generic"
+
+    def export(self, record):
+        raise NotImplementedError("subclasses must export")
+
+
+class GltfExporter(Exporter):
+    format_name = "gltf"
+
+    def export(self, record):
+        return f"{record['path']} -> .gltf"
+
+
+exporter = GltfExporter()
+print(exporter.format_name)
+print(exporter.export({"path": "tree.fbx"}))</code></pre>
+    <p>Method lookup finds the most specific implementation. <code>super()</code> calls the next implementation in the method-resolution order, which is particularly important when a subclass extends rather than replaces setup:</p>
+    <pre><code>class LoggedExporter(GltfExporter):
+    def export(self, record):
+        print(f"exporting {record['path']}")
+        return super().export(record)</code></pre>
+    <p>This resembles a C# virtual method and <code>base.Export(...)</code>, but Python's lookup rules become more significant when multiple base classes are involved.</p>
+
+    <h2>Abstract Base Classes and Protocols</h2>
+    <p>An abstract base class (ABC) makes a nominal contract explicit. A subclass must implement abstract methods before it can be instantiated:</p>
+    <pre><code>from abc import ABC, abstractmethod
+
+class Converter(ABC):
+    @abstractmethod
+    def convert(self, source, destination):
+        """Convert one source asset."""
+        raise NotImplementedError
+
+class FbxConverter(Converter):
+    def convert(self, source, destination):
+        return f"convert {source} to {destination}"
+</code></pre>
+    <p>A <code>Protocol</code> describes the shape a caller needs and is especially useful with static type checkers. A class can satisfy a protocol without inheriting from it:</p>
+    <pre><code>from typing import Protocol
+
+class Validator(Protocol):
+    def validate(self, record) -&gt; list[str]: ...
+
+class TextureValidator:
+    def validate(self, record) -&gt; list[str]:
+        return [] if record["width"] &gt; 0 else ["width must be positive"]
+
+def publish(record, validator: Validator):
+    return validator.validate(record)</code></pre>
+    <p>This is close to a C# interface in purpose, but a protocol is primarily a structural typing contract. The static checker looks for the required members; ordinary Python does not automatically enforce every annotation at runtime.</p>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: Separate the contract from the construction</div><p>Use an ABC when shared implementation or nominal registration is valuable. Use a protocol when callers only need a shape. Keep the runtime boundary explicit: a type hint is not a substitute for validating untrusted asset data.</p></div>
+
+    <h2>Duck Typing and Composition-First Design</h2>
+    <p>Duck typing means asking an object to perform the operation you need rather than checking its class first: if it has the right method and behavior, it can participate. Composition goes one step further by assembling behavior from independent objects:</p>
+    <pre><code>class ExportPipeline:
+    def __init__(self, validator, converter):
+        self.validator = validator
+        self.converter = converter
+
+    def run(self, record):
+        errors = self.validator.validate(record)
+        if errors:
+            return {"ok": False, "errors": errors}
+        output = self.converter.convert(record["path"], record["destination"])
+        return {"ok": True, "output": output}</code></pre>
+    <p>A pipeline can receive a different validator or converter without a subclass for every combination. This is the preferred shape for many tools: small objects, narrow contracts, and dependencies passed in from the outside.</p>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>Asset pipelines often vary by client, file format, or target platform. Composition lets you swap a validation policy or export adapter at configuration time instead of growing a deep hierarchy such as <code>WebGltfValidatedCompressedExporter</code>.</p></div>
+
+    <h2>Mixins, Multiple Inheritance, and MRO</h2>
+    <p>A mixin is a small class intended to add one focused behavior, not to represent a complete standalone object:</p>
+    <pre><code>class TimingMixin:
+    def timed_name(self):
+        return f"timed:{self.name}"
+
+class NamedExporter:
+    def __init__(self, name):
+        self.name = name
+
+class TimedNamedExporter(TimingMixin, NamedExporter):
+    pass
+
+tool = TimedNamedExporter("gltf")
+print(tool.timed_name())</code></pre>
+    <p>With multiple inheritance, Python computes an MRO, the ordered list of classes it searches for attributes and methods. <code>super()</code> follows that order; it does not simply mean “my one direct parent.” Cooperative multiple inheritance requires each participating method to call <code>super()</code> with compatible signatures. If a mixin silently assumes unrelated state or skips the chain, the design becomes fragile.</p>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: Multiple inheritance is not free composition</div><p>Mixins can be useful for tiny, orthogonal behavior, but multiple inheritance introduces MRO and cooperative-<code>super()</code> constraints. Prefer composition when the relationship is “has a validator” or “uses a logger,” and reserve multiple inheritance for a deliberate, documented design.</p></div>
+
+    <h2>Short Drills</h2>
+    <ol><li>Define a protocol for an exporter with one method, then pass two unrelated exporter classes to a function that uses that method.</li><li>Refactor a hypothetical subclass with three feature combinations into a pipeline that receives three components.</li><li>Write a two-class inheritance example that calls <code>super()</code>, then print the MRO with <code>SomeClass.__mro__</code>. Explain why the order matters.</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Inheritance</strong>: reuse and override behavior, with <code>super()</code> following the MRO.</li><li><strong>Contracts</strong>: ABCs are nominal; protocols and duck typing focus on required behavior.</li><li><strong>Composition</strong>: pass small collaborators into a pipeline to keep variation flat and replaceable.</li><li><strong>Multiple inheritance</strong>: useful for disciplined mixins, advanced by default, and not a replacement for ordinary composition.</li></ul>
+    <div class="lesson-nav"><a href="04-functions-reusable-behavior.html"><span class="label">← Previous</span><span class="title">Functions, Calls, and Reusable Behavior</span></a><a href="06-files-paths-streams-lazy-work.html"><span class="label">Next Lesson →</span><span class="title">Files, Paths, Streams, and Lazy Work</span></a></div>
+  </div>
+</body>
+</html>
