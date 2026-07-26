@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Cheat Sheet | Python for Technical Artists</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .cheat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+    .cheat-section { margin: 0; }
+    .cheat-section h3 { font-size: 1rem; margin-bottom: .75rem; color: var(--accent-blue); border-bottom: 1px solid var(--border-color); padding-bottom: .3rem; }
+    .cheat-section ul { margin: 0; padding-left: 1.25rem; }
+    .cheat-section li { font-size: .9rem; margin-bottom: .3rem; line-height: 1.5; }
+    .mini-table { font-size: .85rem; margin: 1rem 0; }
+    .mini-table th, .mini-table td { padding: .4rem .6rem; }
+    .quick-ref { background: var(--bg-tertiary); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; font-size: .9rem; border-left: 4px solid var(--accent-orange); }
+    .cheat-label { color: var(--accent-green); font-weight: 600; }
+    @media print { body { background: white; color: black; } .nav { display: none; } .cheat-section { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="index.html">Lessons</a><a href="PLAN.md">Course Plan</a><a href="cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="hero"><h1>Course Cheat Sheet</h1><p class="hero-subtitle">Python runtime, data model, automation, and concurrency reference for C# / Java technical artists</p></div>
+    <p class="quick-ref"><span class="cheat-label">Core rule:</span> choose the data contract first, keep resource lifetimes explicit, make process boundaries observable, and distinguish waiting concurrency from CPU parallelism.</p>
+
+    <h2>Lesson 1 — Runtime and Projects</h2>
+    <p class="quick-ref"><strong>Model:</strong> source module → implementation compiler → bytecode/runtime → operating-system process.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Vocabulary</h3><ul><li><strong>Module</strong>: importable <code>.py</code> file.</li><li><strong>Package</strong>: import namespace containing modules.</li><li><strong>Distribution</strong>: installable artifact; may contain packages.</li><li><strong>Environment</strong>: isolated interpreter/dependency context.</li><li><strong><code>pyproject.toml</code></strong>: project metadata and dependencies.</li></ul></div><div class="cheat-section"><h3>Invocation</h3><pre><code>uv venv
+uv add rich
+uv run python -m package.tool
+
+if __name__ == "__main__":
+    raise SystemExit(main())</code></pre></div></div>
+    <table class="mini-table"><tr><th>Channel</th><th>Use</th></tr><tr><td>stdout</td><td>normal results / pipeline data</td></tr><tr><td>stderr</td><td>diagnostics</td></tr><tr><td>exit 0</td><td>success</td></tr><tr><td>non-zero</td><td>invalid input or failed work</td></tr></table>
+
+    <h2>Lesson 2 — Names, Objects, Values, and Types</h2>
+    <p class="quick-ref"><strong>Model:</strong> names bind to objects; assignment rebinds a name, while mutation changes the object.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Surprises</h3><ul><li>Two names can reference one mutable object.</li><li><code>is</code> tests identity; <code>==</code> tests value equality.</li><li>Use <code>value is None</code> for absence.</li><li>Empty built-ins, zero, <code>False</code>, and <code>None</code> are falsey.</li><li>Type hints document intent; ordinary Python does not enforce them automatically.</li></ul></div><div class="cheat-section"><h3>Class essentials</h3><pre><code>class Asset:
+    category = "unknown"
+    def __init__(self, path):
+        self.path = path
+        self.tags = []
+    def add_tag(self, tag):
+        self.tags.append(tag)
+
+asset = Asset("tree.fbx")</code></pre></div></div>
+    <table class="mini-table"><tr><th>Immutable</th><th>Mutable</th></tr><tr><td><code>str</code>, <code>tuple</code>, numbers</td><td><code>list</code>, <code>dict</code>, <code>set</code></td></tr></table>
+
+    <h2>Lesson 3 — Collections and Transformations</h2>
+    <p class="quick-ref"><strong>Choose by guarantee:</strong> list = ordered work; tuple = fixed grouping; dict = key lookup; set = unique membership.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Syntax</h3><pre><code>items = ["a", "b"]
+point = (0, 1, 2)
+meta = {"lod": 2}
+unique = {"fbx", "gltf"}
+empty_set = set()
+
+first, *middle, last = items
+tail = items[-2:]
+subset = [x for x in items if rule(x)]</code></pre></div><div class="cheat-section"><h3>LINQ bridge</h3><ul><li>Comprehension ≈ readable result-building loop.</li><li><code>map(fn, xs)</code> ≈ <code>Select</code>; lazy iterator.</li><li><code>filter(pred, xs)</code> ≈ <code>Where</code>; lazy iterator.</li><li><code>sorted(xs, key=fn)</code> ≈ <code>OrderBy</code>; new list.</li><li>Slicing selects positions; filtering tests content.</li></ul></div></div>
+    <table class="mini-table"><tr><th>Operation</th><th>Result</th><th>Use</th></tr><tr><td><code>items[a:b:c]</code></td><td>new slice</td><td>positional range</td></tr><tr><td><code>append</code></td><td>mutates list</td><td>add work</td></tr><tr><td><code>set(items)</code></td><td>new set; loses duplicates/order</td><td>membership</td></tr><tr><td><code>dict[key]</code></td><td>lookup; may raise <code>KeyError</code></td><td>metadata</td></tr></table>
+
+    <h2>Lesson 4 — Functions and Reusable Behavior</h2>
+    <p class="quick-ref"><strong>Functions are values:</strong> pass callbacks, capture configuration in closures, manage resources with <code>with</code>, and wrap cross-cutting behavior with decorators.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Call shape</h3><pre><code>def export(path, output="build", *, dry_run=False):
+    ...
+
+def log(label, *steps, **metadata):
+    ...
+
+export("tree.fbx", output="web", dry_run=True)</code></pre></div><div class="cheat-section"><h3>Patterns</h3><ul><li><strong>Callback</strong>: function passed to another function.</li><li><strong>Closure</strong>: nested function remembers enclosing values.</li><li><strong>Bound method</strong>: instance access supplies <code>self</code>.</li><li><strong>Context manager</strong>: <code>with</code> enters and cleans up.</li><li><strong>Decorator</strong>: function returns a wrapper; use <code>functools.wraps</code>.</li></ul></div></div>
+    <table class="mini-table"><tr><th>Feature</th><th>C# / Java bridge</th><th>Caution</th></tr><tr><td>default</td><td>optional parameter</td><td>mutable defaults persist</td></tr><tr><td>closure</td><td>capturing lambda</td><td>late binding in loops</td></tr><tr><td><code>with</code></td><td><code>using</code> / try-finally</td><td>lifecycle, not import</td></tr><tr><td>decorator</td><td>attribute / middleware</td><td>can hide flow</td></tr></table>
+
+    <h2>Lesson 5 — Classes and Contracts</h2>
+    <p class="quick-ref"><strong>Design default:</strong> pass collaborators into a composed pipeline; inherit for a genuine substitutable family; use multiple inheritance only for deliberate mixins.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Contracts</h3><ul><li><strong>ABC</strong>: nominal contract; abstract methods block incomplete instantiation.</li><li><strong>Protocol</strong>: structural shape for static checking.</li><li><strong>Duck typing</strong>: call required behavior; validate boundaries.</li><li><strong><code>super()</code></strong>: follows the MRO.</li></ul></div><div class="cheat-section"><h3>Composition</h3><pre><code>class Pipeline:
+    def __init__(self, validator, converter):
+        self.validator = validator
+        self.converter = converter
+    def run(self, record):
+        errors = self.validator.validate(record)
+        if errors:
+            return {"ok": False, "errors": errors}
+        return self.converter.convert(record)</code></pre></div></div>
+
+    <h2>Lesson 6 — Files, Streams, and Lazy Work</h2>
+    <p class="quick-ref"><strong>Separate:</strong> <code>Path</code> is a location, a file object is live access, and its cursor is the current position.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>File mechanics</h3><pre><code>from pathlib import Path
+
+path = Path("assets") / "manifest.json"
+with path.open(encoding="utf-8") as stream:
+    first = stream.readline()
+    position = stream.tell()
+    stream.seek(0)
+    text = stream.read()
+
+with path.open("rb") as binary:
+    header = binary.read(16)</code></pre></div><div class="cheat-section"><h3>Lazy mechanics</h3><pre><code>def records(path):
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if line.strip():
+                yield line.strip()
+
+match = next((x for x in records(path)
+              if "ERROR" in x), None)</code></pre></div></div>
+    <table class="mini-table"><tr><th>Layer</th><th>Question</th><th>Tool</th></tr><tr><td>Path</td><td>where?</td><td><code>Path</code>, <code>glob</code>, <code>exists</code></td></tr><tr><td>Stream</td><td>how to access?</td><td><code>open</code>, mode, encoding</td></tr><tr><td>Cursor</td><td>where am I?</td><td><code>tell</code>, <code>seek</code>, <code>read</code></td></tr><tr><td>Records</td><td>what data next?</td><td>iterator, generator, <code>yield</code></td></tr></table>
+    <p><strong>Structured data:</strong> <code>json.load(stream)</code> maps JSON to Python values. <code>csv.DictReader(stream)</code> yields row dictionaries; convert numeric fields explicitly. Parsing is not validation.</p>
+
+    <h2>Lesson 7 — Reliable Tools and Automation</h2>
+    <p class="quick-ref"><strong>Boundary rule:</strong> exceptions describe in-process failure; stdout/stderr/exit codes describe process behavior.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Exceptions</h3><pre><code>try:
+    value = int(record["width"])
+except (KeyError, ValueError) as error:
+    raise ConversionError("bad width") from error
+else:
+    use(value)
+finally:
+    release_or_log()</code></pre></div><div class="cheat-section"><h3>Subprocess</h3><pre><code>completed = subprocess.run(
+    ["converter", "--input", source],
+    capture_output=True, text=True, timeout=60
+)
+if completed.returncode != 0:
+    raise RuntimeError(completed.stderr)</code></pre></div></div>
+    <ul><li>Catch narrowly; preserve causes with <code>raise ... from</code>.</li><li>Prefer <code>argparse</code> to manual <code>sys.argv</code> for real CLIs.</li><li>Use argument lists; avoid <code>shell=True</code> unless deliberately required.</li><li><code>subprocess.run</code> waits by default; descendant cleanup is platform/tool dependent.</li><li>Deliverables include interpreter, dependencies, executables, paths, permissions, and configuration.</li></ul>
+
+    <h2>Lesson 8 — Async, Threads, Processes, and Deployment</h2>
+    <p class="quick-ref"><strong>Decision rule:</strong> async for cooperative I/O concurrency; threads for appropriate shared-process work; processes for isolation or CPU scaling when IPC cost is acceptable.</p>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Async sequence</h3><pre><code>async def fetch(name):
+    await io_operation(name)
+    return name
+
+async def main():
+    coroutine = fetch("tree")
+    result = await coroutine
+    task = asyncio.create_task(fetch("hero"))
+    results = await asyncio.gather(task)
+    return result, results</code></pre></div><div class="cheat-section"><h3>Concurrency map</h3><ul><li><strong>Event loop</strong>: one coordinator interleaves tasks at <code>await</code>.</li><li><strong>Thread</strong>: shares process memory; protect multi-step state.</li><li><strong>Queue</strong>: explicit worker messages often beat shared mutation.</li><li><strong>Process</strong>: private memory; use IPC.</li><li><strong>CPU caveat</strong>: standard CPython builds have a GIL; async does not parallelize Python CPU loops.</li></ul></div></div>
+    <table class="mini-table"><tr><th>Need</th><th>Candidate</th><th>Watch for</th></tr><tr><td>many network waits</td><td>asyncio</td><td>blocking calls freeze loop</td></tr><tr><td>I/O worker</td><td>thread</td><td>shared state / thread safety</td></tr><tr><td>CPU-heavy jobs</td><td>process pool</td><td>serialization and IPC</td></tr><tr><td>long-lived service</td><td>server + worker model</td><td>shutdown and errors</td></tr></table>
+
+    <h2>Interview Prompts</h2>
+    <div class="cheat-grid"><div class="cheat-section"><h3>Explain clearly</h3><ul><li>Why is a path not a file pointer?</li><li>When does a coroutine body run?</li><li>Why does a set help membership but not ordered output?</li><li>What does <code>super()</code> follow?</li></ul></div><div class="cheat-section"><h3>Design under pressure</h3><ul><li>Separate parsing, validation, conversion, and delivery.</li><li>Prefer composition for replaceable pipeline stages.</li><li>Keep process boundaries observable and serializable.</li><li>State behavior on failure, timeout, cancellation, and shutdown.</li></ul></div></div>
+    <div class="lesson-nav"><a href="index.html"><span class="label">← Back to</span><span class="title">All Lessons</span></a><a href="PLAN.md"><span class="label">Review</span><span class="title">Course Plan and Topic Map</span></a></div>
+  </div>
+</body>
+</html>

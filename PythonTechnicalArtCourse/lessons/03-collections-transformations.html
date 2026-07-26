@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 03: Collections and Pythonic Data Transformations | Python for Technical Artists</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="nav"><div class="nav-content"><a href="../index.html" class="nav-brand">Python for Technical Artists</a><div class="nav-links"><a href="../index.html">Lessons</a><a href="../PLAN.md">Course Plan</a><a href="../cheatsheet.html">Cheat Sheet</a></div></div></nav>
+  <div class="container">
+    <div class="lesson-header"><div class="lesson-number">Lesson 03</div><h1>Collections and Pythonic Data Transformations</h1><p class="lesson-subtitle">Lists, records, sets, and readable transformations compared with C# LINQ</p></div>
+
+    <h2>The Big Picture</h2>
+    <p>Technical-art tools are mostly data plumbing: collect asset paths, group metadata, remove duplicates, select candidates, and produce a new representation. Python's collection syntax makes those operations compact, but compact does not mean mysterious. Start by choosing the collection that expresses the data contract, then choose a transformation whose evaluation and mutation behavior you can explain.</p>
+    <div class="diagram">
+┌──────────────────────┐   transform   ┌──────────────────────────┐
+│ source collection    │ ────────────→ │ result collection        │
+│ paths / records      │               │ selected / mapped values │
+└──────────┬───────────┘               └────────────┬─────────────┘
+           │                                        │
+           ├─ list: ordered, mutable                ├─ comprehension
+           ├─ tuple: fixed grouping                 ├─ map / filter
+           ├─ dict: key → value                     └─ explicit loop
+           └─ set: unique membership
+    </div>
+    <div class="callout callout-concept"><div class="callout-title">🧠 Key Concept: A collection is a contract</div><p>Choose a list when order and duplicates matter, a tuple for a fixed grouping, a dictionary for keyed lookup, and a set for uniqueness or membership. The syntax is secondary to the data guarantee.</p></div>
+
+    <h2>Literal Syntax and the Core Collection Types</h2>
+    <pre><code>paths = ["hero.fbx", "tree.fbx", "hero.fbx"]  # list
+origin = (0.0, 0.0, 0.0)                       # tuple
+settings = {"lod": 2, "compressed": True}     # dict
+extensions = {"fbx", "gltf", "obj"}           # set
+empty_dict = {}                                # not an empty set
+empty_set = set()</code></pre>
+    <p>Square brackets create lists, parentheses create tuples, braces with key-value pairs create dictionaries, and braces with values create sets. An empty pair of braces is a dictionary, so use <code>set()</code> for an empty set. Dictionaries preserve insertion order in current Python implementations, but their primary contract is key lookup; sets intentionally do not provide a stable sequence order for presentation.</p>
+    <table><tr><th>Python</th><th>C# comparison</th><th>Typical operation</th><th>Cost intuition</th></tr><tr><td><code>list</code></td><td><code>List&lt;T&gt;</code></td><td>ordered work items</td><td>index access is fast; middle insertion shifts later items</td></tr><tr><td><code>tuple</code></td><td>small immutable record / value tuple</td><td>fixed return or coordinate</td><td>cannot be changed in place</td></tr><tr><td><code>dict</code></td><td><code>Dictionary&lt;K,V&gt;</code></td><td>metadata lookup</td><td>key lookup is typically constant-time</td></tr><tr><td><code>set</code></td><td><code>HashSet&lt;T&gt;</code></td><td>deduplication and membership</td><td>membership is typically constant-time</td></tr></table>
+    <div class="callout callout-important"><div class="callout-title">💡 Important: Performance follows the operation</div><p>“Pythonic” does not mean “free.” A set is a good membership index, but converting a list to a set costs time and loses sequence order. A list comprehension creates a new list; repeated concatenation can copy data. Choose the structure and operation that match the workload.</p></div>
+
+    <h2>Mutation, Slicing, and Unpacking</h2>
+    <p>Lists, dictionaries, and sets can be mutated. That is useful for a work queue, but shared references make ownership important:</p>
+    <pre><code>pending = ["a.fbx", "b.fbx", "c.fbx"]
+alias = pending
+alias.pop(0)                 # mutates pending too
+
+snapshot = pending.copy()    # shallow copy of the list structure
+snapshot.append("d.fbx")     # pending is unchanged</code></pre>
+    <p><strong>Slicing</strong> selects a contiguous range by position and returns a new sequence. It is not filtering by a predicate:</p>
+    <pre><code>names = ["a.fbx", "b.txt", "c.fbx", "d.png", "e.fbx"]
+middle = names[1:4]          # positions 1, 2, 3
+last_two = names[-2:]        # positions from the end
+reversed_names = names[::-1] # new reversed list
+
+fbx = [name for name in names if name.endswith(".fbx")]  # filtering</code></pre>
+    <p>Slice syntax is <code>sequence[start:stop:step]</code>; the stop position is excluded. Negative indices count from the end. Filtering asks a question about each element and is normally expressed with a loop, comprehension, or <code>filter</code>.</p>
+    <div class="callout callout-warning"><div class="callout-title">⚠️ Python Surprise: Slicing is not filtering</div><p><code>items[2:5]</code> selects positions 2 through 4. It does not mean “items matching condition 2 through 5.” Use a predicate-based transformation when the selection depends on content.</p></div>
+    <p><strong>Unpacking</strong> assigns elements from an iterable to several names at once:</p>
+    <pre><code>width, height = (1920, 1080)
+first, *middle, last = ["a", "b", "c", "d"]
+name, metadata = ("tree.fbx", {"lod": 1})</code></pre>
+
+    <h2>Comprehensions, <code>lambda</code>, <code>map</code>, and <code>filter</code></h2>
+    <p>A comprehension is a compact loop that builds a collection. Read it as “the output expression for each item, optionally kept when a condition is true.”</p>
+    <pre><code>records = [
+    {"path": path, "extension": path.rsplit(".", 1)[-1]}
+    for path in ["hero.fbx", "tree.gltf", "readme.txt"]
+    if "." in path
+]
+
+unique_extensions = {record["extension"] for record in records}
+by_name = {record["path"]: record for record in records}</code></pre>
+    <p><code>lambda</code> creates a small anonymous function. <code>map</code> applies a function to each item, and <code>filter</code> keeps items for which a predicate is true. In modern Python these functions return lazy iterators, so materialize them with <code>list()</code> when you need a reusable list.</p>
+    <pre><code>names = ["tree.fbx", "hero.fbx", "camera.fbx"]
+sorted_names = sorted(names, key=lambda name: name.lower())
+fbx_names = list(filter(lambda name: name.endswith(".fbx"), names))
+lengths = list(map(len, names))</code></pre>
+    <p>The direct C# LINQ comparison is useful but limited. <code>Select</code> resembles <code>map</code>, <code>Where</code> resembles <code>filter</code>, and <code>OrderBy</code> resembles <code>sorted(..., key=...)</code>. Python does not turn every collection into a fluent object with chained methods. Transformations are usually function calls, comprehensions, or generator expressions, and their laziness differs by operation.</p>
+    <div class="callout callout-tip"><div class="callout-title">💚 Technical-Art Relevance</div><p>For an asset manifest, a readable comprehension can normalize extensions, filter temporary files, and build a lookup dictionary. Keep complex validation in a named function or loop when a one-line expression would hide an important pipeline rule.</p></div>
+
+    <h2>Short Drills</h2>
+    <ol><li>Given a list of paths, use slicing to take the first three positions, then use a separate predicate to keep only <code>.fbx</code> files. Explain why the operations are different.</li><li>Build a dictionary keyed by file extension whose values are unique paths. Decide where a set is useful and where list order must be preserved.</li><li>Rewrite a short C# LINQ chain using a Python comprehension, then rewrite it with <code>map</code>/<code>filter</code>. Which version makes the asset rule easiest to audit?</li></ol>
+
+    <h2>Key Takeaways</h2>
+    <ul><li><strong>Collections</strong>: list, tuple, dict, and set communicate different guarantees.</li><li><strong>Slicing</strong>: selects positions; filtering selects by a predicate.</li><li><strong>Transformations</strong>: comprehensions, <code>map</code>, and <code>filter</code> create or yield transformed data; they do not automatically mutate the source.</li><li><strong>LINQ bridge</strong>: Python has analogous operations, but not a universal fluent method chain.</li></ul>
+    <div class="lesson-nav"><a href="02-names-objects-values.html"><span class="label">← Previous</span><span class="title">Names, Objects, Values, and Types</span></a><a href="04-functions-reusable-behavior.html"><span class="label">Next Lesson →</span><span class="title">Functions, Calls, and Reusable Behavior</span></a></div>
+  </div>
+</body>
+</html>
