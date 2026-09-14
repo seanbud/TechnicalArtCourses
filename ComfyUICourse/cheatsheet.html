@@ -13,7 +13,7 @@
       gap: 1.5rem;
       margin-top: 1.5rem;
     }
-    
+
     .cheat-section {
       margin: 0;
       background: var(--bg-secondary);
@@ -21,7 +21,7 @@
       border-radius: 8px;
       padding: 1.25rem;
     }
-    
+
     .cheat-section h3 {
       font-size: 1rem;
       margin-top: 0;
@@ -30,32 +30,32 @@
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 0.3rem;
     }
-    
+
     .cheat-section ul {
       margin: 0;
       padding-left: 1.25rem;
     }
-    
+
     .cheat-section li {
       font-size: 0.9rem;
       margin-bottom: 0.3rem;
       line-height: 1.5;
       color: var(--text-secondary);
     }
-    
+
     .cheat-section li strong {
       color: var(--text-primary);
     }
-    
+
     .mini-table {
       font-size: 0.85rem;
       margin: 1rem 0;
     }
-    
+
     .mini-table th, .mini-table td {
       padding: 0.4rem 0.6rem;
     }
-    
+
     .quick-ref {
       background: var(--bg-secondary);
       border-radius: 8px;
@@ -64,18 +64,18 @@
       font-size: 0.9rem;
       border-left: 4px solid var(--accent-orange);
     }
-    
+
     .quick-ref code {
       font-size: 0.85rem;
     }
-    
+
     .checklist-grid {
       display: grid;
       grid-template-columns: 1fr;
       gap: 0.75rem;
       margin-top: 1rem;
     }
-    
+
     .checklist-item {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
@@ -87,16 +87,16 @@
       font-size: 0.9rem;
       color: var(--text-secondary);
     }
-    
+
     .checklist-item strong {
       color: var(--text-primary);
     }
-    
+
     .checklist-checkbox {
       color: var(--accent-green);
       font-weight: bold;
     }
-    
+
     @media print {
       body { background: white; color: black; }
       .nav { display: none; }
@@ -126,7 +126,7 @@
     <div class="quick-ref">
       <strong>Core Pipeline:</strong> VAE Encode (RGB Image → Latent) → CLIP Encode (Text Prompt → Conditioning) → KSampler (Denoises Latent Noise guided by Conditioning) → VAE Decode (Latent → RGB Image)
     </div>
-    
+
     <div class="cheat-grid">
       <div class="cheat-section">
         <h3>Latent Space & VAE</h3>

@@ -52,7 +52,7 @@
 
     <h2>1. Implementation: Robust Validation (The Validator Class)</h2>
     <p>Moving data is dangerous. A simple copy script is not enough. You need <strong>Retries</strong> and <strong>Checksums</strong>.</p>
-    
+
     <div class="code-block">
       <h3>Python: The Validator</h3>
       <pre><code class="language-python">import hashlib
@@ -79,13 +79,13 @@ class AssetValidator:
             try:
                 # 1. Calc Source Hash
                 src_hash = self.calculate_md5(source)
-                
+
                 # 2. Copy
                 shutil.copy2(source, dest)
-                
+
                 # 3. Calc Dest Hash
                 dst_hash = self.calculate_md5(dest)
-                
+
                 # 4. Compare
                 if src_hash == dst_hash:
                     self.logger.info(f"Success: {source} -> {dest}")
@@ -93,11 +93,11 @@ class AssetValidator:
                 else:
                     self.logger.error(f"Corruption Detected! Attempt {attempt+1}")
                     os.remove(dest) # Clean up bad file
-                    
+
             except Exception as e:
                 self.logger.error(f"IO Error: {e}")
                 time.sleep(1) # Backoff before retry
-                
+
         raise Exception("Failed to move file after 3 attempts.")</code></pre>
     </div>
 
@@ -148,7 +148,7 @@ def find_cold_assets():
       </tr>
       <tr>
         <td><strong>Project</strong></td>
-        <td>`sports_project_25`</td>
+        <td><code>sports_project_25</code></td>
         <td>Separates billing/storage costs.</td>
       </tr>
       <tr>
@@ -187,8 +187,8 @@ def find_cold_assets():
     </ul>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: sci_fi_project</div>
-      <p>In <strong>sci_fi_project</strong>, audio files are massive uncompressed WAVs. We can't keep them all on the fast SSDs (Tier 1 Storage). We use a <strong>Tiered Storage Policy</strong>. After 30 days of inactivity, a script moves the raw audio to the slow NAS (Tier 2). After 90 days, it goes to Amazon Glacier (Cold Storage). This saves the studio $50,000/year in storage costs.</p>
+      <div class="callout-title">🎬 Production Relevance: Large Audio Libraries</div>
+      <p>A cinematic sci-fi game may accumulate a large library of uncompressed audio. A <strong>tiered storage policy</strong> can keep active files on fast storage, move inactive sources to lower-cost network storage, and archive long-idle takes in cold object storage.</p>
     </div>
 
     <div class="lesson-nav">

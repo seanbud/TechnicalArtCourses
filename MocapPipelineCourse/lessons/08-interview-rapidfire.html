@@ -20,13 +20,13 @@
   <div class="container">
     <div class="lesson-header">
       <div class="lesson-number">Lesson 08</div>
-      <h1>Interview Rapid-Fire: Nigel Round</h1>
-      <p class="lesson-subtitle">Infrastructure, APIs, Vendor Integration, and the "Future Development" Mindset.</p>
+      <h1>Interview Rapid-Fire: Pipeline Systems</h1>
+      <p class="lesson-subtitle">Infrastructure, APIs, vendor integration, and platform engineering.</p>
     </div>
 
     <div class="callout callout-warning">
       <div class="callout-title">⚠️ Context: What This Round Is About</div>
-      <p>"Future Development" = Platform Engineering for Content. Nigel partners with Engineering, IT, and external vendors. He is NOT asking "can you write a shader." He is asking: <strong>"Can you build a system that 500 people depend on?"</strong></p>
+      <p>A pipeline-systems interview tests whether you can partner with engineering, IT, artists, and external vendors. The central question is broader than shader knowledge: <strong>can you design a dependable system used by many people?</strong></p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -127,29 +127,29 @@ import subprocess
 
 class CaptureIngestHandler(FileSystemEventHandler):
     """Watches a directory for new .c3d files and auto-submits to farm."""
-    
+
     VALID_EXTENSIONS = {'.c3d', '.fbx', '.bvh'}
-    
+
     def on_created(self, event):
         if event.is_directory:
             return
-        
+
         ext = os.path.splitext(event.src_path)[1].lower()
         if ext not in self.VALID_EXTENSIONS:
             return
-        
+
         # Wait for file to finish writing (network copy)
         self._wait_for_stable(event.src_path)
-        
+
         # Validate
         if not self._validate(event.src_path):
             log.error(f"Validation FAILED: {event.src_path}")
             return
-        
+
         # Submit to Farm
         log.info(f"New capture detected: {event.src_path}")
         self._submit_to_deadline(event.src_path)
-    
+
     def _wait_for_stable(self, path, interval=2, checks=3):
         """Wait until file size stops changing (copy complete)."""
         sizes = []
@@ -157,7 +157,7 @@ class CaptureIngestHandler(FileSystemEventHandler):
             sizes.append(os.path.getsize(path))
             time.sleep(interval)
         return len(set(sizes)) == 1  # All sizes identical = stable
-    
+
     def _validate(self, path):
         size_mb = os.path.getsize(path) / (1024**2)
         if size_mb < 1:
@@ -165,10 +165,10 @@ class CaptureIngestHandler(FileSystemEventHandler):
         if size_mb > 50000:
             return False  # >50GB? Something is wrong.
         return True
-    
+
     def _submit_to_deadline(self, path):
         subprocess.Popen([
-            "deadlinecommand", 
+            "deadlinecommand",
             "-SubmitCommandLineJob",
             "-executable", "mayapy",
             "-arguments", f"-batch -script solve.py --input {path}",
@@ -183,7 +183,7 @@ observer.start()</code></pre>
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>3. Vendor API Integration</h2>
-    <p>Studio works with vendors like Vicon, OptiTrack, Faceware, DI4D, Move.ai, etc. Their data formats are proprietary. Your job is to normalize them.</p>
+    <p>Capture teams may work with vendors such as Vicon, OptiTrack, Faceware, DI4D, and Move.ai. Each tool has its own SDK and data format; the pipeline should normalize those differences.</p>
 
     <div class="callout callout-concept">
       <div class="callout-title">🧠 The Adapter Pattern</div>
@@ -228,16 +228,16 @@ class ViconAdapter(BaseCaptureAdapter):
     def load(self, filepath):
         import c3d
         reader = c3d.Reader(open(filepath, 'rb'))
-        
+
         data = CaptureData()
         data.frame_rate = reader.header.frame_rate
         data.take_name = reader.header.events[0].desc if reader.header.events else ""
         data.marker_names = reader.point_labels
-        
+
         for frame_idx, points, analog in reader.read_frames():
             data.markers.append(points[:, :3].tolist())
             data.frame_count += 1
-        
+
         return data
 
 class OptiTrackAdapter(BaseCaptureAdapter):
@@ -319,17 +319,17 @@ def parent_node(child, parent):
 def export_fbx(filepath, selected_only=True):
     """Wraps FBX export with studio defaults."""
     cmds.loadPlugin("fbxmaya", quiet=True)
-    
+
     # Studio-standard FBX settings
     mel.eval('FBXExportSmoothingGroups -v true')
     mel.eval('FBXExportInputConnections -v false')
     mel.eval('FBXExportBakeComplexAnimation -v true')
-    
+
     if selected_only:
         cmds.file(filepath, force=True, type="FBX export", exportSelected=True)
     else:
         cmds.file(filepath, force=True, type="FBX export", exportAll=True)
-    
+
     log.info(f"FBX Export: {filepath}")
 
 def get_skeleton_hierarchy(root_joint):
@@ -511,11 +511,11 @@ def submit_cloud_job(scene_file, s3_bucket):
     """When local farm is full, burst to AWS Batch."""
     s3 = boto3.client('s3')
     batch = boto3.client('batch')
-    
+
     # 1. Upload scene to S3
     s3_key = f"inbox/{os.path.basename(scene_file)}"
     s3.upload_file(scene_file, s3_bucket, s3_key)
-    
+
     # 2. Submit AWS Batch job (runs our Docker container)
     response = batch.submit_job(
         jobName=f"solve_{os.path.basename(scene_file)}",
@@ -545,10 +545,10 @@ def publish_to_perforce(local_path, depot_path):
     p4.user = os.environ['P4USER']
     p4.port = os.environ['P4PORT']
     p4.client = os.environ['P4CLIENT']
-    
+
     try:
         p4.connect()
-        
+
         # Check if file exists in depot
         try:
             p4.run_fstat(depot_path)
@@ -557,7 +557,7 @@ def publish_to_perforce(local_path, depot_path):
         except P4Exception:
             # File is new: add it
             p4.run_add(local_path)
-        
+
         # Submit with a structured changelist
         change = p4.fetch_change()
         change['Description'] = (
@@ -567,7 +567,7 @@ def publish_to_perforce(local_path, depot_path):
             f"Hash: {calculate_md5(local_path)}"
         )
         p4.run_submit(change)
-        
+
     except P4Exception as e:
         log.error(f"P4 Error: {e}")
         raise
@@ -591,7 +591,7 @@ def publish_to_perforce(local_path, depot_path):
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>8. Bones, Retargeting & Skeletons (Quick Reference)</h2>
-    <p>Fast-reference table if Nigel probes on capture fundamentals.</p>
+    <p>Fast-reference table for questions about capture fundamentals.</p>
 
     <table>
       <tr>
@@ -650,8 +650,8 @@ def publish_to_perforce(local_path, depot_path):
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>9. Photogrammetry Pipeline</h2>
-    <p>If the role involves 3D scanning (likely for "Future Development"), know this flow:</p>
-    
+    <p>If the role involves 3D scanning, know this flow:</p>
+
     <div class="diagram">
 ┌─────────────────────────────────────────────────────────────────┐
 │                 PHOTOGRAMMETRY PIPELINE                          │
@@ -728,7 +728,7 @@ def main():
         log.info("DRY RUN: Validation only.")
         # Run validation, skip export
         return 0
-    
+
     # ... full processing logic ...
     log.info(f"Export Complete: {args.output}")
     return 0
@@ -763,7 +763,7 @@ if __name__ == "__main__":
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>11. The Infrastructure Bottleneck Story</h2>
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Your Story: Solving a Pipeline Bottleneck</div>
+      <div class="callout-title">🎬 Example Answer: Solving a Pipeline Bottleneck</div>
       <p><strong>Problem:</strong> "Our capture team was producing 200 takes per day, but our processing pipeline could only handle 50. Artists were waiting 3-4 days for cleaned data. The bottleneck was a single workstation running MotionBuilder sequentially."</p>
       <p><strong>Diagnosis:</strong> "I profiled the process. Each take took 12 minutes: 2 minutes to solve, 10 minutes waiting for file I/O on a shared network drive. The real bottleneck wasn't CPU—it was the NAS throughput."</p>
       <p><strong>Solution:</strong> "Three changes: (1) I containerized the solve into a headless Docker image and deployed it to 20 Deadline farm nodes. (2) I wrote a Python file watcher (`watchdog`) that auto-detected new .c3d files and submitted farm jobs. (3) I moved the intermediate cache to each node's local SSD, only writing the final .fbx to the NAS. This eliminated the I/O bottleneck."</p>
@@ -773,23 +773,23 @@ if __name__ == "__main__":
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>12. Global Collaboration: The Multi-Site Question</h2>
-    <p><strong>"If a capture happens in Vancouver, how does Stockholm use it?"</strong></p>
+    <p><strong>"If capture and animation teams work in different regions, how should they share data?"</strong></p>
     <ol>
-      <li><strong>Perforce Proxy:</strong> A caching server in Stockholm. First request is slow (WAN). Every request after is instant (cached).</li>
-      <li><strong>Pre-fetch Script:</strong> Runs at 3AM Stockholm time. Force-syncs yesterday's dailies so data is local when artists arrive at 9AM.</li>
-      <li><strong>Tiered Replication:</strong> Raw data stays in Vancouver (Cold). Game-ready FBX is replicated to all sites (Hot).</li>
+      <li><strong>Perforce Proxy:</strong> A caching server near the remote team. The first request crosses the WAN; subsequent requests use the local cache.</li>
+      <li><strong>Pre-fetch Script:</strong> Runs before the local workday and warms the proxy with recent dailies.</li>
+      <li><strong>Tiered Replication:</strong> Raw data stays near the capture stage; smaller game-ready files replicate to consuming sites.</li>
       <li><strong>Metadata First:</strong> Publish a small JSON manifest immediately (take name, frame count, thumbnail). Artists can search/preview before syncing the heavy 2GB file.</li>
       <li><strong>Bandwidth Budget:</strong> Schedule large syncs for off-peak hours. Use <code>p4 sync --parallel=threads=8</code> for throughput.</li>
     </ol>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <h2>13. Questions YOU Should Ask Nigel</h2>
+    <h2>13. Questions to Ask the Hiring Team</h2>
     <div class="callout callout-important">
       <div class="callout-title">💡 Show Senior Thinking</div>
       <ul>
-        <li>"How does Future Development balance bespoke solutions for current titles versus building a <strong>unified platform</strong> across all Studio studios?"</li>
+        <li>"How does the team balance bespoke solutions for current projects with a <strong>unified platform</strong> shared across studios?"</li>
         <li>"What are the biggest <strong>IT or infrastructure hurdles</strong> currently slowing capture-to-engine throughput?"</li>
-        <li>"How do you handle <strong>global collaboration</strong>? If a capture happens in Vancouver, how is that data optimized for Stockholm?"</li>
+        <li>"How do you optimize capture data for <strong>global collaboration</strong> across sites?"</li>
         <li>"What does the team's relationship with <strong>external vendors</strong> (Vicon, DI4D) look like in terms of API integration?"</li>
         <li>"What is the team's stance on <strong>markerless mocap</strong> (Move.ai, DeepMotion)? Is that on the roadmap?"</li>
       </ul>
@@ -813,7 +813,7 @@ if __name__ == "__main__":
       </a>
       <a href="09-production-capture-pipeline.html">
         <span class="label">Next Lesson →</span>
-        <span class="title">The Real Studio Pipeline</span>
+        <span class="title">A Production Capture Pipeline</span>
       </a>
     </div>
   </div>

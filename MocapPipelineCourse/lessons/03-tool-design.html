@@ -50,15 +50,15 @@ def get_maya_window():
 class CaptureTool(QtWidgets.QMainWindow):
     def __init__(self, parent=get_maya_window()):
         super(CaptureTool, self).__init__(parent)
-        
+
         # 1. Load UI (Dynamic Loading)
         # Note: In PySide6, we typically use QUiLoader or convert via pyside6-uic
         self.ui = self.load_ui("capture_tool.ui")
         self.setCentralWidget(self.ui)
-        
+
         # 2. Connect Signals (The Wiring)
         self.ui.btn_export.clicked.connect(self.on_export_clicked)
-        
+
     def load_ui(self, path):
         # ... logic to load .ui file ...
         pass
@@ -69,7 +69,7 @@ class CaptureTool(QtWidgets.QMainWindow):
 
     <h2>2. Architecure: The Model-View-Controller (MVC)</h2>
     <p>Junior TAs write "Spaghetti Code" where the button click logic is mixed with the math logic. Senior TAs use <strong>MVC</strong>.</p>
-    
+
     <div class="diagram">
 ┌─────────────────────────────────────────────────────────────────┐
 │                  MODEL - VIEW - CONTROLLER                      │
@@ -111,7 +111,7 @@ class FileCopyWorker(QtCore.QObject):
         for i in range(100):
             time.sleep(0.1) # Simulate copying file
             self.progress.emit(i) # Update Progress Bar
-        
+
         self.finished.emit()
 
 # 2. The Context (The UI)
@@ -121,14 +121,14 @@ class MyTool(QtWidgets.QWidget):
         self.thread = QtCore.QThread()
         self.worker = FileCopyWorker()
         self.worker.moveToThread(self.thread)
-        
+
         # Connect Signals
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.worker.progress.connect(self.update_progress_bar)
-        
+
         # Start!
         self.thread.start()</code></pre>
     </div>
@@ -157,8 +157,8 @@ class MyTool(QtWidgets.QWidget):
     </ul>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: life_simulation_project UGC</div>
-      <p>In <strong>life_simulation_project</strong>, we release tools to the public. If our internal tool crashes, an artist complains. If a public tool crashes, the forums explode. We use <strong>Context Managers</strong> and <strong>Try/Except</strong> blocks obsessively to ensure that no matter what the user processes, the tool fails gracefully and never corrupts their save data.</p>
+      <div class="callout-title">🎬 Production Relevance: User-Generated Content</div>
+      <p>A life-simulation game may expose creation tools to players as well as developers. Public-facing tools need strict validation, context managers, and exception handling so unsupported input fails clearly without corrupting save data.</p>
     </div>
 
     <div class="lesson-nav">

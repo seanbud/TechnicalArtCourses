@@ -1,6 +1,6 @@
 # Interactive Pipeline Simulator — Implementation Plan
 
-An interactive single-page web app that lets you visually trace mock capture data through the full Studio pipeline architecture from Module 6.
+An interactive single-page web app that lets you visually trace mock capture data through the full production pipeline architecture from Module 6.
 
 ## App Location
 
@@ -35,13 +35,13 @@ See [architecture.md](file:///Users/seanbudning/Documents/GitHub/UnityTechnicalA
 │    core.py     │  └────────────────────────────┘││  [Adpt] [Hook]│
 │    runner.py   │                                 ││  [Logs]       │
 │  config/       │   ┌──────┐   ┌──────┐          ││               │
-│    stadium_project.json     │   │INGEST│──▶│CLEAN │          ││  CaptureResult│
-│    field_project.json │   └──────┘   └──────┘          ││  {            │
+│    stadium.json     │   │INGEST│──▶│CLEAN │          ││  CaptureResult│
+│    field.json │   └──────┘   └──────┘          ││  {            │
 │  adapters/     │      ···CONVERGENCE···          ││    take_name  │
 │    fbx.py      │   ┌──────┐   ┌──────┐  ┌─────┐││    frame_rate │
 │    gltf.py     │   │RETAR │──▶│VALID │─▶│EXPRT│││    joints: {} │
 │  plugins/      │   └──────┘   └──────┘  └──────┘││  }            │
-│    metaverse.py│        ▼  DELIVER  ▶  📦       ││               │
+│    immersive.py│        ▼  DELIVER  ▶  📦       ││               │
 ├────────────────┴─────────────────────────────────┴───────────────┤
 │  CONSOLE  [14:23:01] ClientRegistry loaded 5 profiles            │
 │           [14:23:02] Adapter FBXExportAdapter initialized         │
@@ -57,7 +57,7 @@ See [architecture.md](file:///Users/seanbudning/Documents/GitHub/UnityTechnicalA
 | Brighter theme, more midtones | Using `#1a1f2e` bg, `#252b3d` panels, `#2d3548` cards — blue-grey midtones, not pure dark |
 | Data packet should be a box, clickable with metadata popup | Rectangular "data packet" card showing take name. Click opens modal with full CaptureResult fields |
 | Simple bg highlight for active files, no pulse | Active files get solid subtle bg highlight (`#2d3548`), no animations |
-| No icons in file explorer, just extensions | Plain text file tree: `stadium_project.json`, `core.py` — no emoji icons |
+| No icons in file explorer, just extensions | Plain text file tree: `stadium.json`, `core.py` — no emoji icons |
 
 ---
 

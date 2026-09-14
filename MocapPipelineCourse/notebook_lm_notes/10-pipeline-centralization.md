@@ -1,12 +1,12 @@
-# Lesson 10: Pipeline Centralization — One Pipeline For 15 Vendor-Clients
+# Lesson 10: Pipeline Centralization — One Pipeline for Many Clients
 
-## The Problem: 15 Clients, 15 Ways
+## The Problem: Many Clients, Many Requirements
 
-Here's the challenge that Studio's capture studio faces every day. They don't serve one game team. They serve about fifteen different vendor-clients — the stadium_project team wants output one way, field_project wants it another, action_project has its own skeleton template, and then there's an external metaverse partner that doesn't even want FBX files, they want glTF.
+A central capture service may support many internal and external clients. A stadium-sports team might publish through Perforce, a field-sports team might use a NAS drop, an action-adventure team might require a different skeleton, and an immersive-media partner might prefer glTF rather than FBX.
 
-Each of these clients has a different skeleton template, different naming conventions, different export formats, and different delivery destinations. stadium_project wants Perforce. field_project wants a NAS drop. The metaverse partner wants files in an S3 bucket.
+Each client has a different skeleton template, naming convention, export format, and delivery destination.
 
-If you write a separate pipeline script for each client, you end up with fifteen export scripts, fifteen naming validators, fifteen delivery scripts. When you change the core pipeline — say you upgrade the FBX exporter — you have to update all fifteen. That doesn't scale. It breaks. It creates bugs. And most importantly, it's a maintenance burden that eats your entire team's bandwidth.
+If you write a separate pipeline script for each client, you duplicate exporters, naming validators, and delivery scripts. Every core change must then be repeated in each fork, creating bugs and maintenance work.
 
 ## The Architecture: Shared Core + Per-Client Config
 
@@ -14,7 +14,7 @@ The solution is centralization. One pipeline engine, many configuration profiles
 
 The core pipeline code handles the universal stages: ingest, validate, solve, retarget, export, deliver. It never mentions a specific client name. It reads a JSON configuration file that says "this client wants this skeleton, this format, this delivery method."
 
-Here's the golden rule: if you can grep the core pipeline source code and find the word "stadium_project" or "field_project" anywhere, you have a design flaw. Client specifics belong only in configuration files. The code is generic. The config is specific.
+Here's the golden rule: if core pipeline code contains a client identifier such as `stadium_team`, you have a design flaw. Client specifics belong only in configuration files. The code is generic; the config is specific.
 
 Each client gets their own JSON config file. It specifies their skeleton template and required joints, their naming pattern as a regex, their export format and version, their delivery method and destination, and their validation thresholds. The pipeline runner loads the right config, and everything just works.
 
@@ -24,15 +24,15 @@ You build a Client Registry — a Python class that scans a directory of JSON co
 
 This is clean, testable, and scalable. To add a new client, you create a new JSON file. No code changes. No pull request against the core pipeline.
 
-## What About "Metaverse Stuff"?
+## What About Immersive-Media Delivery?
 
-You mentioned hearing about custom tools for a metaverse client, and wondering what that is. Here's the practical reality.
+Consider a fictional client that needs real-time avatars rather than conventional game-ready FBX files.
 
-"Metaverse" in this context means real-time avatar animation. Think of it like VTubers, virtual concerts, or platforms like Meta's Horizon Worlds. The key differences from traditional game mocap:
+"Immersive Media" in this context means real-time avatar animation. Think of it like VTubers, virtual concerts, or platforms like Meta's Horizon Worlds. The key differences from traditional game mocap:
 
-First, the skeletons are much simpler. A AAA game character might have 200 joints — fingers, face, twist bones, helper bones. A metaverse avatar might have 40. You need a retarget template that maps your full mocap solve down to a simplified skeleton.
+First, the skeletons are much simpler. A AAA game character might have 200 joints — fingers, face, twist bones, helper bones. A immersive media avatar might have 40. You need a retarget template that maps your full mocap solve down to a simplified skeleton.
 
-Second, the output format is different. The metaverse ecosystem runs on web-friendly formats. glTF — GL Transmission Format — is called "the JPEG of 3D." It's small, fast to load, works in web browsers. You export to glTF or GLB (the binary version) instead of FBX.
+Second, the output format is different. The immersive media ecosystem runs on web-friendly formats. glTF — GL Transmission Format — is called "the JPEG of 3D." It's small, fast to load, works in web browsers. You export to glTF or GLB (the binary version) instead of FBX.
 
 Third, the delivery might be real-time streaming instead of file drops. Instead of writing an FBX to a NAS, you might stream joint rotations live via WebSockets or Unreal's LiveLink.
 
@@ -44,7 +44,7 @@ Not everything can be handled by configuration. Some clients need genuinely cust
 
 Different naming convention? That's just a regex in the JSON config. Different skeleton? A joint map JSON file. Different export format? That's an export adapter — you write it once and it works for any client that needs that format.
 
-But real-time mocap streaming to avatars? That requires a custom LiveLink bridge. Custom facial blendshape mapping for a specific partner? That's a client-specific retarget tool. Auto-LOD generation for mobile metaverse? That's a custom decimation pipeline.
+But real-time mocap streaming to avatars? That requires a custom LiveLink bridge. Custom facial blendshape mapping for a specific partner? That's a client-specific retarget tool. Auto-LOD generation for mobile immersive media? That's a custom decimation pipeline.
 
 When you DO need custom behavior, isolate it in a plugin. The core pipeline defines hook points — pre-export, post-export, custom-validate, custom-retarget. A client-specific plugin can register functions for any of these hooks. The core pipeline calls them at the right time. If the plugin doesn't exist, the pipeline just skips the hook and continues with default behavior.
 
@@ -61,6 +61,6 @@ The pipeline runner doesn't know or care where the file goes. It just calls `del
 *   One core pipeline, many configs. Client specifics belong in JSON configuration files, never in the core code.
 *   Use the Adapter + Factory pattern for both export and delivery. Each format or destination has its own class. A factory picks the right one.
 *   Plugin architecture for custom tools. When a client needs unique behavior, isolate it in a plugin module with defined hook points.
-*   "Metaverse" means real-time avatars, lightweight rigs, web-friendly formats like glTF, and potentially live streaming instead of file delivery.
+*   "Immersive Media" means real-time avatars, lightweight rigs, web-friendly formats like glTF, and potentially live streaming instead of file delivery.
 *   Centralization doesn't mean one-size-fits-all. It means having a unified architecture that flexes to accommodate differences without forking the codebase.
 *   Adding a new client should be a config file change, not a code change. That's the litmus test of a well-centralized pipeline.

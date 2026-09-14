@@ -26,8 +26,8 @@
 
     <h2>The Big Picture</h2>
     <p>When you first look at a Stable Diffusion workflow in ComfyUI, you see a tangled web of spaghetti wires connecting <strong>Models</strong>, <strong>VAEs</strong>, <strong>CLIP text encoders</strong>, and <strong>Samplers</strong>. To a beginner, it looks intimidating. To a Technical Artist, however, this node graph is a direct map of how neural networks process and compress data.</p>
-    
-    <p>At the center of it all is the concept of <strong>Latent Space</strong>. If you don't understand latent space, you are just blindly copying node networks. Once you master it, you unlock the ability to debug generation failures, optimize rendering times, and build custom pipelines for large studios like Studio.</p>
+
+    <p>At the center of it all is the concept of <strong>Latent Space</strong>. If you don't understand latent space, you are just blindly copying node networks. Once you master it, you unlock the ability to debug generation failures, optimize rendering times, and build custom pipelines for large studios.</p>
 
     <div class="callout callout-concept">
       <div class="callout-title">🧠 Key Concept: Latent Space</div>
@@ -36,7 +36,7 @@
 
     <h2>The VAE: Variational Autoencoder</h2>
     <p>How do we get an image into latent space and back out? We use a specialized helper network called a <strong>VAE</strong> (Variational Autoencoder). The VAE has two halves: the <strong>Encoder</strong> and the <strong>Decoder</strong>.</p>
-    
+
     <p>Imagine trying to transmit a huge 3D textured mesh over a slow network. You wouldn't send the raw OBJ file; you would compress it into a zip file first, send the zip, and unzip it at the destination. The VAE Encoder is the zip compressor; the VAE Decoder is the unzipper.</p>
 
     <div class="diagram">
@@ -54,7 +54,7 @@
     <div class="note good" style="margin: 2rem 0; padding: 1.5rem;">
       <h3 style="margin-top: 0; color: var(--accent-green); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">📊 Visualizer: VAE Compression Ratio</h3>
       <p style="font-size: 0.9rem; margin-bottom: 1.25rem;">Visual comparison of the data overhead processed during diffusion steps:</p>
-      
+
       <div style="display: flex; gap: 2rem; align-items: center; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0;">
         <div style="text-align: center;">
           <div style="width: 120px; height: 120px; border: 1px dashed var(--border-color); background: radial-gradient(circle, var(--accent-blue) 10%, transparent 11%), radial-gradient(circle, var(--accent-orange) 10%, transparent 11%); background-size: 8px 8px; border-radius: 8px; opacity: 0.7;"></div>
@@ -111,10 +111,10 @@
       <p>If your output images have muddy colors, look blurry, or look like static even though your sampler completed successfully, you likely have a VAE mismatch. Ensure you are using the correct VAE file matching your model (e.g., SD1.5 VAE for SD1.5 checkpoints, SDXL VAE for SDXL checkpoints).</p>
     </div>
 
-    <h2>Why sports-game studio Uses ComfyUI</h2>
-    <p>How does this math relate to a massive game production environment like sports-game studio?</p>
-    
-    <p>Large studios don't use ComfyUI to just click buttons in a browser. They use it as a headless pipeline automation server. Think about field_project or stadium_project fictional card-collection mode card generation: Studio creates thousands of card variations, player portraits, and styled assets. Doing this manually or via standard web UI is too slow.</p>
+    <h2>Why Studios Use ComfyUI</h2>
+    <p>How does this math relate to a large game production environment?</p>
+
+    <p>Large studios can use ComfyUI as a headless pipeline automation server rather than only as an interactive browser tool. Consider a fictional sports game that needs thousands of card variations, avatar portraits, and uniform textures. Producing every variation manually would be too slow.</p>
 
     <table>
       <thead>
@@ -144,8 +144,8 @@
     </table>
 
     <div class="callout callout-tip">
-      <div class="callout-title">💚 sports-game studio Pipeline Relevance</div>
-      <p>At Studio, ComfyUI can be integrated into headless rendering farms. For example, when a 3D artist submits a raw player head render to Perforce, a CI/CD runner can trigger a headless ComfyUI workflow via Python. ComfyUI uses the raw render as a structural guide, applies a stylized LoRA, and automatically outputs a finalized, stylized portrait directly back to the game assets directory.</p>
+      <div class="callout-title">💚 Production Pipeline Relevance</div>
+      <p>At a large game studio, ComfyUI can be integrated into headless rendering farms. For example, when a 3D artist submits a raw player head render to Perforce, a CI/CD runner can trigger a headless ComfyUI workflow via Python. ComfyUI uses the raw render as a structural guide, applies a stylized LoRA, and automatically outputs a finalized, stylized portrait directly back to the game assets directory.</p>
     </div>
 
     <h2>Key Takeaways</h2>

@@ -2,9 +2,9 @@
 
 ## The 10-Minute Rule
 
-Stage time is the most expensive resource in Studio's capture studio. Actors, directors, camera crew, lighting, costumes — all of that is burning money while the stage is live. If the pipeline breaks and the stage can't record or can't process data, every minute of downtime costs thousands of dollars.
+Stage time is expensive because performers, directors, camera crew, lighting, and costumes are scheduled together. A resilient pipeline should keep recording available when downstream processing or storage is degraded.
 
-The mandate from Studio leadership is clear: build defensive resilience so that no pipeline failure ever costs more than 10 minutes of stage time. Ten minutes is the absolute maximum. And ideally, zero. The stage should never stop recording because of a software or infrastructure issue.
+A resilient design should keep recording available during downstream failures and define a measurable recovery objective. For this fictional system, use ten minutes as the target for restoring a degraded service while local buffering protects the capture itself.
 
 This lesson is about how you build a pipeline that delivers on that promise.
 

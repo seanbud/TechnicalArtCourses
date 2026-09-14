@@ -2,13 +2,13 @@
 
 ## The Big Picture: Signal vs Noise
 
-Let's start by defining what this job actually is. When you hear "Motion Capture," you might think of actors in funny suits. But as a Technical Artist at Studio, your job isn't the performance—it's the data.
+Let's start by defining what this job actually is. When you hear "Motion Capture," you might think of actors in funny suits. But as a Technical Artist at a large game studio, your job isn't the performance—it's the data.
 
 Motion capture is fundamentally a process of **Data Acquisition**. Unlike traditional animation, where an artist creates movement from scratch (additive), mocap starts with real-world data and filters it down (subtractive).
 
 We start with a "Point Cloud"—thousands of infrared markers floating in 3D space. This data is messy. It has noise. Markers get occluded. Cameras shake. Actors bump into each other.
 
-Your primary goal is to separate the **Signal** (the actor's true performance) from the **Noise** (artifacts and errors). If you fail, the result is "foot sliding" in stadium_project or "jittery hands" in action_project. The player's immersion breaks instantly.
+Your primary goal is to separate the **Signal** (the actor's true performance) from the **Noise** (artifacts and errors). If you fail, the result is "foot sliding" in a stadium-sports game or "jittery hands" in a large-scale action game. The player's immersion breaks instantly.
 
 ## The Pipeline Journey
 
@@ -33,10 +33,10 @@ The **Cross Product** helps you find perpendicular vectors, which is crucial for
 
 You don't need to be a mathematician, but you do need to know that if a marker is flipping out, it's likely a vector math error in the solver definition.
 
-## Studio Relevance: The "Uncanny Valley"
+## Production Relevance: The "Uncanny Valley"
 
-Why does Studio invest millions in this? Because of the **Uncanny Valley**.
-In games like *field_project* or *stadium_project* (stadium_project), players know exactly how human beings move. We see athletes on TV every day. If the motion is even 1% off—if the foot slides 5mm on the grass, or the weight shift feels floaty—the human brain rejects it. It looks "video gamey."
+Why do studios invest heavily in capture quality? Because of the **uncanny valley**.
+In a fictional sports game, players know how athletes should move because they see those motions regularly. A sliding foot or floaty weight shift can make the performance feel disconnected even when the rest of the animation is convincing.
 
 Your role as a Capture TA is to be the guardian of that fidelity. You build the tools that ensure the data flow is clean, the solves are accurate, and the final result feels real.
 

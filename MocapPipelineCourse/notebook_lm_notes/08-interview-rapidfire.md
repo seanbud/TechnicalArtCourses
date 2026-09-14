@@ -1,4 +1,4 @@
-# Lesson 08: Nigel Round Rapid-Fire
+# Lesson 08: Pipeline Systems Interview Rapid-Fire
 
 ## Infrastructure as Code
 
@@ -31,7 +31,7 @@ The key pattern is **decoupling**. The capture stage writes to a buffer (NAS). T
 
 ## Vendor Integration: The Adapter Pattern
 
-Studio works with Vicon, OptiTrack, DI4D, Faceware, Move.ai. Each vendor has a different SDK and data format. Your golden rule: never let a vendor format infect your pipeline.
+Capture teams may work with Vicon, OptiTrack, DI4D, Faceware, and Move.ai. Each vendor has a different SDK and data format. Your golden rule: never let a vendor format infect your pipeline.
 
 Write an **Adapter**. It's a class that converts the vendor's proprietary format into YOUR internal data format.
 *   `ViconAdapter.load("file.c3d")` → returns your `CaptureData` object.
@@ -114,7 +114,7 @@ Key commands to know cold: `fstat`, `edit`, `add`, `submit`, `revert`, `sync`, `
 
 ## Bones, Retargeting & Skeletons
 
-Fast reference if Nigel probes on capture fundamentals:
+Fast reference for questions about capture fundamentals:
 
 *   **Rigid Body:** 3+ non-collinear markers define one bone's 6DOF (3 position + 3 rotation).
 *   **Solving:** Fitting a skeleton into a point cloud. Uses SVD (Singular Value Decomposition) to minimize the error between the marker positions and the bone model.
@@ -131,7 +131,7 @@ Fast reference if Nigel probes on capture fundamentals:
 
 ## Photogrammetry Pipeline
 
-If the role touches 3D scanning (likely for "Future Development"), know this flow:
+If the role touches 3D scanning, know this flow:
 
 1.  **Capture:** 200+ DSLR photos of a subject from all angles. Or a structured-light scanner (Artec, FARO).
 2.  **Alignment (SfM):** Structure from Motion. The software computes camera positions from overlapping photos.
@@ -173,20 +173,20 @@ If they ask "tell me about a time you solved a complex infrastructure bottleneck
 
 ## Global Collaboration: Multi-Site Data Flow
 
-"If a capture happens in Vancouver, how does Stockholm use it?"
+"If capture and animation teams work in different regions, how should they share data?"
 
-1.  **Perforce Proxy** in Stockholm. Sits on the local network. First request for a file fetches it from Vancouver (slow, crosses the WAN). Every subsequent request serves it from the local cache (fast).
-2.  **Pre-fetch script** runs at 3AM Stockholm time. Force-syncs yesterday's processed output. When artists arrive at 9AM, the data is already local.
-3.  **Tiered replication.** Only the game-ready FBX files (small, ~100MB) are replicated to all sites. The raw capture data (large, ~50GB per take) stays in Vancouver. If Stockholm needs the raw data, they request it explicitly.
-4.  **Metadata first.** As soon as a take is processed, publish a small JSON manifest (take name, frame count, actor, thumbnail path) to a shared database. Artists in Stockholm can search and preview BEFORE syncing the heavy files.
+1.  **Perforce Proxy** near the remote team. The first request crosses the WAN; subsequent requests use the local cache.
+2.  **Pre-fetch script** runs before the local workday and warms the proxy with recent processed output.
+3.  **Tiered replication.** Smaller game-ready files replicate to consuming sites while large raw capture files remain near the capture stage unless explicitly requested.
+4.  **Metadata first.** Publish a small JSON manifest immediately so remote artists can search and preview before syncing heavy files.
 5.  **Bandwidth budgeting.** Schedule large syncs for off-peak hours. Use `p4 sync --parallel=threads=8` for maximum throughput during the transfer window.
 
-## Questions to Ask Nigel
+## Questions to Ask the Hiring Team
 
 Show you're thinking at the Senior/Lead level:
-*   "How does Future Development balance bespoke solutions for titles versus building a unified platform across studios?"
+*   "How does the team balance bespoke solutions for current projects with a unified platform shared across studios?"
 *   "What are the biggest IT or infrastructure hurdles currently slowing capture-to-engine throughput?"
-*   "How do you handle global data flow between Vancouver and international studios?"
+*   "How do you optimize capture data for global collaboration across sites?"
 *   "What does the vendor relationship look like — are we consuming SDKs or co-developing with Vicon/DI4D?"
-*   "What's the team's stance on markerless mocap (Move.ai, DeepMotion)? Is that on the Future Development roadmap?"
+*   "What's the team's stance on markerless mocap, and is it on the platform roadmap?"
 *   "How does the team approach documentation and handoff when a TA moves to a different project?"

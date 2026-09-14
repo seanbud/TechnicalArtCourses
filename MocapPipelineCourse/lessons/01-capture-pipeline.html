@@ -98,26 +98,26 @@ dist = (p2 - p1).magnitude() # Returns 10.0</code></pre>
     threshold_speed: Max allowed speed (mm per frame).
     """
     spikes = []
-    
+
     for i in range(1, len(frames)):
         current_pos = frames[i]
         prev_pos = frames[i-1]
-        
+
         # Calculate distance traveled in one frame
         delta = current_pos - prev_pos
         speed = delta.magnitude()
-        
+
         # If speed exceeds human possibility, it's a swap/error
         if speed > threshold_speed:
             spikes.append(i)
             print(f"CRITICAL: Frame {i} velocity {speed:.2f} exceeds limit!")
-            
+
     return spikes</code></pre>
     </div>
 
     <h2>4. Deep Dive: Rigid Body Solving (SVD)</h2>
     <p>How do we turn floating dots into a bone? We fit a "Rigid Body" to them. This is typically done using <strong>Singular Value Decomposition (SVD)</strong>.</p>
-    
+
     <div class="callout callout-concept">
       <div class="callout-title">🧠 Concept: The Kabsch Algorithm</div>
       <p>1. <strong>Centroid:</strong> Find the center of the cloud of points.<br>
@@ -133,30 +133,30 @@ def solve_rigid_body(source_points, target_points):
     # 1. Calculate Centroids
     centroid_A = np.mean(source_points, axis=0)
     centroid_B = np.mean(target_points, axis=0)
-    
+
     # 2. Center the points
     AA = source_points - centroid_A
     BB = target_points - centroid_B
-    
+
     # 3. Covariance Matrix
     H = np.dot(AA.T, BB)
-    
+
     # 4. SVD (The Magic)
     U, S, Vt = np.linalg.svd(H)
-    
+
     # 5. Calculate Rotation
     Rotation = np.dot(Vt.T, U.T)
-    
+
     return Rotation, centroid_B</code></pre>
     </div>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: Sports & Realism</div>
-      <p>Why does this math matter? In <strong>stadium_project/stadium_project</strong>, players are judged by their signature moves. If the rigid body solve is off by even 2mm, the foot slides on the grass ("foot skating"). Millions of players notice this immediately. High-fidelity solving is the barrier between a game that feels "arcade" and one that feels "simulation".</p>
+      <div class="callout-title">🎬 Production Relevance: Sports & Realism</div>
+      <p>Why does this math matter? In a <strong>fictional stadium-sports game</strong>, signature moves must read clearly. Even a small solving error can make a planted foot slide across the ground. High-fidelity solving is the difference between grounded motion and animation that feels disconnected.</p>
     </div>
 
     <h2>5. Technical Drill: Interview Prep</h2>
-    
+
     <div class="callout callout-warning">
       <div class="callout-title">🗣️ Interview Prompt</div>
       <p><strong>"I have a character that needs to look at a target, but their head shouldn't rotate past 45 degrees. Write the logic."</strong></p>

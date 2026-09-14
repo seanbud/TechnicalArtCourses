@@ -4,19 +4,19 @@
 
 Welcome back. In our first lesson, we looked at the math of latent space and how ComfyUI maps the diffusion loop to visual nodes. Today, we’re shifting focus from how these networks work to how they are actually deployed in a professional game production environment.
 
-If you go on YouTube, you’ll see people using ComfyUI in their browser. They’re clicking buttons, drawing lines, and waiting for images to pop up. That’s fine for hobbyists, but if you’re a Technical Artist at a big studio like Studio, that visual interface is actually a bottleneck. 
+If you go on YouTube, you’ll see people using ComfyUI in their browser. They’re clicking buttons, drawing lines, and waiting for images to pop up. That’s fine for hobbyists, but if you’re a Technical Artist at a large game studio, that visual interface is actually a bottleneck.
 
 Imagine having to manually process thousands of uniform variations or player avatars one-by-one inside a browser. It would drive you crazy. Instead, we want to run ComfyUI programmatically. We want it running in the background, triggered automatically by file changes or build servers—completely headlessly.
 
 ## The Secret API under the Hood
 
-Here is the key insight that many beginners miss: ComfyUI isn't actually a web application. It is a Python application that uses a web browser as its control panel. 
+Here is the key insight that many beginners miss: ComfyUI isn't actually a web application. It is a Python application that uses a web browser as its control panel.
 
 The web page you see is just sending commands back to a Python server. Because of this, everything you build visually in ComfyUI can be exported as a single JSON text file.
 
-Now, if you try to save your workspace normally, the JSON file you get contains a lot of metadata about where nodes are positioned, what color they are, and how they connect visually. The server doesn't care about this layout. 
+Now, if you try to save your workspace normally, the JSON file you get contains a lot of metadata about where nodes are positioned, what color they are, and how they connect visually. The server doesn't care about this layout.
 
-To export the raw execution code, you need to open ComfyUI’s settings and check a box called **"Enable Dev Mode Options."** This unlocks a new button: **"Save (API Format)."** 
+To export the raw execution code, you need to open ComfyUI’s settings and check a box called **"Enable Dev Mode Options."** This unlocks a new button: **"Save (API Format)."**
 
 This API JSON is clean. It strips away all the visual layout data, leaving only a mathematical map of the nodes, their parameters, and how data flows between them.
 
@@ -31,7 +31,7 @@ In this analogy:
 * The API JSON is the ticket.
 * The ComfyUI background server is the kitchen.
 
-First, your script opens a WebSocket connection to the server. This is like a walkie-talkie connection that allows the server to send you updates in real-time. 
+First, your script opens a WebSocket connection to the server. This is like a walkie-talkie connection that allows the server to send you updates in real-time.
 
 Second, your script sends the API JSON ticket to the server using an HTTP POST request to the `/prompt` endpoint. The server assigns your request a unique ID and puts it in the queue.
 
@@ -45,9 +45,9 @@ How does this pipeline look in a real studio? Let's use a sports game production
 
 Imagine a team working on stadium crowd variations or player uniforms. An artist models a new uniform template in Blender and submits it to the version control system—like Perforce or Git.
 
-The moment that texture file is checked in, it triggers a hook—an automated script on the version control server. This script grabs the new texture, swaps out the input path in our ComfyUI API JSON, and sends the prompt to a central headless GPU server. 
+The moment that texture file is checked in, it triggers a hook—an automated script on the version control server. This script grabs the new texture, swaps out the input path in our ComfyUI API JSON, and sends the prompt to a central headless GPU server.
 
-The GPU server runs the workflow, stylizes the texture to match the game's art direction, and automatically check-ins the finalized asset back into the game files. 
+The GPU server runs the workflow, stylizes the texture to match the game's art direction, and automatically check-ins the finalized asset back into the game files.
 
 By centralizing ComfyUI on dedicated server nodes, you save thousands of dollars on hardware. You don't need to put expensive AI-capable GPUs on every artist’s desk; instead, artists can work on standard laptops, relying on the central build server to render high-fidelity variations.
 

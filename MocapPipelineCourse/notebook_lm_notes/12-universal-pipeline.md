@@ -2,9 +2,9 @@
 
 ## The Strategic Heart of the Job
 
-This lesson is arguably the most important one in the entire course, because it represents the long-term strategic direction of the studio. The stage TA told you directly: the goal is to incorporate markerless tracking into the existing pipeline — not as a separate system, but as a unified pipeline that services both technologies.
+A common long-term direction is to incorporate markerless tracking into an existing marker-based pipeline rather than maintain two independent systems.
 
-Your predecessor in this role was focused on building "universal code" — generic, high-level abstraction layers that sit above the specifics of what vendor or technology is doing the actual work. That's the vision you're inheriting. That's the vision they want you to continue building.
+The architectural goal is "universal code": generic, high-level abstractions that sit above the specifics of each vendor or capture technology.
 
 ## How Marker and Markerless Differ
 
@@ -52,7 +52,7 @@ This phased approach is important for the interview. If they ask "how would you 
 
 ## The Three Principles of Universal Code
 
-Your predecessor's philosophy boils down to three principles:
+The universal-code philosophy boils down to three principles:
 
 **The Convergence Principle.** There must be a single, well-defined internal data format where all capture technologies meet. Everything downstream of this format is shared code.
 
@@ -62,11 +62,7 @@ Your predecessor's philosophy boils down to three principles:
 
 ## Framing Your Experience as a Strength
 
-You mentioned having beginner-level experience with big production pipelines. Here's how to frame that honestly but strategically in the interview:
-
-"I'm coming in with fresh eyes. I don't have ingrained assumptions about how this has always been done. I can see the abstraction layer clearly because I haven't been buried in the implementation details for years. My predecessor built the vision — I can build on it without the bias of 'we've always done it this way.'"
-
-Combine this with demonstrated understanding of the Strategy Pattern, Factory Pattern, and Adapter Pattern, and they'll see someone who can learn the specifics quickly because the architectural thinking is already there.
+Describe your experience accurately, then connect it to architecture you can demonstrate. Strategy, Factory, and Adapter patterns show that you can learn vendor specifics without coupling the whole system to them. Keep hypothetical examples clearly labeled instead of presenting them as personal production accomplishments.
 
 ## Key Takeaways
 

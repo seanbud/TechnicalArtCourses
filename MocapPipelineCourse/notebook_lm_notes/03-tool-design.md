@@ -37,9 +37,9 @@ Imagine a tool that changes the time slider, does some work, and then changes it
 `with maintain_time():`
 If the tool crashes halfway through, the Context Manager guarantees that the time slider is restored to its original position. It leaves the scene exactly how it found it. This builds trust with your users.
 
-## Studio Relevance: life_simulation_project UGC
+## Production Relevance: User-Generated Content
 
-In a game like *life_simulation_project*, we release tools to the public for User Generated Content. When an internal tool crashes, an artist walks over to your desk and complains. When a public tool crashes, the forums explode and PR gets involved.
+A life-simulation game may expose creation tools to players as well as developers. Public-facing tools need clearer validation and stronger failure handling because users cannot rely on an internal support channel.
 We use these architectural patterns—MVC, Threading, and Safety Wrappers—to ensure that our tools are robust enough for millions of players, not just internal teams.
 
 ## Key Takeaways

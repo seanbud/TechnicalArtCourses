@@ -14,7 +14,7 @@ function highlightPy(code, focusTarget) {
   var src = code;
   var out = '';
   var i = 0;
-  
+
   var rawLines = src.split('\n');
   var hlIndex = -1;
   if (focusTarget) {
@@ -68,7 +68,7 @@ function highlightPy(code, focusTarget) {
   for (var t = 0; t < tokens.length; t++) {
     h = h.replace('\x00T' + t + '\x00', tokens[t]);
   }
-  
+
   // Split into lines and add line numbers
   var lines = h.split('\n');
   var lineH = lines.map(function(line, idx) {
@@ -104,7 +104,7 @@ function buildJsonTree(obj, depth, oldObj) {
       if (!(k in oldObj)) diffCls = "json-diff-add";
       else if (JSON.stringify(oldObj[k]) !== JSON.stringify(v) && typeof v !== 'object') diffCls = "json-diff-mod";
     }
-    
+
     if (!isArr) html += '<span class="jkey ' + diffCls + '">"' + esc(String(k)) + '"</span>: ';
     html += buildJsonTree(v, depth + 1, (oldObj && oldObj[k] !== undefined) ? oldObj[k] : undefined);
     if (i < len - 1) html += ',';

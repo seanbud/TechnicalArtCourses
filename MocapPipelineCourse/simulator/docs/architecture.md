@@ -49,26 +49,26 @@ const STATE = {
   selectedClient: "stadium",      // dropdown value
   selectedTech: "marker",           // "marker" | "markerless"
   speed: 1,                         // 1 | 2 | 4
-  
+
   // --- Simulation ---
   isRunning: false,
   currentStage: null,               // "ingest" | "cleanup" | ... | "deliver" | null
   stageHistory: [],                 // stages already completed
   dataPacket: { ... },              // the CaptureResult being built up
-  
+
   // --- Failure injection ---
   failureActive: false,
   failureType: null,                // "nas_down" | "p4_down" | null
   circuitBreakerState: "CLOSED",    // "CLOSED" | "OPEN" | "HALF_OPEN"
   retryCount: 0,
   localQueueCount: 0,
-  
+
   // --- UI state ---
   activeFile: null,                 // path of file selected in explorer
   expandedFolders: ["pipeline", "config", "config/clients"],
   inspectorTab: "data",            // "data" | "config" | "adapter" | "hooks" | "logs"
   consoleEntries: [],              // { time, level, message, stage }
-  
+
   // --- Derived (computed per stage) ---
   activeFiles: [],                 // files highlighted in file explorer
   activeAdapter: null,             // adapter class name
@@ -84,7 +84,7 @@ const STATE = {
    → Load client profile from MOCK_DATA.clientConfigs[selectedClient]
    → Log: "ClientRegistry: loaded profile for {client}"
    → Log: "PluginManager: discovered {N} plugins"
-   
+
 2. Stage: INGEST
    → currentStage = "ingest"
    → activeFiles = ["pipeline/core.py", "adapters/vicon_ingest.py"]  (or markerless)

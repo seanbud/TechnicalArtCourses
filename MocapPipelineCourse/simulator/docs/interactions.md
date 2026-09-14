@@ -7,7 +7,7 @@ All user interactions, simulation scenarios, and state transitions.
 ## Control Bar Interactions
 
 ### Client Selector (Dropdown)
-- **Options**: stadium_project, field_project, action_project, Metaverse Partner, External Vendor A
+- **Options**: a stadium-sports game, a field-sports game, a large-scale action game, Immersive Media Partner, External Vendor A
 - **On change**:
   - `selectedClient` updates
   - Inspector Config tab reloads with new profile JSON
@@ -186,12 +186,12 @@ All user interactions, simulation scenarios, and state transitions.
    - log "✅ Pipeline complete (recovered from NAS failure)"
 
 ### Scenario 3: Client Hot-Swap
-1. Start sim with stadium_project client
-2. Mid-simulation, switch dropdown to Metaverse
+1. Start sim with stadium client
+2. Mid-simulation, switch dropdown to Immersive Media
 3. At the next stage, the pipeline picks up the new config
 4. Export now uses GLTFExportAdapter instead of FBX
 5. Delivery now uses S3 instead of Perforce
-6. Plugin hooks fire for metaverse (pre_export, custom_validate)
+6. Plugin hooks fire for immersive media (pre_export, custom_validate)
 
 ### Scenario 4: Technology Toggle
 1. Start with Marker

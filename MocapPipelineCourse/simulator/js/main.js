@@ -25,44 +25,44 @@ function openModal(type, key) {
   var title = document.getElementById("modal-title");
   var sub = document.getElementById("modal-sub");
   var body = document.getElementById("modal-body");
-  
+
   if (type === "info" && STAGE_INFO[key]) {
     var info = STAGE_INFO[key];
     title.textContent = info.title;
     sub.textContent = "Pattern: " + info.pattern;
-    
+
     // Process markdown-ish bold and code
     var d = info.desc.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
     d = d.replace(/\`(.*?)\`/g, '<code class="modal-code" onclick="pingFile(\'$1\')">$1</code>');
-    
+
     body.innerHTML = '<div class="modal-section"><p>' + d + '</p></div>' +
-      '<div class="modal-section"><h4>Source Code</h4>' + highlightPy(stadium_project[info.code] || "") + '</div>' +
+      '<div class="modal-section"><h4>Source Code</h4>' + highlightPy(FILES[info.code] || "") + '</div>' +
       '<a class="modal-link" href="../lessons/' + info.lesson + '" target="_blank">📖 Open Lesson →</a>';
   } else if (type === "storage" && STORAGE_INFO[key]) {
     var sInfo = STORAGE_INFO[key];
     title.textContent = "Storage Logistics";
     sub.innerHTML = '<span class="sbadge" style="position:static;display:inline-flex;margin-right:6px">🗄️</span> ' + sInfo.title;
-    
+
     // Process markdown-ish bold and code
     var sd = sInfo.desc.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
     sd = sd.replace(/\`(.*?)\`/g, '<code class="modal-code" onclick="pingFile(\'$1\')">$1</code>');
-    
+
     body.innerHTML = '<div class="modal-section"><p>' + sd + '</p></div>';
   } else if (type === "runbook" && RUNBOOKS[key]) {
     var rInfo = RUNBOOKS[key];
     title.textContent = "RUNBOOK";
     title.style.color = "var(--accent-red)";
     sub.innerHTML = '<span class="sbadge" style="position:static;display:inline-flex;margin-right:6px">📖</span> ' + rInfo.title;
-    
+
     // Process markdown-ish bold and code and headers
     var rd = rInfo.desc
         .replace(/^## (.*$)/gim, '<h2 style="font-size:14px; margin: 12px 0 6px 0; color:var(--text-primary)">$1</h2>')
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
         .replace(/\`(.*?)\`/g, '<code class="modal-code">$1</code>')
         .replace(/^\d+\. (.*$)/gim, '<div style="margin-bottom:6px; padding-left:14px; text-indent:-14px;">• $1</div>');
-    
+
     body.innerHTML = '<div class="modal-section" style="border-left:3px solid var(--accent-red); padding-left:12px;"><p>' + rd + '</p></div>';
-  } else if (type === "packet" && S.packet) { 
+  } else if (type === "packet" && S.packet) {
     title.textContent = "Data Packet — " + S.packet.take_name;
     sub.textContent = "After stage: " + (STAGES[S.step] || "complete");
     body.innerHTML = '<div class="jtree">' + buildJsonTree(S.packet) + '</div>';
@@ -88,10 +88,10 @@ function pingFile(term, checkOnly) {
     "HumanIK": {f:"capture_pipeline/pipeline/retarget.py", t:"class HumanIKRetarget"},
     "PluginManager": {f:"capture_pipeline/pipeline/plugin_manager.py", t:"class PluginManager"},
     "ValidationStage": {f:"capture_pipeline/pipeline/validation.py", t:"class UniversalValidator"},
-    "pre-export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def pre_export"},
-    "post-export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def post_export"},
-    "pre_export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def pre_export"},
-    "post_export": {f:"capture_pipeline/plugins/metaverse_client.py", t:"def post_export"},
+    "pre-export": {f:"capture_pipeline/plugins/immersive_client.py", t:"def pre_export"},
+    "post-export": {f:"capture_pipeline/plugins/immersive_client.py", t:"def post_export"},
+    "pre_export": {f:"capture_pipeline/plugins/immersive_client.py", t:"def pre_export"},
+    "post_export": {f:"capture_pipeline/plugins/immersive_client.py", t:"def post_export"},
     "ExportFactory": {f:"capture_pipeline/adapters/fbx_export.py", t:"class FBXExportAdapter"},
     "Circuit Breaker": {f:"capture_pipeline/adapters/nas_delivery.py", t:"@circuit_breaker"},
     "CaptureResult": {f:"capture_pipeline/adapters/vicon_ingest.py", t:"result = CaptureResult()"}
@@ -137,7 +137,7 @@ function closeModal(e) {
   document.addEventListener("mouseup", function() {
     if (draggingV) { draggingV = false; handleV.classList.remove("dragging"); }
   });
-  
+
   // Horizontal console resize
   var handleH = document.getElementById("console-resize");
   var draggingH = false, startY, startH;

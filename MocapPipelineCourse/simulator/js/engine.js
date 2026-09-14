@@ -29,7 +29,7 @@ function toggleChaosMain() {
   var btnMain = document.getElementById("btn-chaos-main");
   var btnDrop = document.getElementById("btn-chaos-drop");
   var menu = document.getElementById("chaos-menu");
-  
+
   if (S.chaosActive) {
     btnMain.classList.add("active");
     btnMain.innerHTML = "🔴 Chaos: ON";
@@ -41,7 +41,7 @@ function toggleChaosMain() {
     btnMain.innerHTML = "⚪ Chaos: OFF";
     btnDrop.disabled = true;
     menu.classList.remove("show"); // Hide menu if open
-    
+
     // Clear all
     log("success", "[System] Chaos events cleared. Systems recovering...");
     if (!S.nasEnabled) {
@@ -55,7 +55,7 @@ function toggleChaosMain() {
              S.cbState = "CLOSED";
              log("success", "[System] Circuit Breaker: CLOSED (Service Healthy)", "System");
              renderGraph(); renderInspector();
-             
+
              if (S.queueCount > 0) {
                  log("info", "[Sweeper Daemon] Waking up to process fallback queue...", "System");
                  setTimeout(function() {
@@ -65,7 +65,7 @@ function toggleChaosMain() {
                      log("success", "[Sweeper Daemon] Emptied fallback queue. All files safely on NAS.", "System");
                      document.getElementById("btn-next").disabled = false;
                      renderGraph(); renderInspector();
-                     
+
                      // Advance simulation to complete
                      setTimeout(function() { advanceStep(); }, 1000);
                  }, 1500);
@@ -74,7 +74,7 @@ function toggleChaosMain() {
       }
     }
   }
-  
+
   if (S.inspectorTab === "health" || S.inspectorTab === "adapter") renderInspector();
 }
 
@@ -84,11 +84,11 @@ function toggleChaosMenu() {
 
 function updateChaosSelection() {
   if (!S.chaosActive) return; // Only apply if master is on
-  
+
   var checkboxes = document.querySelectorAll('.chaos-dropdown-item input[type="checkbox"]');
   S.chaosModes = [];
   S.nasEnabled = true; // reset to true, evaluate below
-  
+
   checkboxes.forEach(function(cb) {
     if (cb.checked) {
       S.chaosModes.push(cb.value);
@@ -102,7 +102,7 @@ function updateChaosSelection() {
       }
     }
   });
-  
+
   if (S.inspectorTab === "health" || S.inspectorTab === "adapter") renderInspector();
 }
 
@@ -132,11 +132,11 @@ function clickStage(stage, preserveSelection) {
   } else if (stage === "deliver") {
     S.activeFiles = SF[stage][c.delivery.method] || [];
   }
-  
+
   // Set default selection
   if (S.activeFiles.length > 0) S.selectedFile = S.activeFiles[0];
   else S.selectedFile = null;
-  
+
   if (stage === "export" || stage === "deliver") S.inspectorTab = "adapter";
   else if (stage === "validate" && c.plugin) S.inspectorTab = "hooks";
   else S.inspectorTab = "data";
@@ -151,7 +151,7 @@ function clickStage(stage, preserveSelection) {
       S.inspectorTab = "logs";
     }
   }
-  
+
   setActiveTab(S.inspectorTab);
   renderTree(); renderInspector();
 }
@@ -159,7 +159,7 @@ function clickStage(stage, preserveSelection) {
 function onNext() {
   if (S.step === -1) { startSim(); return; }
   if (S.step >= STAGES.length) return;
-  
+
   advanceStep();
 }
 
@@ -207,9 +207,9 @@ function startSim() {
   var dp = document.getElementById("data-packet");
   dp.textContent = "📦 " + c.naming.example; dp.style.display = "inline-block";
   log("info", "PipelineRunner: starting for " + c.display + " (" + S.tech + ")", "System");
-  if (c.plugin) { 
+  if (c.plugin) {
     setTimeout(function() {
-      log("plugin", "PluginManager: loaded " + c.plugin + ".py", "Cloud"); 
+      log("plugin", "PluginManager: loaded " + c.plugin + ".py", "Cloud");
       S.hooksDone.push("register");
     }, 300);
   }
@@ -230,7 +230,7 @@ async function advanceStep() {
   }
   var stage = STAGES[S.step];
   var c = CL[S.client];
-  
+
   // Advance the stage visuals and code selection, preserving packet view if currently active
   clickStage(stage, true);
 
@@ -258,7 +258,7 @@ async function advanceStep() {
       stopAuto(); document.getElementById("btn-next").disabled = true;
       renderGraph(); renderInspector(); return;
     }
-    
+
     S.packet.cleanup_applied = S.tech === "marker"
       ? ["marker_swap_fix (3)", "gap_fill (12)", "butterworth (6Hz)"]
       : ["temporal_smooth", "bone_stabilize", "contact_est", "conf_filter"];
@@ -270,10 +270,10 @@ async function advanceStep() {
     S.packet.joints = "{ " + c.skeleton.required.length + " joints (target) }";
     await new Promise(function(r) { setTimeout(r, 500); });
     log("info", "HumanIKRetarget: → " + c.skeleton.template, "Cloud");
-    if (c.plugin === "stadium_custom") { 
+    if (c.plugin === "stadium_custom") {
       await new Promise(function(r) { setTimeout(r, 300); });
-      S.hooksDone.push("custom_retarget"); 
-      log("plugin", "Hook: stadium_custom.custom_retarget()", "Cloud"); 
+      S.hooksDone.push("custom_retarget");
+      log("plugin", "Hook: stadium_custom.custom_retarget()", "Cloud");
       triggerHookPing("node-retarget", "custom_retarget");
     }
   } else if (stage === "validate") {
@@ -301,17 +301,17 @@ async function advanceStep() {
        renderGraph();
        return;
     }
-    if (c.plugin === "metaverse_client") { 
+    if (c.plugin === "immersive_client") {
       await new Promise(function(r) { setTimeout(r, 200); });
-      S.hooksDone.push("custom_validate"); 
-      log("plugin", "Hook: custom_validate() — OK", "Cloud"); 
+      S.hooksDone.push("custom_validate");
+      log("plugin", "Hook: custom_validate() — OK", "Cloud");
       triggerHookPing("node-validate", "custom_validate");
     }
   } else if (stage === "export") {
-    if (c.plugin === "metaverse_client") { 
+    if (c.plugin === "immersive_client") {
       await new Promise(function(r) { setTimeout(r, 250); });
-      S.hooksDone.push("pre_export"); 
-      log("plugin", "Hook: pre_export() — LOD 5k tris", "Cloud"); 
+      S.hooksDone.push("pre_export");
+      log("plugin", "Hook: pre_export() — LOD 5k tris", "Cloud");
       triggerHookPing("node-export", "pre_export");
     }
     S.packet.output_path = "/output/" + c.id + "/" + c.naming.example + "_v001." + c.export.format;
@@ -319,10 +319,10 @@ async function advanceStep() {
     S.packet.output_format = c.export.format;
     await new Promise(function(r) { setTimeout(r, 450); });
     log("info", "Factory: " + getExpAdapter(c) + " → '" + c.export.format + "'", "Cloud");
-    if (c.plugin === "metaverse_client") { 
+    if (c.plugin === "immersive_client") {
       await new Promise(function(r) { setTimeout(r, 300); });
-      S.hooksDone.push("post_export"); 
-      log("plugin", "Hook: post_export() — turntable", "Cloud"); 
+      S.hooksDone.push("post_export");
+      log("plugin", "Hook: post_export() — turntable", "Cloud");
       triggerHookPing("node-export", "post_export");
     }
   } else if (stage === "deliver") {
@@ -336,9 +336,9 @@ async function advanceStep() {
         triggerFailPing("dest-" + c.delivery.method, "⚠️ Retry " + r + "/3");
         await new Promise(function(res) { setTimeout(res, 800); });
       }
-      S.cbState = "OPEN"; 
+      S.cbState = "OPEN";
       log("critical", "[System] Circuit Breaker: OPEN (Fail-Fast mode)", "System");
-      S.queueCount = 1; 
+      S.queueCount = 1;
       log("info", "[System] High-Availability: Queued take to local staging SSD.", "Stage");
       renderGraph(); renderInspector();
       stopAuto(); document.getElementById("btn-next").disabled = true;

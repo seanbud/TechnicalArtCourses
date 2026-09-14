@@ -1,6 +1,6 @@
 # Technical Art Training Repository
 
-Welcome to the central repository for Technical Art training materials. This repo contains two specialized courses designed for technical artists at different stages of their career.
+Welcome to the central repository for Technical Art training materials. This repo contains specialized courses designed for technical artists at different stages of their career.
 
 ## 📚 Available Courses
 
@@ -9,18 +9,20 @@ A comprehensive set of lessons and notes focused on real-time rendering, shaders
 *   **Location:** `/UnityTechnicalArtCourse`
 *   **Main Index:** `/UnityTechnicalArtCourse/index.html`
 
-### 2. Technical Art & Capture Pipelines
+### 2. Mocap Pipeline Engineering
 A production-hardened course focused on high-fidelity motion capture pipelines, large-scale data management, CI/CD, and distributed systems.
 *   **Location:** `/MocapPipelineCourse`
 *   **Main Index:** `/MocapPipelineCourse/index.html`
 
-### Interactive Pipeline Simulator
-A web-based, interactive tool designed to visualize the complex data journey through the Studio Capture Pipeline. It maps the conceptual architecture from Module 6 into a live, traceable dashboard.
+### 3. ComfyUI for Technical Artists
+A practical course covering latent-space fundamentals, headless automation, multi-modal asset workflows, and AI agent orchestration with OpenClaw.
+*   **Location:** `/ComfyUICourse`
+*   **Main Index:** `/ComfyUICourse/index.html`
+
+### Interactive Mocap Workflow Simulator
+A web-based, interactive tool for tracing mock capture data through a vendor-neutral production pipeline. It maps the architecture from Module 6 into a live, traceable dashboard.
 
 Click here to try the [**Live Demo**](https://seanbud.github.io/TechnicalArtCourses/) in your browser.
-
-<img width="556" height="301" alt="pipeline-simulator-screenshot" src="https://github.com/user-attachments/assets/e94ed12a-801d-4630-b460-f63e9e0dcd97" />
-
 
 *   **Location:** `/MocapPipelineCourse/simulator/index.html`
 *   **Key Features:**
@@ -40,4 +42,3 @@ Simply open the appropriate `index.html` in your browser to start exploring the 
 
 ---
 *Happy Creating!* 🤖✨
-

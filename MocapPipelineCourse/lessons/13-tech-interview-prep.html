@@ -21,13 +21,13 @@
     <div class="lesson-header">
       <div class="lesson-number">Lesson 13</div>
       <h1>Technical Interview Deep Dive: Data Flow, Automation & Problem Solving</h1>
-      <p class="lesson-subtitle">Battle-tested answers for every technical question from the Studio interview description. This is the capstone — everything in Module 6 converges here.</p>
+      <p class="lesson-subtitle">Reusable frameworks for common mocap pipeline interview questions. This capstone connects everything in Module 6.</p>
     </div>
 
     <div class="callout callout-important">
-      <div class="callout-title">💡 The Interview Description (Verbatim)</div>
-      <p><em>"Deliver tooling, automation, or integrations that improved cross-departmental data flow or reduced processing time."</em></p>
-      <p>Every answer in this lesson maps directly to this requirement. You need to demonstrate that you can build tools and automation that make data flow faster across departments (capture → post-production → game team delivery).</p>
+      <div class="callout-title">💡 A Common Interview Theme</div>
+      <p>Senior pipeline roles often emphasize tooling, automation, integrations, cross-team data flow, and measurable reductions in processing time.</p>
+      <p>Use examples you can substantiate and connect them to the capture-to-post-production-to-engine flow.</p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -105,18 +105,18 @@ def get_next_version(output_dir, take_name, extension="fbx"):
 def create_sidecar(output_path, metadata):
     """Create a JSON sidecar file with version metadata."""
     sidecar_path = output_path.replace('.fbx', '_meta.json')
-    
+
     # Load existing sidecar if it exists
     history = []
     if os.path.exists(sidecar_path):
         with open(sidecar_path) as f:
             existing = json.load(f)
             history = existing.get("version_history", [])
-    
+
     # Add this version's entry
     with open(output_path, 'rb') as f:
         md5 = hashlib.md5(f.read()).hexdigest()
-    
+
     history.append({
         "version": metadata["version"],
         "timestamp": datetime.now().isoformat(),
@@ -126,21 +126,21 @@ def create_sidecar(output_path, metadata):
         "md5": md5,
         "notes": metadata.get("notes", ""),
     })
-    
+
     sidecar = {
         "take_name": metadata["take_name"],
         "latest_version": metadata["version"],
         "version_history": history,
     }
-    
+
     with open(sidecar_path, 'w') as f:
         json.dump(sidecar, f, indent=2)
-    
+
     return sidecar_path
 
 
 # Usage:
-version_num, filename = get_next_version("/output/stadium_project/", "ST_20260228_sc01_sh05")
+version_num, filename = get_next_version("/output/stadium/", "ST_20260228_sc01_sh05")
 # → (3, "ST_20260228_sc01_sh05_v003.fbx")
 
 create_sidecar(output_path, {
@@ -183,7 +183,7 @@ class ValidationResult:
         self.checker_name = checker_name
         self.passed = passed
         self.message = message
-    
+
     def __repr__(self):
         status = "✅" if self.passed else "❌"
         return f"{status} [{self.checker_name}] {self.message}"
@@ -195,10 +195,10 @@ def check_naming(filepath, profile):
     """Verify filename matches client naming convention."""
     basename = os.path.basename(filepath)
     pattern = profile.naming_pattern
-    
+
     if re.match(pattern, os.path.splitext(basename)[0]):
         return ValidationResult("naming", True, f"Matches pattern: {pattern}")
-    return ValidationResult("naming", False, 
+    return ValidationResult("naming", False,
         f"'{basename}' does not match pattern: {pattern}")
 
 def check_skeleton_completeness(scene_joints, profile):
@@ -206,33 +206,33 @@ def check_skeleton_completeness(scene_joints, profile):
     required = set(profile.required_joints)
     present = set(scene_joints)
     missing = required - present
-    
+
     if not missing:
-        return ValidationResult("skeleton", True, 
+        return ValidationResult("skeleton", True,
             f"All {len(required)} required joints present")
-    return ValidationResult("skeleton", False, 
+    return ValidationResult("skeleton", False,
         f"Missing joints: {missing}")
 
 def check_frame_range(frame_count, profile):
     """Verify frame count is within acceptable range."""
     min_f = profile.get("validation", "min_frame_count", default=10)
     max_f = profile.get("validation", "max_frame_count", default=50000)
-    
+
     if min_f <= frame_count <= max_f:
-        return ValidationResult("frame_range", True, 
+        return ValidationResult("frame_range", True,
             f"Frame count {frame_count} is within [{min_f}, {max_f}]")
-    return ValidationResult("frame_range", False, 
+    return ValidationResult("frame_range", False,
         f"Frame count {frame_count} outside range [{min_f}, {max_f}]")
 
 def check_root_at_origin(root_position, tolerance=5.0):
     """Verify root joint is near world origin at frame 0."""
     import math
     dist = math.sqrt(sum(c**2 for c in root_position))
-    
+
     if dist < tolerance:
-        return ValidationResult("root_origin", True, 
+        return ValidationResult("root_origin", True,
             f"Root is {dist:.2f}cm from origin (tolerance: {tolerance}cm)")
-    return ValidationResult("root_origin", False, 
+    return ValidationResult("root_origin", False,
         f"Root is {dist:.2f}cm from origin (tolerance: {tolerance}cm)")
 
 def check_file_integrity(filepath):
@@ -241,7 +241,7 @@ def check_file_integrity(filepath):
     # ";" (ASCII FBX comment) in the first bytes
     with open(filepath, 'rb') as f:
         header = f.read(20)
-    
+
     if b"Kaydara" in header or header[:1] == b";":
         return ValidationResult("integrity", True, "Valid FBX header")
     return ValidationResult("integrity", False, "Invalid FBX header — file may be corrupt")
@@ -257,10 +257,10 @@ def validate_all(filepath, scene_joints, frame_count, root_position, profile):
         check_root_at_origin(root_position),
         check_file_integrity(filepath),
     ]
-    
+
     for r in results:
         print(r)
-    
+
     passed = all(r.passed for r in results)
     print(f"\n{'✅ ALL PASSED' if passed else '❌ VALIDATION FAILED'}")
     return results</code></pre>
@@ -270,10 +270,10 @@ def validate_all(filepath, scene_joints, frame_count, root_position, profile):
     <h2>4. Question Bank: System Design & Architecture</h2>
 
     <div class="callout callout-concept">
-      <div class="callout-title">Q: "How would you design a pipeline that works for 15 different clients without maintaining 15 codebases?"</div>
+      <div class="callout-title">Q: "How would you design a pipeline for many clients without maintaining many codebases?"</div>
       <p><strong>Your Answer:</strong> (This is Lesson 10, condensed into an interview answer.)</p>
       <p><strong>Architecture:</strong> One pipeline engine, many configuration profiles. Each client gets a JSON config file specifying their skeleton template, naming pattern, export format, and delivery destination. The core code reads the config and acts generically. The pipeline uses three patterns: Config Registry for client profiles, Adapter + Factory for format-specific export and delivery, and a Plugin Architecture for genuinely unique client requirements that can't be expressed as config.</p>
-      <p><strong>Litmus test:</strong> "If I can grep my pipeline source code and find the word 'stadium_project' or any specific client name, I have a design flaw. Client names belong only in config files."</p>
+      <p><strong>Litmus test:</strong> "If core pipeline code contains a specific client identifier, I have a design flaw. Client names belong in config files."</p>
       <p><strong>Metric:</strong> Adding a new client goes from "weeks of custom development" to "create a JSON file and test."</p>
     </div>
 
@@ -327,7 +327,7 @@ def validate_all(filepath, scene_joints, frame_count, root_position, profile):
     <div class="callout callout-tip">
       <div class="callout-title">Your Prepared Response</div>
       <p><em>"My production pipeline experience is growing — I'm honest about that. What I bring is a strong foundation in the engineering patterns that make pipelines work: I understand the Adapter Pattern for isolating vendor lock-in, the Strategy Pattern for unifying marker and markerless workflows under a common interface, config-driven architecture so adding a new client means writing a JSON file not a fork of the codebase, and defensive patterns like circuit breakers and graceful degradation for zero-downtime resilience.</em></p>
-      <p><em>I've studied Studio's specific pipeline context — the vendor landscape with Vicon and DI4D, the manual post-production reality, the delivery layers from NAS to Perforce to cloud storage, and the long-term vision of universal code that services both marker and markerless capture.</em></p>
+      <p><em>I've studied the general pipeline problem: vendor integration, manual post-production, delivery layers from NAS to version control and cloud storage, and architectures that support both marker and markerless capture.</em></p>
       <p><em>What I bring that's immediately practical: I can build Python automation fast — batch renaming tools, validation pipelines, file watchers, Perforce integration. And I think in terms of measurable impact: how many artist-hours does this tool save? What's the error rate before and after automation?</em></p>
       <p><em>Where I need your mentoring is in the production nuances — the edge cases that only surface when you're running 5,000 takes a year. I learn fast and I approach the problem space architecturally, which means I can absorb the domain specifics quickly because the structural foundation is there."</em></p>
     </div>

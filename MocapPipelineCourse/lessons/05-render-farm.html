@@ -60,7 +60,7 @@ def submit_maya_job(scene_file, start, end, output_path):
         "Frames={}-{}".format(start, end),
         "ChunkSize=10" # Optimization!
     ]
-    
+
     # 2. Define Plugin Info (Arguments for Maya)
     plugin_info = [
         "SceneFile={}".format(scene_file),
@@ -68,14 +68,14 @@ def submit_maya_job(scene_file, start, end, output_path):
         "Version=2024",
         "Renderer=Arnold"
     ]
-    
+
     # 3. Write files to temp
     with open("job_info.txt", "w") as f:
         f.write("\n".join(job_info))
-        
+
     with open("plugin_info.txt", "w") as f:
         f.write("\n".join(plugin_info))
-        
+
     # 4. Call Deadline Command
     # deadlinecommand.exe job_info.txt plugin_info.txt
     result = subprocess.check_output(
@@ -138,7 +138,7 @@ from botocore.exceptions import NoCredentialsError
 
 def upload_to_s3(local_file, bucket, s3_file):
     s3 = boto3.client('s3')
-    
+
     try:
         # Upload with automatic multipart (fast for big files)
         s3.upload_file(local_file, bucket, s3_file)
@@ -162,8 +162,8 @@ def upload_to_s3(local_file, bucket, s3_file):
     </ul>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: field_project</div>
-      <p>For <strong>field_project</strong>, we process thousands of motion capture takes every week. We don't just render logic; we run <strong>Machine Learning</strong> queries on the farm to auto-tag animations ("Is this a tackle? Is this a touchdown?"). This requires a distributed graph of thousands of nodes running 24/7. Scaling is the only way to ship.</p>
+      <div class="callout-title">🎬 Production Relevance: Sports Animation</div>
+      <p>A field-sports game can accumulate a large motion library. Distributed workers can process takes in parallel and run machine-learning classifiers that add searchable action tags, turning a slow serial job into a repeatable batch pipeline.</p>
     </div>
 
     <div class="lesson-nav">

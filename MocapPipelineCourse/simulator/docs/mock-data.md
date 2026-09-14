@@ -29,10 +29,10 @@ const FILE_TREE = {
           name: "clients",
           type: "folder",
           children: [
-            { name: "stadium_project.json", type: "file" },
-            { name: "field_project.json", type: "file" },
-            { name: "action_project.json", type: "file" },
-            { name: "metaverse.json", type: "file" },
+            { name: "stadium.json", type: "file" },
+            { name: "field.json", type: "file" },
+            { name: "action.json", type: "file" },
+            { name: "immersive.json", type: "file" },
             { name: "vendor_a.json", type: "file" },
           ]
         },
@@ -57,8 +57,8 @@ const FILE_TREE = {
       name: "plugins",
       type: "folder",
       children: [
-        { name: "metaverse_client.py", type: "file", desc: "LOD decimation, preview gen, joint count check" },
-        { name: "stadium_custom.py", type: "file", desc: "stadium_project-specific facial retarget hooks" },
+        { name: "immersive_client.py", type: "file", desc: "LOD decimation, preview gen, joint count check" },
+        { name: "stadium_custom.py", type: "file", desc: "stadium-project-specific facial retarget hooks" },
       ]
     },
     {
@@ -83,7 +83,7 @@ const FILE_TREE = {
 const CLIENT_CONFIGS = {
   stadium: {
     client_id: "stadium",
-    display_name: "stadium_project Team",
+    display_name: "Stadium Sports Team",
     skeleton: {
       template: "Athlete_Humanoid_v3",
       root_joint: "Hips",
@@ -99,9 +99,9 @@ const CLIENT_CONFIGS = {
     has_plugin: true, plugin_id: "stadium_custom"
   },
 
-  field_project: {
-    client_id: "field_project",
-    display_name: "field_project Team",
+  field: {
+    client_id: "field",
+    display_name: "Field Sports Team",
     skeleton: {
       template: "FieldSports_v2",
       root_joint: "Hips",
@@ -112,14 +112,14 @@ const CLIENT_CONFIGS = {
     },
     naming: { pattern: "^FS_[a-zA-Z]+_take\\d{2}$", example: "FS_shotName_take03" },
     export: { format: "fbx", fbx_version: "FBX202000", up_axis: "y", units: "cm", bake_animation: true },
-    delivery: { method: "nas", nas_path: "\\\\nas02\\field_project\\mocap\\", slack_channel: "#field_project-anim" },
+    delivery: { method: "nas", nas_path: "\\\\nas02\\field\\mocap\\", slack_channel: "#field-anim" },
     validation: { max_frame_count: 30000, min_frame_count: 10, check_foot_contact: true, max_residual_mm: 2.0 },
     has_plugin: false
   },
 
-  action_project: {
-    client_id: "action_project",
-    display_name: "action_project",
+  action: {
+    client_id: "action",
+    display_name: "Action Adventure Team",
     skeleton: {
       template: "Action_Generic",
       root_joint: "Root",
@@ -135,22 +135,22 @@ const CLIENT_CONFIGS = {
     has_plugin: false
   },
 
-  metaverse: {
-    client_id: "metaverse",
-    display_name: "Metaverse Partner",
+  immersive: {
+    client_id: "immersive",
+    display_name: "Immersive Media Partner",
     skeleton: {
-      template: "MetaHuman_compat",
+      template: "LightweightAvatar_compat",
       root_joint: "Hips",
       required_joints: ["Hips","Spine","Head",
         "L_Shoulder","L_Arm","L_Hand",
         "R_Shoulder","R_Arm","R_Hand",
         "L_UpLeg","L_Leg","L_Foot","R_UpLeg","R_Leg","R_Foot"]
     },
-    naming: { pattern: "^MV_[a-zA-Z0-9]+_[a-z]+$", example: "MV_avatar01_walk" },
+    naming: { pattern: "^IM_[a-zA-Z0-9]+_[a-z]+$", example: "IM_avatar01_walk" },
     export: { format: "gltf", up_axis: "y", units: "m" },
-    delivery: { method: "s3", s3_bucket: "partner-delivery-demo", slack_channel: "#metaverse-drops" },
+    delivery: { method: "s3", s3_bucket: "partner-delivery-demo", slack_channel: "#immersive-drops" },
     validation: { max_frame_count: 10000, min_frame_count: 10, max_joint_count: 50, max_residual_mm: 5.0 },
-    has_plugin: true, plugin_id: "metaverse_client"
+    has_plugin: true, plugin_id: "immersive_client"
   },
 
   vendor_a: {
@@ -232,7 +232,7 @@ The data packet evolves as it passes through each stage. Below is the state at e
 ```json
 {
   "...": "all previous fields +",
-  "output_path": "/output/stadium_project/ST_20260228_sc01_sh05_v001.fbx",
+  "output_path": "/output/stadium/ST_20260228_sc01_sh05_v001.fbx",
   "output_format": "fbx",
   "fbx_version": "FBX202000",
   "adapter_used": "FBXExportAdapter",
@@ -287,22 +287,22 @@ class UniversalPipeline:
         "marker":     { "ingest": MarkerIngest, "cleanup": MarkerCleanup },
         "markerless": { "ingest": MarkerlessIngest, "cleanup": MarkerlessCleanup },
     }
-    
+
     def process(self, input_path, technology, client_id):
         profile = self.registry.get_profile(client_id)
         strategies = self.STRATEGIES[technology]
-        
+
         # Divergent stages
         data = strategies["ingest"]().ingest(input_path)
         data = strategies["cleanup"]().cleanup(data)
-        
+
         # ── CONVERGENCE POINT ──
         data = HumanIKRetarget().retarget(data, profile.skeleton_template)
         results = UniversalValidator(profile).validate(data)
-        
+
         adapter = get_export_adapter(profile)
         adapter.export(data, output_path, profile)
-        
+
         get_delivery_adapter(profile).deliver(output_path, profile)
 ```
 
@@ -340,10 +340,10 @@ class GLTFExportAdapter(BaseExportAdapter):
                         "--output", output_path, "--binary"])
 ```
 
-### plugins/metaverse_client.py
+### plugins/immersive_client.py
 ```python
 def register():
-    return { 'client_id': 'metaverse_partner', 'version': '1.0' }
+    return { 'client_id': 'immersive_partner', 'version': '1.0' }
 
 def pre_export(scene_data, profile):
     decimator.reduce_to_target(scene_data, max_tris=5000)
@@ -358,7 +358,7 @@ def custom_validate(scene_data, profile):
     return True, "OK"
 ```
 
-### config/clients/stadium_project.json
+### config/clients/stadium.json
 (Use the stadium config from CLIENT_CONFIGS above, formatted as JSON)
 
 ---
@@ -380,7 +380,7 @@ def custom_validate(scene_data, profile):
 
 | Hook | When Called | Clients With Hooks |
 |------|-----------|-------------------|
-| `pre_export` | Before export adapter runs | metaverse (LOD decimation) |
-| `post_export` | After export file written | metaverse (turntable gen) |
-| `custom_validate` | After core validation | metaverse (joint count check) |
+| `pre_export` | Before export adapter runs | immersive media (LOD decimation) |
+| `post_export` | After export file written | immersive media (turntable gen) |
+| `custom_validate` | After core validation | immersive media (joint count check) |
 | `custom_retarget` | After HumanIK | stadium_custom (facial retarget) |

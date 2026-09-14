@@ -167,7 +167,7 @@
 
     <!-- ═══════════════════════════════ DIAGRAM 1 ═══════════════════════════════ -->
     <div class="arch-section">
-      <h2><span class="section-num">1</span> The Actual Studio Capture Data Flow</h2>
+      <h2><span class="section-num">1</span> A Production Capture Data Flow</h2>
       <p><span class="arch-label label-infra">Infrastructure</span> What the pipeline ACTUALLY looks like — vendors, handoffs, and manual stages included.</p>
 
       <div class="diagram">
@@ -182,11 +182,11 @@
 │ .c3d out│     │   (scans)   │     │ ⚠️ MANUAL WORK   │     │   workstation  │
 └─────────┘     └─────────────┘     └──────────────────┘     └────────────────┘
       │                                      │
-      │         Studio's Role: ORCHESTRATION      │
+      │      PIPELINE TEAM: ORCHESTRATION           │
       └──────── Config, Automation, QA ───────┘
       </div>
-      <p class="diagram-caption">Lesson 09 — Vendors do the heavy compute. Studio orchestrates the data flow between stages.</p>
-      <a href="lessons/09-production-capture-pipeline.html" class="ref-link">→ Full lesson: The Real Studio Pipeline</a>
+      <p class="diagram-caption">Lesson 09 — Specialized tools process data; the pipeline team orchestrates handoffs and validation.</p>
+      <a href="lessons/09-production-capture-pipeline.html" class="ref-link">→ Full lesson: A Production Capture Pipeline</a>
     </div>
 
     <!-- ═══════════════════════════════ DIAGRAM 2 ═══════════════════════════════ -->
@@ -208,15 +208,15 @@
                  ┌───────────────┼───────────────┐
                  ▼               ▼               ▼
           ┌────────────┐  ┌────────────┐  ┌────────────┐
-          │ stadium_project.json    │  │ field_project.json│  │ meta.json  │  ... (15 total)
+          │ stadium.json│  │ field.json│  │ immersive.json│  ...
           │            │  │            │  │            │
           │ skeleton:  │  │ skeleton:  │  │ skeleton:  │
-          │  Athlete_Humanoid │  │  FieldSports_v2 │  │  MetaHuman │
+          │  Athlete_Humanoid │  │  FieldSports_v2 │  │  LightweightAvatar │
           │ format:fbx │  │ format:fbx │  │ format:gltf│
           │ deliver:p4 │  │ deliver:nas│  │ deliver:s3 │
           └────────────┘  └────────────┘  └────────────┘
       </div>
-      <p class="diagram-caption">Lesson 10 — The golden rule: grep for "stadium_project" in source → design flaw.</p>
+      <p class="diagram-caption">Lesson 10 — The golden rule: grep for "a stadium-sports game" in source → design flaw.</p>
 
       <h3>The Three Architecture Layers</h3>
       <div class="pattern-grid">

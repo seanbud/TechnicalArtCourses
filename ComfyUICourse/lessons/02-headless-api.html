@@ -25,7 +25,7 @@
     </div>
 
     <h2>The Big Picture</h2>
-    <p>In a standard creative environment, artists sit in front of the ComfyUI browser tab, dragging wires and clicking the "Queue Prompt" button. In an enterprise-scale game studio like Studio, this manual step is a bottleneck. We need to run workflows headlessly—without a UI, triggered automatically by file changes, asset ingestion scripts, or CI/CD pipelines.</p>
+    <p>In a standard creative environment, artists sit in front of the ComfyUI browser tab, dragging wires and clicking the "Queue Prompt" button. In an enterprise-scale game studio, this manual step is a bottleneck. We need to run workflows headlessly—without a UI, triggered automatically by file changes, asset ingestion scripts, or CI/CD pipelines.</p>
 
     <p>Fortunately, ComfyUI was designed from the ground up as a client-server application. The web browser is just a front-end UI. Under the hood, ComfyUI is a Python server that executes tasks based on a JSON graph description. As a Technical Artist, you can export this JSON, bypass the browser, and run workflows programmatically.</p>
 
@@ -72,7 +72,7 @@
         Click "Run Dispatch" to simulate WebSocket enqueuing & API execution...
       </div>
     </div>
-    
+
     <script>
       function runSim() {
         const log = document.getElementById("consoleLog");
@@ -80,7 +80,7 @@
         log.innerHTML = "";
         btn.disabled = true;
         btn.style.opacity = 0.5;
-        
+
         const lines = [
           { text: "$ python3 headless_client.py --workflow jersey_style.json", delay: 0, color: "var(--text-primary)" },
           { text: "[HTTP POST] Connecting to http://127.0.0.1:8188/prompt...", delay: 600, color: "var(--accent-blue)" },
@@ -197,8 +197,8 @@ print(f"Prompt queued successfully! ID: {response_data['prompt_id']}")
     </div>
 
     <h2>Industrial Production Pipeline: Perforce & CI/CD Hooks</h2>
-    <p>How does this play out in a real studio pipeline? Imagine a game team creating styled jerseys or custom logos for a sports game like fictional stadium-sports title.</p>
-    
+    <p>How does this play out in a real studio pipeline? Imagine a game team creating styled jerseys or custom logos for a fictional sports title.</p>
+
     <p>Instead of hiring an artist to manually run images through ComfyUI, the process is built directly into the version control pipeline:</p>
 
     <div class="diagram">

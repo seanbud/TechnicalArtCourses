@@ -59,12 +59,12 @@
 
     <div class="callout callout-warning">
       <div class="callout-title">Scenario A: The Multi-Site Sync</div>
-      <p><strong>Problem:</strong> "We have a studio in Vancouver and one in Guildford (UK). How do we keep 50TB of data in sync so both teams can work?"</p>
+      <p><strong>Problem:</strong> "We have two studios in different regions. How do we keep a large capture library available to both teams?"</p>
       <p><strong>Solution: The Proxy Pattern.</strong></p>
       <ul>
-          <li><strong>Central Source:</strong> Perforce Server in Vancouver (Master).</li>
-          <li><strong>Local Caching:</strong> Perforce Proxy server in Guildford.</li>
-          <li><strong>Pre-Fetch:</strong> A script runs at 3AM to force-sync the Proxy with yesterday's dailies, so when Guildford artists arrive at 9AM, the data is local (Fast).</li>
+          <li><strong>Central Source:</strong> One authoritative Perforce server.</li>
+          <li><strong>Local Caching:</strong> A Perforce Proxy near the remote team.</li>
+          <li><strong>Pre-Fetch:</strong> A scheduled job warms the proxy with recent dailies before artists begin work.</li>
       </ul>
     </div>
 
@@ -102,7 +102,7 @@
 
     <h2>4. Behavioral Prep (The Bar Raiser)</h2>
     <p>Finally, they will ask: "Tell me about a time you failed." Use the <strong>STAR Method</strong>.</p>
-    
+
     <div class="code-block">
       <h3>Example Answer: The Broken Build</h3>
       <ul>
@@ -123,8 +123,8 @@
     </ul>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: racing_project</div>
-      <p>In <strong>racing_project</strong>, the "car usage" telemetry tells designers which cars are popular. In Tech Art, "tool usage" telemetry tells us which tools are broken. If we see the "Import Car" tool throwing errors for 50% of users, we prioritize fixing it immediately. We don't wait for artists to report bugs—the system reports them for us.</p>
+      <div class="callout-title">🎬 Production Relevance: Tool Telemetry</div>
+      <p>A fictional racing game might measure vehicle selection to guide design decisions. Technical-art teams can apply the same idea to tools: usage and error telemetry reveal which workflows fail most often so maintenance priorities are based on evidence.</p>
     </div>
 
     <div class="lesson-nav">

@@ -40,9 +40,9 @@ Say: "We should use a relative path here, because the render nodes on Linux don'
 
 Now you aren't just fixing a typo; you are teaching system architecture. You are raising the bar for the whole team.
 
-## Studio Relevance: Telemetry in racing_project
+## Production Relevance: Telemetry in a racing game
 
-How do we know what to fix? In *racing_project*, we track player data (which cars are used). In Tech Art, we track **Tool Telemetry**.
+How do we know what to fix? In *a racing game*, we track player data (which cars are used). In Tech Art, we track **Tool Telemetry**.
 We log every time a tool is used, and every time it crashes.
 If we see that the "Import Car" tool is crashing for 50% of users, we know we have a crisis—even if nobody has reported it yet. Telemetry allows us to be proactive rather than reactive.
 

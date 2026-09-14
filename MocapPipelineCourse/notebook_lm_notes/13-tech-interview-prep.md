@@ -1,8 +1,8 @@
 # Lesson 13: Technical Interview Deep Dive — Data Flow, Automation & Problem Solving
 
-## The Interview Requirement
+## A Common Interview Theme
 
-The job description says it directly: "Deliver tooling, automation, or integrations that improved cross-departmental data flow or reduced processing time." Every answer you give needs to map back to this requirement. You need to demonstrate that you can build tools and automation that make data flow faster across departments — from capture stage, through post-production, to game team delivery.
+Senior pipeline roles often emphasize tooling, automation, integrations, cross-team data flow, and measurable reductions in processing time. Use examples you can substantiate and connect them to the capture-to-post-production-to-engine flow.
 
 ## How to Structure Technical Answers
 
@@ -48,9 +48,9 @@ A validation pipeline with pluggable checkers. Each checker tests one thing: nam
 
 ## System Design Questions
 
-**"15 different clients, one pipeline — how?"**
+**"Many clients, one pipeline — how?"**
 
-This is Lesson 10 condensed. One pipeline engine, many JSON config profiles. Config Registry for client profiles, Adapter + Factory for format-specific export.  Plugin architecture for genuinely unique client needs. The litmus test: grep the source for "stadium_project" — if you find it, you have a design flaw.
+This is Lesson 10 condensed. Use one pipeline engine with many JSON config profiles, a registry for client profiles, Adapter + Factory for format-specific export, and plugins for genuinely unique client needs. A client identifier in core code is a sign that configuration has leaked into the architecture.
 
 **"How do you ensure zero downtime during deployment?"**
 
@@ -76,7 +76,7 @@ When they inevitably ask about your experience level, here's the prepared answer
 
 "My production pipeline experience is growing — I'm honest about that. What I bring is a strong foundation in the engineering patterns that make pipelines work: Adapter Pattern for vendor isolation, Strategy Pattern for technology unification, config-driven architecture for client portability, and defensive patterns for zero-downtime resilience.
 
-I've studied Studio's specific context — the vendor landscape, the manual post-production reality, the delivery layers, and the universal code vision. What I bring immediately: I can ship Python automation fast. Batch renaming, validation pipelines, file watchers, Perforce integration. And I think in measurable impact — how many artist-hours does this save?
+I've studied the general pipeline problem: vendor integration, manual post-production, delivery layers, and universal architectures. What I bring immediately is practical Python automation—batch renaming, validation pipelines, file watchers, and version-control integration—paired with measurable impact.
 
 Where I need your mentoring is in the production nuances. The edge cases that surface at 5,000 takes per year. I learn fast because the structural foundation is there."
 

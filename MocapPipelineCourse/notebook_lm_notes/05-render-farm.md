@@ -10,7 +10,7 @@ This is **Horizontal Scaling**. Instead of one super-computer (Vertical Scaling)
 100 hours / 100 computers = 1 hour.
 We just turned an impossible deadline into a lunch break.
 
-At Studio, we call this "The Farm." We use software like **AWS Thinkbox Deadline** or **OpenCue** to manage it.
+At a large game studio, we call this "The Farm." We use software like **AWS Thinkbox Deadline** or **OpenCue** to manage it.
 
 ## The Dependency Graph (DAG)
 
@@ -42,9 +42,9 @@ If you send 1 frame per job, you are spending 98% of your time loading Maya.
 We use **Chunking** to solve this. We bundle 50 or 100 frames into a single job.
 Now we pay the 45-second "Startup Tax" once, and process 100 frames. The efficiency skyrockets.
 
-## Studio Relevance: field_project Machine Learning
+## Production Relevance: Sports Animation Libraries
 
-The Farm isn't just for rendering anymore. On titles like *field_project*, we use the farm to process data for **Machine Learning**. We might have 10 years of football animation data. We spin up thousands of nodes to analyze that data, tagging every tackle, run, and throw automatically. This training data powers the "data_driven_animation_system" animation system. The scale of this compute utility is one of Studio's biggest competitive advantages.
+The farm is not limited to rendering. A field-sports game may use distributed workers to process a large motion library and run **machine-learning** classifiers that add searchable action tags. Parallel processing makes this repeatable without tying up artist workstations.
 
 ## Key Takeaways
 

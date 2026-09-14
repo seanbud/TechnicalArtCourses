@@ -42,23 +42,23 @@ function buildTree(items, prefix) {
     var path = prefix ? prefix + "/" + item.n : item.n;
     var depth = path.split("/").length - 1;
     var pad = "padding-left:" + (12 + depth * 16) + "px";
-    
+
     if (item.t === "d") {
       var open = expandedDirs.has(path);
       // Check if this directory has a README.md child for the (i) icon
       var hasReadme = item.c && item.c.some(child => child.n === "README.md");
       var infoIcon = hasReadme ? '<span class="dir-info" title="View Directory Architecture" onclick="event.stopPropagation();selectFile(\'' + path + '/README.md\')">ⓘ</span>' : "";
-      
+
       html += '<div class="tree-item" style="' + pad + '" onclick="toggleDir(\'' + path + '\',event)">' +
         '<span class="tree-chevron">' + (open ? '▾' : '▸') + '</span><span>' + item.n + '/</span>' + infoIcon + '</div>';
       if (open && item.c) html += buildTree(item.c, path);
     } else {
       // Hide README.md from the file list
       if (item.n === "README.md") continue;
-      
+
       var cls = S.selectedFile === path ? "selected" : "";
       if (S.activeFiles.some(f => path.endsWith(f))) cls += " active-file";
-      
+
       html += '<div class="tree-item ' + cls + '" style="' + pad + '" onclick="selectFile(\'' + path + '\')">' +
         '<span class="tree-chevron hidden">·</span><span>' + item.n + '</span></div>';
     }
@@ -69,7 +69,7 @@ function buildTree(items, prefix) {
 function toggleDir(p, e) {
   if (e) e.stopPropagation();
   var isExpanding = !expandedDirs.has(p);
-  
+
   if (e && e.shiftKey) {
     var node = findNodeByPath(TREE, p);
     if (node) {
@@ -98,7 +98,6 @@ function selectFile(p, focusTarget) {
   var app = document.querySelector(".app");
   if (p.includes("config/clients/")) {
     var id = p.split("/").pop().replace(".json","");
-    if (id === "stadium_project") id = "stadium";
     if (CL[id]) {
       S.client = id;
       document.getElementById("sel-client").value = id;
@@ -160,19 +159,19 @@ function renderGraph() {
   // ROW 2 — Universal stages
   h += '<div style="grid-row:2;grid-column:6;display:flex;align-items:center;gap:6px">';
   h += '<span class="parrow tight-arrow ' + (S.step >= 2 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Remapped joints</span></span>';
-  
+
   var retarget_hooks = [];
   if (c.plugin === "stadium_custom") retarget_hooks.push("custom_retarget");
   h += mkNode("retarget", "Retarget", "HumanIK → " + c.skeleton.template, true, "", "first-conv", retarget_hooks);
-  
+
   h += '<span class="parrow ' + (S.step >= 3 ? 'active-arrow' : '') + '">→<span class="arrow-tip">Validated data</span></span>';
   h += mkNodeValidate(c);
   h += '<span class="parrow ' + (S.step >= 4 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + c.export.format.toUpperCase() + ' file</span></span>';
-  
+
   var export_hooks = [];
-  if (c.plugin === "metaverse_client") export_hooks.push("pre_export", "post_export");
+  if (c.plugin === "immersive_client") export_hooks.push("pre_export", "post_export");
   h += mkNode("export", "Export", (c.export.format === "gltf" ? "GLTF" : "FBX") + " via " + getExpAdapter(c), true, "", "", export_hooks);
-  
+
   h += '<span class="parrow ' + (S.step >= 5 ? 'active-arrow' : '') + '">→<span class="arrow-tip">' + getDelAdapter(c) + '</span></span>';
   h += '</div>';
 
@@ -184,7 +183,7 @@ function renderGraph() {
     var isNasOffline = (d.id === "nas" && !S.nasEnabled);
     var cls = isActive ? "active-dest" : "inactive-dest";
     if (isNasOffline && isActive) cls += " nas-offline";
-    
+
     var badge = "";
     if (isActive && S.step >= 5) {
       if (S.cbState === "OPEN") {
@@ -194,7 +193,7 @@ function renderGraph() {
         badge = '<span class="sbadge" style="display:flex; position:static; margin-left:6px; transform:translateY(-1px)">✓</span>';
       }
     }
-    
+
     var dest = "";
     if (d.id === "perforce") dest = c.delivery.depot_path || "";
     else if (d.id === "nas") dest = c.delivery.nas_path || "";
@@ -207,13 +206,13 @@ function renderGraph() {
     }
     h += '<div class="dnode ' + cls + '" id="dest-' + d.id + '"><div class="dname">' + d.icon + ' ' + d.label + extra + badge + '</div><div class="ddest">' + (isActive ? dest : d.proto) + '</div></div>';
   });
-  
+
   if (S.queueCount > 0) {
-    h += '<div class="dnode active-dest fallback-node" style="margin-top:10px; border-color:var(--accent-yellow); box-shadow:0 0 10px rgba(250, 204, 21, 0.2);">' + 
-         '<div class="dname" style="color:var(--accent-yellow)">📁 Local Fallback Queue</div>' + 
+    h += '<div class="dnode active-dest fallback-node" style="margin-top:10px; border-color:var(--accent-yellow); box-shadow:0 0 10px rgba(250, 204, 21, 0.2);">' +
+         '<div class="dname" style="color:var(--accent-yellow)">📁 Local Fallback Queue</div>' +
          '<div class="ddest">Queue Depth: ' + S.queueCount + '</div></div>';
   }
-  
+
   h += '</div>';
 
   document.getElementById("pgraph").innerHTML = '<div class="pgraph-content" id="pgraph-content">' + h + '</div>';
@@ -225,22 +224,22 @@ function scaleGraph() {
   var container = document.getElementById("pgraph");
   var content = document.getElementById("pgraph-content");
   if (!container || !content) return;
-  
+
   content.style.transform = "none";
   var cw = container.clientWidth;
   var ch = container.clientHeight;
   var iw = content.scrollWidth;
   var ih = content.scrollHeight;
-  
+
   if (iw === 0 || ih === 0) return;
-  
+
   var scaleX = (cw - 40) / iw;
   var scaleY = (ch - 40) / ih;
   var scale = Math.min(scaleX, scaleY);
-  
+
   // Clamping minimum scale to prevent text illegibility
   if (scale < 0.2) scale = 0.2;
-  
+
   content.style.transform = "scale(" + scale + ")";
 }
 
@@ -266,7 +265,7 @@ function mkNode(stage, name, sub, active, pfx, extraCls, hooks) {
   if (isFailed) badge = '<span class="sbadge" style="display:flex; background-color: var(--accent-red); border-color: var(--accent-red)">✕</span>';
 
   var fail = (stage === "deliver" && S.cbState === "OPEN") ? " failed" : "";
-  
+
   var hooksHtml = "";
   if (hooks.length > 0) {
     hooksHtml = '<div class="shooks">';
@@ -276,7 +275,7 @@ function mkNode(stage, name, sub, active, pfx, extraCls, hooks) {
     });
     hooksHtml += '</div>';
   }
-  
+
   return '<div class="snode ' + cls + fail + '" id="' + pfx + 'node-' + stage + '" onclick="clickStage(\'' + stage + '\')">' +
     '<span class="sinfo" onclick="event.stopPropagation();openModal(\'info\',\'' + stage + '\')">ⓘ</span>' +
     '<div class="sname">' + name + '</div><div class="ssub">' + sub + '</div>' + hooksHtml + badge + '</div>';
@@ -310,18 +309,18 @@ function mkNodeValidate(c) {
 
     var vClass = passed ? ' pass' : (failed ? ' fail' : '');
     var vLabel = passed ? '✓' : (failed ? '✕' : l);
-    
+
     vcks += '<div class="vck' + vClass + '">' + vLabel + '</div>';
   });
   vcks += '</div>';
-  
+
   var hooksHtml = "";
-  if (c.plugin === "metaverse_client") {
+  if (c.plugin === "immersive_client") {
     var h = "custom_validate";
     var d = S.hooksDone.includes(h) ? " done" : "";
     hooksHtml = '<div class="shooks"><div class="shook' + d + '">' + h + '()</div></div>';
   }
-  
+
   return '<div class="snode ' + cls + '" id="node-validate" onclick="clickStage(\'validate\')">' +
     '<span class="sinfo" onclick="event.stopPropagation();openModal(\'info\',\'validate\')">ⓘ</span>' +
     '<div class="sname">Validate</div><div class="ssub">5 Checkers</div>' + vcks + hooksHtml + badge + '</div>';
@@ -382,8 +381,8 @@ function renderInspector() {
       };
       body.innerHTML = '<div class="inspector-label">File: config/pipeline_settings.json (Live)</div>' +
                        '<div class="jtree">' + buildJsonTree(config) + '</div>';
-    } else if (S.selectedFile && stadium_project[S.selectedFile]) {
-      var raw = stadium_project[S.selectedFile];
+    } else if (S.selectedFile && FILES[S.selectedFile]) {
+      var raw = FILES[S.selectedFile];
       if (S.selectedFile.endsWith(".json")) {
         var obj = null;
         try { obj = JSON.parse(raw); } catch(e){}
@@ -401,7 +400,7 @@ function renderInspector() {
           .replace(/<\/ul>\n<ul>/gim, '')
           .replace(/`(.*?)`/gim, '<code class="md-code">$1</code>')
           .replace(/\n\n/g, '</p><p>');
-        
+
         body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div><div class="md-view" style="padding:10px"><p>' + mdHTML + '</p></div>';
       } else {
         body.innerHTML = '<div class="inspector-label">File: ' + S.selectedFile + '</div>' + highlightPy(raw, S.focusTarget);
@@ -426,7 +425,7 @@ function renderInspector() {
     }
     var expFile = c.export.format === "gltf" ? "capture_pipeline/adapters/gltf_export.py" : "capture_pipeline/adapters/fbx_export.py";
     var delFile = "capture_pipeline/adapters/" + ({perforce:"p4",nas:"nas",s3:"s3",sftp:"sftp"})[c.delivery.method] + "_delivery.py";
-    
+
     body.innerHTML = '<div class="inspector-label">Active Adapters</div>' +
       '<div class="adapter-card" style="cursor:pointer" onclick="selectFile(\'' + expFile + '\', \'class ' + getExpAdapter(c) + '\')" title="Click to view code">' +
       '<h4>Export: ' + exp + '</h4><p>Pattern: Adapter + Factory</p><p>Format: ' + c.export.format.toUpperCase() + ' ' + (c.export.fbx_version || '') + '</p></div>' +
@@ -448,13 +447,13 @@ function renderInspector() {
     body.innerHTML = html;
   } else if (t === "health") {
     var h = '<div class="inspector-label" style="display:flex; justify-content:space-between; align-items:center;"><span>Health Monitor (Grafana)</span><span class="l-badge lb-system">Live</span></div>';
-    
+
     // NAS
     var nasStatus = S.nasEnabled ? '<span style="color:var(--accent-green)">🟢 UP</span>' : '<span style="color:var(--accent-red)">🔴 DOWN</span>';
     var nasBtn = S.nasEnabled ? '' : '<button class="btn btn-fail" style="margin-top:8px; width:100%" onclick="openModal(\'runbook\', \'nas_runbook\')">📖 Open Runbook</button>';
     h += '<div style="margin-bottom:12px; padding:10px; background:var(--bg-input); border-radius:4px; border-left:4px solid ' + (S.nasEnabled ? 'var(--accent-green)' : 'var(--accent-red)') + '">';
     h += '<h4 style="margin:0">Primary Storage (NAS)</h4><p style="margin:4px 0 0 0; font-size:12px;">Status: ' + nasStatus + '</p>' + nasBtn + '</div>';
-    
+
     // Vendor
     var vStatus = !S.chaosActive || !S.chaosModes.includes("vendor") ? '<span style="color:var(--accent-green)">🟢 UP</span>' : '<span style="color:var(--accent-red)">🔴 CRASH LOOP</span>';
     var vBtn = !S.chaosActive || !S.chaosModes.includes("vendor") ? '' : '<button class="btn btn-fail" style="margin-top:8px; width:100%" onclick="openModal(\'runbook\', \'vendor_runbook\')">📖 Open Runbook</button>';
@@ -470,7 +469,7 @@ function renderInspector() {
     body.innerHTML = h;
   } else if (t === "logs") {
     var f = S.logs;
-    
+
     var selHtml = '<select class="log-view-sel" onchange="S.logView=this.value;renderInspector()">' +
                     '<option value="sequential" ' + (S.logView==='sequential'?'selected':'') + '>Sequential</option>' +
                     '<option value="categorized" ' + (S.logView==='categorized'?'selected':'') + '>Categorized</option>' +
@@ -479,7 +478,7 @@ function renderInspector() {
     var header = '<div class="inspector-label" style="display:flex;justify-content:space-between;align-items:center">' +
                  '<span>Logs</span>' +
                  '<div>' + selHtml + '<button class="btn-clear" onclick="clearLogs()" title="Clear all logs">Clear</button></div></div>';
-    
+
     var logsHtml = "";
     if (S.logView === "categorized") {
       var buckets = {};
@@ -497,15 +496,15 @@ function renderInspector() {
         }).join("");
       });
     } else {
-      logsHtml = f.map(function(l) { 
+      logsHtml = f.map(function(l) {
         var b = l.nodeLoc ? '<span class="l-badge lb-' + l.nodeLoc.toLowerCase() + '">' + l.nodeLoc + '</span>' : '';
-        return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> ' + b + '<span class="msg">' + l.msg + '</span></div>'; 
+        return '<div class="log-entry ' + l.level + '"><span class="ts">' + l.time + '</span> ' + b + '<span class="msg">' + l.msg + '</span></div>';
       }).join("");
     }
-    
+
     body.innerHTML = header + logsHtml;
   }
-  
+
   if (S.focusTarget) {
     setTimeout(function() {
       var el = document.getElementById("focus-target");
@@ -525,7 +524,7 @@ function log(level, msg, nodeLoc, stage) {
   var now = new Date();
   var time = '[' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0') + ']';
   S.logs.push({time:time, level:level, msg:msg, nodeLoc:nodeLoc, stage:stage || STAGES[S.step] || null});
-  
+
   // Real-time update for both panels
   var el = document.getElementById("console-log");
   if (el) {
@@ -533,7 +532,7 @@ function log(level, msg, nodeLoc, stage) {
     el.innerHTML += '<div class="log-entry ' + level + '"><span class="ts">' + time + '</span> ' + b + '<span class="msg">' + msg + '</span></div>';
     el.scrollTop = el.scrollHeight;
   }
-  
+
   // Force a render tick if we are looking at logs during simulation looping
   if (S.inspectorTab === "logs") {
      renderInspector();
@@ -548,39 +547,39 @@ function triggerHookPing(nodeId, hookName) {
   ping.className = "hook-ping";
   ping.textContent = "⚙️ " + hookName;
   document.body.appendChild(ping);
-  
+
   // Center above the node
   var x = rect.left + rect.width / 2;
   var y = rect.top;
   ping.style.left = (x - ping.offsetWidth / 2) + "px";
   ping.style.top = y + "px";
-  
+
   setTimeout(function() { ping.remove(); }, 1200);
 }
 
 function triggerFailPing(nodeId, msg) {
   var node = document.getElementById(nodeId);
   if (!node) return;
-  
+
   node.classList.add("node-fail");
-  
+
   var rect = node.getBoundingClientRect();
   var ping = document.createElement("div");
   ping.className = "fail-badge";
   ping.textContent = msg;
   document.body.appendChild(ping);
-  
+
   // Center above the node
   var x = rect.left + rect.width / 2;
   var y = rect.top - 30;
   // Offset appropriately
   ping.style.left = (x) + "px"; // we'll use transform in css if needed, but for now absolute position
   // Actually, wait, let's offset by half its width after it's in the DOM
-  
+
   requestAnimationFrame(function() {
       ping.style.left = (x - ping.offsetWidth / 2) + "px";
       ping.style.top = y + "px";
   });
-  
+
   setTimeout(function() { if (ping) ping.remove(); node.classList.remove("node-fail"); }, 3000);
 }

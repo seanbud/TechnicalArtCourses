@@ -35,9 +35,9 @@ We use a **SQL Database** (like SQLite or PostgreSQL) to track our assets.
 We store metadata: "Shot Name," "Date," "Actor Name," "File Path," and "Hash."
 Querying the database takes milliseconds. Scanning the drive takes hours.
 
-## Studio Relevance: sci_fi_project Audio
+## Production Relevance: Large Audio Libraries
 
-For *sci_fi_project*, the audio team recorded thousands of uncompressed, high-fidelity sounds. The library was massive. By implementing a Tiered Storage system, we kept the active sound effects on the fast servers while automatically archiving the unused takes to cold storage. This simple script saved the studio tens of thousands of dollars in storage equipment costs per year. It's not glamorous work, but it pays the bills.
+A cinematic sci-fi game may accumulate a large library of uncompressed audio. Tiered storage keeps active effects on fast servers while automatically moving inactive sources to lower-cost archival storage.
 
 ## Key Takeaways
 

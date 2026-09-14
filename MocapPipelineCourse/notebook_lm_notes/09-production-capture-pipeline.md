@@ -1,16 +1,16 @@
-# Lesson 09: The Real Studio Pipeline — Vendors, Post-Production & Manual Cleanup
+# Lesson 09: Production Capture Pipelines — Vendors, Post-Production & Manual Cleanup
 
-## The Reality: Studio Doesn't Do Everything In-House
+## The Reality: Studios Don't Build Everything In-House
 
-Here's something important that might surprise you after the earlier lessons. Studio does not build every piece of the capture pipeline themselves. The heavy math — solving point clouds into bones, performing 3D body scans, even retargeting in many cases — that's all done by proprietary vendor software. Vicon Shogun Post does the solving. OptiTrack Motive does its own version. DI4D handles facial capture processing. External scan vendors deliver meshes from structured-light scanners like Artec or FARO.
+Here's something important that might surprise you after the earlier lessons. Production teams rarely build every capture component themselves. Specialized software can solve point clouds into bones, process body scans, and retarget motion. Tools such as Vicon Shogun, OptiTrack Motive, and DI4D illustrate the variety of vendor interfaces a pipeline may need to support.
 
-Studio's role — and specifically YOUR role as a Senior Pipeline TA — is to orchestrate the data flow between all these stages. You're the connective tissue. You make sure data gets from vendor A to vendor B to the artist's workstation without losing integrity, without wrong naming, without broken hierarchies. You build the automation that ties all these vendor outputs together into one coherent pipeline.
+The pipeline team's role—and specifically your role as a Senior Pipeline TA—is to orchestrate data across these stages. You make sure files travel from acquisition through processing and review without losing integrity, naming, or hierarchy information.
 
 Think of it like this: the vendors are specialist subcontractors. They're incredibly good at their one thing. But they don't talk to each other. They don't know your naming conventions. They deliver in their own formats, their own units, their own coordinate systems. Your job is to be the translator and the traffic controller.
 
 ## Post-Production: The Manual Reality
 
-After the automated solve and retarget, the data is close — but rarely perfect. This is where "post-production" comes in, and it's more manual than you'd expect at a company like Studio.
+After the automated solve and retarget, the data is close — but rarely perfect. This is where "post-production" comes in, and it's more manual than you'd expect at a large game studio.
 
 Here's what gets fixed by hand:
 
@@ -32,7 +32,7 @@ At the tail end of the pipeline, the final deliverable is an FBX file dropped on
 
 A **NAS** — Network-Attached Storage — _is_ a type of network drive. It's a dedicated hardware appliance whose only job is to serve files over the network. You've probably heard brand names like Synology or QNAP for consumer models, or NetApp and Isilon for enterprise. They speak standard file-sharing protocols: SMB for Windows, NFS for Linux and Mac.
 
-When Studio says "we put FBX files on a network drive," they almost certainly mean a NAS or an enterprise file server with SMB shares. On each artist's Windows workstation, that share is mapped as a drive letter — like `N:\captures\output\` — and it looks like a local folder.
+In many studios, "put the FBX files on a network drive" means publishing to a NAS or enterprise file server exposed through an SMB share. On an artist's Windows workstation, that share might be mapped as `N:\captures\output\` and appear like a local folder.
 
 A **SAN** — Storage Area Network — is different. That's block-level storage, like having a raw hard drive plugged in over a high-speed network. Faster and more expensive, used for things like video editing bays or databases, not typically for file delivery.
 
@@ -46,7 +46,7 @@ This is a great example for the interview. It's a tool that directly reduces err
 
 ## Key Takeaways
 
-*   Studio orchestrates the pipeline, vendors do the heavy processing. Your value is in the data flow, validation, and automation between stages.
+*   Pipeline teams orchestrate specialized tools. Your value is in the data flow, validation, and automation between stages.
 *   Post-production is manual and expensive. Naming fixes, bone cleanup, contact correction — still done by hand. Automating any part of this has massive ROI.
 *   A NAS is a network drive. It's a dedicated file server appliance. FBX files are delivered to artists via mapped SMB shares.
 *   Layer your delivery: NAS for speed, Perforce for versioning, S3 for archival. Each layer serves a different purpose.

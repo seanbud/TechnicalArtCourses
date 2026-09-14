@@ -8,26 +8,26 @@ const TREE = [
   {n:"capture_pipeline",t:"d",c:[
     {n:"README.md",t:"f"},
     {n:"pipeline",t:"d",c:[{n:"README.md",t:"f"},{n:"core.py",t:"f"},{n:"runner.py",t:"f"},{n:"retarget.py",t:"f"},{n:"validation.py",t:"f"},{n:"plugin_manager.py",t:"f"},{n:"client_registry.py",t:"f"}]},
-    {n:"config",t:"d",c:[{n:"clients",t:"d",c:[{n:"stadium_project.json",t:"f"},{n:"field_project.json",t:"f"},{n:"action_project.json",t:"f"},{n:"metaverse.json",t:"f"},{n:"vendor_a.json",t:"f"}]},{n:"pipeline_settings.json",t:"f"}]},
+    {n:"config",t:"d",c:[{n:"clients",t:"d",c:[{n:"stadium.json",t:"f"},{n:"field.json",t:"f"},{n:"action.json",t:"f"},{n:"immersive.json",t:"f"},{n:"vendor_a.json",t:"f"}]},{n:"pipeline_settings.json",t:"f"}]},
     {n:"adapters",t:"d",c:[{n:"README.md",t:"f"},{n:"vicon_ingest.py",t:"f"},{n:"moveai_ingest.py",t:"f"},{n:"fbx_export.py",t:"f"},{n:"gltf_export.py",t:"f"},{n:"p4_delivery.py",t:"f"},{n:"nas_delivery.py",t:"f"},{n:"s3_delivery.py",t:"f"}]},
-    {n:"plugins",t:"d",c:[{n:"README.md",t:"f"},{n:"metaverse_client.py",t:"f"},{n:"stadium_custom.py",t:"f"}]},
+    {n:"plugins",t:"d",c:[{n:"README.md",t:"f"},{n:"immersive_client.py",t:"f"},{n:"stadium_custom.py",t:"f"}]},
     {n:"scripts",t:"d",c:[{n:"README.md",t:"f"},{n:"batch_rename.py",t:"f"},{n:"delivery_bot.py",t:"f"},{n:"health_monitor.py",t:"f"}]}
   ]}
 ];
 
 const CL = {
-  stadium:{id:"stadium",display:"stadium_project",skeleton:{template:"Athlete_Humanoid_v3",root:"Hips",required:["Hips","Spine","Spine1","Spine2","Head","L_Shoulder","L_Arm","L_ForeArm","L_Hand","R_Shoulder","R_Arm","R_ForeArm","R_Hand","L_UpLeg","L_Leg","L_Foot","R_UpLeg","R_Leg","R_Foot"]},naming:{example:"ST_20260228_sc01_sh05_v001"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"y",units:"cm"},delivery:{method:"perforce",depot_path:"//depot/stadium/mocap/",slack:"#stadium-mocap-delivery"},validation:{max_frames:50000,min_frames:10,max_residual:1.5},plugin:"stadium_custom"},
-  field_project:{id:"field_project",display:"field_project",skeleton:{template:"FieldSports_v2",root:"Hips",required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"FS_shotName_take03"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"y",units:"cm"},delivery:{method:"nas",nas_path:"\\\\nas02\\field_project\\mocap\\",slack:"#field_project-anim"},validation:{max_frames:30000,min_frames:10,max_residual:2.0},plugin:null},
-  action_project:{id:"action_project",display:"action_project",skeleton:{template:"Action_Generic",root:"Root",required:["Root","Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"AC_actor01_sprint"},export:{format:"fbx",fbx_version:"FBX201900",up_axis:"y",units:"cm"},delivery:{method:"perforce",depot_path:"//depot/action/anim/raw/",slack:"#action-pipeline"},validation:{max_frames:100000,min_frames:5,max_residual:1.0},plugin:null},
-  metaverse:{id:"metaverse",display:"Metaverse",skeleton:{template:"MetaHuman_compat",root:"Hips",required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"MV_avatar01_walk"},export:{format:"gltf",up_axis:"y",units:"m"},delivery:{method:"s3",s3_bucket:"partner-delivery-demo",slack:"#metaverse-drops"},validation:{max_frames:10000,min_frames:10,max_residual:5.0},plugin:"metaverse_client"},
-  vendor_a:{id:"vendor_a",display:"Vendor A",skeleton:{template:"Vendor_Custom",root:"root",required:["root","hips","spine","head","l_arm","l_hand","r_arm","r_hand","l_thigh","l_foot","r_thigh","r_foot"]},naming:{example:"VEND_260228_take5"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"z",units:"m"},delivery:{method:"sftp",sftp_host:"sftp.vendor-a.com",slack:"#vendor-drops"},validation:{max_frames:50000,min_frames:10,max_residual:2.0},plugin:null}
+  stadium:{id:"stadium",display:"Stadium Sports",skeleton:{template:"Athlete_Humanoid_v3",root:"Hips",required:["Hips","Spine","Spine1","Spine2","Head","L_Shoulder","L_Arm","L_ForeArm","L_Hand","R_Shoulder","R_Arm","R_ForeArm","R_Hand","L_UpLeg","L_Leg","L_Foot","R_UpLeg","R_Leg","R_Foot"]},naming:{example:"ST_20260228_sc01_sh05_v001"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"y",units:"cm"},delivery:{method:"perforce",depot_path:"//depot/stadium/mocap/",slack:"#stadium-mocap-delivery"},validation:{max_frames:50000,min_frames:10,max_residual:1.5},plugin:"stadium_custom"},
+  field:{id:"field",display:"Field Sports",skeleton:{template:"FieldSports_v2",root:"Hips",required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"FS_shotName_take03"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"y",units:"cm"},delivery:{method:"nas",nas_path:"\\\\nas02\\field\\mocap\\",slack:"#field-anim"},validation:{max_frames:30000,min_frames:10,max_residual:2.0},plugin:null},
+  action:{id:"action",display:"Action Adventure",skeleton:{template:"Action_Generic",root:"Root",required:["Root","Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"AC_actor01_sprint"},export:{format:"fbx",fbx_version:"FBX201900",up_axis:"y",units:"cm"},delivery:{method:"perforce",depot_path:"//depot/action/anim/raw/",slack:"#action-pipeline"},validation:{max_frames:100000,min_frames:5,max_residual:1.0},plugin:null},
+  immersive:{id:"immersive",display:"Immersive Media",skeleton:{template:"LightweightAvatar_compat",root:"Hips",required:["Hips","Spine","Head","L_Arm","L_Hand","R_Arm","R_Hand","L_UpLeg","L_Foot","R_UpLeg","R_Foot"]},naming:{example:"IM_avatar01_walk"},export:{format:"gltf",up_axis:"y",units:"m"},delivery:{method:"s3",s3_bucket:"partner-delivery-demo",slack:"#immersive-drops"},validation:{max_frames:10000,min_frames:10,max_residual:5.0},plugin:"immersive_client"},
+  vendor_a:{id:"vendor_a",display:"Vendor A",skeleton:{template:"Vendor_Custom",root:"root",required:["root","hips","spine","head","l_arm","l_hand","r_arm","r_hand","l_thigh","l_foot","r_thigh","r_foot"]},naming:{example:"VEND_260228_take5"},export:{format:"fbx",fbx_version:"FBX202000",up_axis:"z",units:"m"},delivery:{method:"sftp",sftp_host:"sftp.vendor-a.example",slack:"#vendor-drops"},validation:{max_frames:50000,min_frames:10,max_residual:2.0},plugin:null}
 };
 
-const stadium_project = {
+const FILES = {
 "capture_pipeline/README.md":
-`# Studio Universal Capture Pipeline
+`# Universal Capture Pipeline
 
-This repository contains the centralized capture pipeline for all Studio studio partners. 
+This repository contains the centralized capture pipeline for all studio partners.
 
 ## Architecture Deployment Map
 Because this is a central service, the code here does not run on a single machine. It is distributed across the studio infrastructure:
@@ -42,7 +42,7 @@ Because this is a central service, the code here does not run on a single machin
 
 **Deployment Location:** ☁️ AWS Cloud Compute Farm (EC2 Instances) via Deadline
 
-The scripts in this directory form the "brain" of the universal pipeline. They abstract away the technology and vendor specifics. 
+The scripts in this directory form the "brain" of the universal pipeline. They abstract away the technology and vendor specifics.
 
 Because retargeting (HumanIK) and export (FBX) are computationally heavy, this core module is containerized (Docker) and deployed to a scalable cloud farm. It is never run directly on a capture stage PC.`,
 
@@ -77,7 +77,7 @@ Utilities that operate outside the core automated flow.
 "capture_pipeline/pipeline/runner.py":
 `class UniversalPipeline:
     """Orchestrates the convergent/divergent execution flow."""
-    
+
     # Strategy Pattern: Define logic for different capture techs
     STRATEGIES = {
         "marker": {
@@ -104,16 +104,16 @@ Utilities that operate outside the core automated flow.
         plugin_mgr.run_hook("custom_retarget", data, profile)
 
         data = HumanIKRetarget().retarget(
-            data, 
+            data,
             profile.skeleton_template
         )
-        
+
         results = UniversalValidator(profile, plugin_mgr).validate(data)
 
         # ── ADAPTERS (Client-Specific Export) ──
         # Factory Pattern: Resolve correct exporter
         adapter = get_export_adapter(profile)
-        
+
         # Injects plugin_mgr for hook dispatching
         adapter.export(data, output_path, profile, plugin_mgr)
 
@@ -133,21 +133,21 @@ Utilities that operate outside the core automated flow.
 
     def run(self, input_path, client_id, technology="marker"):
         log.info(f"Starting pipeline flow for {client_id} ({technology})")
-        
+
         # Resolve client profile and load any logic overrides
         profile = self.registry.get_profile(client_id)
         self.plugin_mgr.load_plugins_for(client_id)
-        
+
         # Submits core pipeline job to cloud compute farm
         cloud_farm.submit_job(
             self.pipeline.process,
-            input_path, 
-            technology, 
+            input_path,
+            technology,
             client_id,
             self.registry,
             self.plugin_mgr
         )
-        
+
         log.info("Pipeline execution queued to Farm ✅")`,
 "capture_pipeline/pipeline/plugin_manager.py":
 `class PluginManager:
@@ -209,10 +209,10 @@ Utilities that operate outside the core automated flow.
 
         # Iterative execution and reporting
         results = [
-            checker(data, profile) 
+            checker(data, profile)
             for checker in checkers
         ]
-        
+
         return results`,
 
 "capture_pipeline/pipeline/retarget.py":
@@ -221,20 +221,20 @@ Utilities that operate outside the core automated flow.
 
     def retarget(self, data, target_skeleton, scale_factor, up_axis):
         joint_map = load_joint_map(target_skeleton)
-        
+
         # Step 1: Normalize Scene Scale & Space constraints first
         normalize_space(data, up_axis, scale_factor)
-        
+
         # Step 2: Perform 1:1 joint redirection
         # e.g., mapping a heavy 200-joint solve down to a 40-joint rig
         for src, tgt in joint_map.items():
             if src in data.joints:
                 data.joints[tgt] = data.joints.pop(src)
-        
+
         # Update simulation state metadata
         data.target_skeleton = target_skeleton
         data.joints_remapped = True
-        
+
         return data`,
 
 "capture_pipeline/adapters/fbx_export.py":
@@ -243,16 +243,16 @@ Utilities that operate outside the core automated flow.
 
     def export(self, data, output_path, profile, plugin_mgr):
         fbx_ver = profile.export["fbx_version"]
-        
+
         # Hook: Trigger pre-export optimizations (e.g. LOD gen)
         plugin_mgr.run_hook("pre_export", data, profile)
 
         # Maya API / MEL Configuration
         mel.eval(f'FBXExportFileVersion -v "{fbx_ver}"')
-        
+
         if profile.export.get("bake_animation"):
             mel.eval('FBXExportBakeComplexAnimation -v true')
-        
+
         # Trigger native binary export
         cmds.file(output_path, force=True, type="FBX export")
 
@@ -270,10 +270,10 @@ Utilities that operate outside the core automated flow.
 
         # Intermediary format for conversion
         temp_fbx = output_path.replace('.gltf', '_temp.fbx')
-        
+
         # Step 1: Maya FBX Export
         FBXExportAdapter().export(data, temp_fbx, profile, plugin_mgr)
-        
+
         # Step 2: Open Source Converter
         subprocess.run(["FBX2glTF", "--input", temp_fbx, "--output", output_path])
 
@@ -288,16 +288,16 @@ Utilities that operate outside the core automated flow.
     def ingest(self, input_path):
         # Native Vicon C3D Stream
         raw = vicon_sdk.read_c3d(input_path)
-        
+
         result = CaptureResult()
         result.source_technology = "marker"
         result.source_vendor     = "vicon"
-        
+
         # Spatial Marker extraction
         result.joints     = raw.get_marker_positions()
         result.frame_rate = raw.sample_rate  # (120Hz)
         result.confidence = 1.0
-        
+
         return result`,
 
 "capture_pipeline/adapters/moveai_ingest.py":
@@ -307,16 +307,16 @@ Utilities that operate outside the core automated flow.
     def ingest(self, input_path):
         # High-performance ML Inference
         ml_data = moveai_sdk.process_video(input_path)
-        
+
         result = CaptureResult()
         result.source_technology = "markerless"
         result.source_vendor     = "moveai"
-        
+
         # Extract AI joint predictions
         result.joints     = ml_data.joint_predictions
         result.frame_rate = ml_data.fps  # (30Hz)
         result.confidence = ml_data.avg_confidence
-        
+
         return result`,
 
 "capture_pipeline/adapters/p4_delivery.py":
@@ -326,18 +326,18 @@ Utilities that operate outside the core automated flow.
     @retry(max_attempts=3, delay=2.0)
     def deliver(self, output_path, profile):
         depot = profile.delivery["depot_path"]
-        
+
         p4 = P4()
         p4.connect()
-        
+
         # Source Control Operations
         p4.run("add", output_path)
         p4.run(
-            "submit", 
-            "-d", 
+            "submit",
+            "-d",
             f"Auto: Pipeline v2.1 ({os.path.basename(output_path)})"
         )
-        
+
         notify_slack(profile.delivery["slack"], output_path)`,
 
 "capture_pipeline/adapters/nas_delivery.py":
@@ -349,14 +349,14 @@ Utilities that operate outside the core automated flow.
     def deliver(self, output_path, profile):
         nas_path = profile.delivery["nas_path"]
         dest     = os.path.join(nas_path, os.path.basename(output_path))
-        
+
         # Native Copy + Cryptographic Hash Check
         shutil.copy2(output_path, dest)
         md5_hash = verify_md5(dest)
-        
+
         # Store hash in packet manifest
         profile.packet.md5_hash = md5_hash
-        
+
         notify_slack(profile.delivery["slack"], dest)`,
 
 "capture_pipeline/adapters/s3_delivery.py":
@@ -367,31 +367,31 @@ Utilities that operate outside the core automated flow.
     def deliver(self, output_path, profile):
         bucket = profile.delivery["s3_bucket"]
         key    = f"mocap/{os.path.basename(output_path)}"
-        
+
         # AWS S3 API Upload
         boto3.client("s3").upload_file(
-            output_path, 
-            bucket, 
+            output_path,
+            bucket,
             key
         )
-        
+
         notify_slack(
-            profile.delivery["slack"], 
+            profile.delivery["slack"],
             f"s3://{bucket}/{key}"
         )`,
 
-"capture_pipeline/plugins/metaverse_client.py":
+"capture_pipeline/plugins/immersive_client.py":
 `def register():
     """Client-specific plugin manifest."""
     return {
-        "client_id": "metaverse", 
+        "client_id": "immersive",
         "version":   "1.0"
     }
 
 def pre_export(data, profile):
     # Optimize for real-time shaders
     decimator.reduce_to_target(
-        data, 
+        data,
         max_tris=5000
     )
 
@@ -400,24 +400,24 @@ def post_export(output_path, profile):
     preview_gen.create_turntable(output_path)
 
 def custom_validate(data, profile):
-    # Specific Metaverse Constraint
+    # Specific Immersive Media Constraint
     if len(data.joints) > 50:
         return False, f"LOD Error: {len(data.joints)} joints"
     return True, "Success"`,
 
 "capture_pipeline/plugins/stadium_custom.py":
 `def register():
-    """Client-specific plugin manifest (stadium_project Sports)."""
+    """Client-specific plugin manifest (Stadium Sports)."""
     return {
-        "client_id": "stadium", 
+        "client_id": "stadium",
         "version":   "2.1"
     }
 
 def custom_retarget(data, profile):
     # Specialized sports facial rig injection
-    facial_map = load_fc_facial_map()
+    facial_map = load_stadium_facial_map()
     data.blendshapes = map_facial_markers(
-        data, 
+        data,
         facial_map
     )
     return data`,
@@ -451,7 +451,7 @@ class DeliveryBot:
         if event.src_path.endswith('.c3d'):
             # Automated ingestion pipeline
             self.pipeline.run(
-                event.src_path, 
+                event.src_path,
                 technology="marker"
             )
             slack.post(f"Watcher: processing {event.src_path}")`,
@@ -463,16 +463,16 @@ Monitors critical capture pipeline services.
 """
 def check_all():
     checks = {
-        "NAS":      ping_nas(), 
+        "NAS":      ping_nas(),
         "Perforce": check_p4_connection(),
-        "Farm":     check_deadline_status(), 
+        "Farm":     check_deadline_status(),
         "Disk":     check_disk_space() > 0.1
     }
-    
+
     for name, ok in checks.items():
         if not ok:
             alert_slack(
-                f"🚨 CRITICAL: {name} is OFFLINE", 
+                f"🚨 CRITICAL: {name} is OFFLINE",
                 severity="critical"
             )`
 };
@@ -490,7 +490,7 @@ const STAGE_INFO = {
   },
   retarget:{
     title:"Retarget Stage",
-    desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Metaverse rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Notice the **Visual Data Diffing** in the inspector—it highlights exactly which skeleton keys are being remapped in real-time.",
+    desc:"The vendor solver (e.g., Vicon Shogun) does the heavy math to produce a generalized posture, but this stage maps that posture onto specific client skeletons (e.g., a 200-joint AAA rig vs. a 40-joint Immersive Media rig).<br><br>The `PipelineRunner` uses the `Client Registry` to load the exact JSON config. It then uses `HumanIK` for joint mapping while also **normalizing scale** (meters vs cm) and **world-space** (Z-up vs Y-up). Notice the **Visual Data Diffing** in the inspector—it highlights exactly which skeleton keys are being remapped in real-time.",
     pattern:"Template Method",lesson:"12-universal-pipeline.html",code:"capture_pipeline/pipeline/retarget.py"
   },
   validate:{
@@ -562,11 +562,11 @@ const STORAGE_INFO = {
   },
   s3: {
     title: "AWS S3 Cloud Storage",
-    desc: "For external partners (like Metaverse clients) or long-term cold storage, data is pushed to an Amazon S3 bucket via the `boto3` API. This provides globally accessible, infinitely scalable object storage."
+    desc: "For external partners (like Immersive Media clients) or long-term cold storage, data is pushed to an Amazon S3 bucket via the `boto3` API. This provides globally accessible, infinitely scalable object storage."
   },
   sftp: {
     title: "External SFTP",
-    desc: "A secure file drop for external vendors who require direct file system access without integrating into Studio's internal network or cloud architecture."
+    desc: "A secure file drop for external vendors who require direct file system access without integrating into a studio's internal network or cloud architecture."
   }
 };
 

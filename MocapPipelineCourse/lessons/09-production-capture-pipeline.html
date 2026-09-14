@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lesson 9: The Real Studio Pipeline | Mocap Pipeline Prep</title>
+  <title>Lesson 9: A Production Capture Pipeline | Mocap Pipeline Prep</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
@@ -20,29 +20,29 @@
   <div class="container">
     <div class="lesson-header">
       <div class="lesson-number">Lesson 09</div>
-      <h1>The Real Studio Pipeline: Vendors, Post-Production & Manual Cleanup</h1>
+      <h1>Production Capture Pipelines: Vendors, Post-Production & Manual Cleanup</h1>
       <p class="lesson-subtitle">What actually happens after the mocap stage wraps. Spoiler: a lot of it is still done by hand.</p>
     </div>
 
     <div class="callout callout-warning">
       <div class="callout-title">⚠️ Reality Check</div>
-      <p>From previous lessons you might think Studio builds every piece of the pipeline in-house. They don't. <strong>Third-party proprietary software handles the heavy math</strong> — solving point clouds into bones, performing 3D scans, retargeting skeletons. Studio's role is to <strong>orchestrate the data flow</strong>, validate output, automate handoffs, and fix what the machines get wrong. This lesson gives you the real picture.</p>
+      <p>Production teams rarely build every capture component in-house. <strong>Specialized software handles much of the heavy computation</strong>—solving point clouds into bones, processing 3D scans, and retargeting skeletons. The pipeline team's role is to <strong>orchestrate the data flow</strong>, validate output, automate handoffs, and route imperfect results for review.</p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>1. The Vendor Landscape: Who Does What</h2>
-    <p>The capture pipeline is a relay race. Studio doesn't run every leg — they hand the baton to specialized vendors and receive it back.</p>
+    <p>A capture pipeline is a relay race. Stage crews, specialist tools, pipeline engineers, and artists each handle part of the journey.</p>
 
     <table>
       <tr>
         <th>Stage</th>
         <th>Who Does It</th>
         <th>Software</th>
-        <th>Studio's Role</th>
+        <th>Pipeline Team's Role</th>
       </tr>
       <tr>
         <td><strong>Capture</strong></td>
-        <td>Stage crew (Studio or outsourced)</td>
+        <td>Internal or external stage crew</td>
         <td>Vicon Shogun, OptiTrack Motive</td>
         <td>Define marker sets, calibration, session naming</td>
       </tr>
@@ -66,13 +66,13 @@
       </tr>
       <tr>
         <td><strong>Post-Production</strong></td>
-        <td>Studio artists + TAs</td>
+        <td>Artists + technical artists</td>
         <td>MotionBuilder, Maya, custom tools</td>
         <td>Manual cleanup, naming, bone fixes, final QA</td>
       </tr>
       <tr>
         <td><strong>Delivery</strong></td>
-        <td>Studio pipeline automation</td>
+        <td>Central pipeline automation</td>
         <td>Python scripts, P4Python</td>
         <td>Export FBX → network drive/Perforce → notify</td>
       </tr>
@@ -97,8 +97,8 @@
     </ul>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance</div>
-      <p>Reducing this manual cleanup time is one of the highest-impact things a Senior Pipeline TA can do. Every minute saved in post-production multiplied by thousands of takes per year equals <strong>months</strong> of artist time recovered. This is exactly the kind of "reduced processing time" the interview prompt is asking about.</p>
+      <div class="callout-title">🎬 Production Relevance</div>
+      <p>Reducing manual cleanup time is one of the highest-impact things a Senior Pipeline TA can do. Small per-take savings compound across a large capture library, freeing artists to focus on exceptions and quality.</p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -135,11 +135,11 @@ def load_joint_map(config_path):
 def rename_joints_motionbuilder(joint_map):
     """Rename joints in the current MotionBuilder scene."""
     from pyfbsdk import FBSystem, FBModelList, FBModel
-    
+
     scene = FBSystem().Scene
     renamed = 0
     skipped = 0
-    
+
     for component in scene.Components:
         if isinstance(component, FBModel):
             old_name = component.Name
@@ -150,20 +150,20 @@ def rename_joints_motionbuilder(joint_map):
                 renamed += 1
             else:
                 skipped += 1
-    
+
     log.info(f"Done. Renamed: {renamed}, Skipped: {skipped}")
     return renamed, skipped
 
 def rename_joints_maya(joint_map):
     """Rename joints in the current Maya scene."""
     import maya.cmds as cmds
-    
+
     all_joints = cmds.ls(type="joint", long=True)
     renamed = 0
-    
+
     # Sort by depth (deepest first) to avoid parent rename breaking child paths
     all_joints.sort(key=lambda x: x.count('|'), reverse=True)
-    
+
     for joint_path in all_joints:
         short_name = joint_path.split('|')[-1]
         if short_name in joint_map:
@@ -171,23 +171,23 @@ def rename_joints_maya(joint_map):
             cmds.rename(joint_path, new_name)
             log.info(f"Renamed: {short_name} → {new_name}")
             renamed += 1
-    
+
     return renamed
 
 def validate_naming(expected_names):
     """Post-rename validation: are all expected joints present?"""
     import maya.cmds as cmds
-    
+
     actual = set(cmds.ls(type="joint", shortNames=True))
     expected = set(expected_names)
     missing = expected - actual
     extra = actual - expected
-    
+
     if missing:
         log.error(f"MISSING joints after rename: {missing}")
     if extra:
         log.warning(f"EXTRA joints found: {extra}")
-    
+
     return len(missing) == 0</code></pre>
     </div>
 
@@ -203,7 +203,7 @@ def validate_naming(expected_names):
         <li><strong>NAS</strong> = a dedicated hardware appliance (like Synology, QNAP, or enterprise-grade NetApp) that exists <em>only</em> to serve files over the network. It speaks SMB (Windows) or NFS (Linux/Mac) or both.</li>
         <li><strong>SAN</strong> = Storage Area Network. Block-level storage (like a raw hard drive over the network). Faster, more expensive, usually for databases or video editing bays, not file delivery.</li>
       </ul>
-      <p>When Studio says "we put FBX files on a network drive," they almost certainly mean a <strong>NAS or enterprise file server</strong> with SMB shares that artists map as a drive letter on Windows (e.g., <code>N:\captures\</code>).</p>
+      <p>In many studios, "put the FBX files on a network drive" means publishing to a <strong>NAS or enterprise file server</strong> exposed through an SMB share, such as <code>N:\captures\</code> on Windows.</p>
     </div>
 
     <h3>Delivery Mechanisms Compared</h3>
@@ -271,37 +271,37 @@ class DeliveryBot:
     def __init__(self, config_path):
         with open(config_path) as f:
             self.config = json.load(f)
-    
+
     def deliver(self, fbx_path):
         """Full delivery pipeline for one FBX file."""
         log.info(f"Starting delivery: {fbx_path}")
-        
+
         # 1. Validate before touching anything
         if not self._validate(fbx_path):
             self._notify_failure(fbx_path, "Validation failed")
             return False
-        
+
         # 2. Copy to NAS (immediate artist access)
         nas_path = self._copy_to_nas(fbx_path)
-        
+
         # 3. Submit to Perforce (version control)
         self._submit_to_perforce(fbx_path)
-        
+
         # 4. Generate manifest (metadata for downstream)
         self._write_manifest(fbx_path, nas_path)
-        
+
         # 5. Notify
         self._notify_success(fbx_path)
-        
+
         return True
-    
+
     def _validate(self, path):
         """Pre-delivery sanity checks."""
         # File exists and isn't empty
         if not os.path.exists(path) or os.path.getsize(path) < 1024:
             log.error(f"File missing or empty: {path}")
             return False
-        
+
         # Naming convention check
         import re
         basename = os.path.basename(path)
@@ -310,25 +310,25 @@ class DeliveryBot:
         if not re.match(pattern, basename):
             log.error(f"Naming violation: {basename}")
             return False
-        
+
         return True
-    
+
     def _copy_to_nas(self, fbx_path):
         """Copy to the artist-facing network drive."""
         nas_root = self.config["nas_output_path"]  # e.g., "//nas01/captures/output"
         dest = os.path.join(nas_root, os.path.basename(fbx_path))
-        
+
         shutil.copy2(fbx_path, dest)
-        
+
         # Verify copy integrity with MD5
         src_hash = self._md5(fbx_path)
         dst_hash = self._md5(dest)
         if src_hash != dst_hash:
             raise RuntimeError(f"Hash mismatch after copy! {src_hash} != {dst_hash}")
-        
+
         log.info(f"NAS delivery OK: {dest} (MD5: {src_hash[:8]}...)")
         return dest
-    
+
     def _md5(self, filepath):
         """Calculate MD5 hash of a file."""
         h = hashlib.md5()
@@ -336,7 +336,7 @@ class DeliveryBot:
             for chunk in iter(lambda: f.read(8192), b''):
                 h.update(chunk)
         return h.hexdigest()
-    
+
     def _submit_to_perforce(self, fbx_path):
         """Auto-submit to Perforce depot."""
         from P4 import P4, P4Exception
@@ -344,17 +344,17 @@ class DeliveryBot:
         p4.port = self.config["p4_port"]
         p4.user = self.config["p4_user"]
         p4.client = self.config["p4_client"]
-        
+
         try:
             p4.connect()
             depot_path = self.config["p4_depot_root"] + os.path.basename(fbx_path)
-            
+
             try:
                 p4.run_fstat(depot_path)
                 p4.run_edit(depot_path)
             except P4Exception:
                 p4.run_add(fbx_path)
-            
+
             change = p4.fetch_change()
             change['Description'] = (
                 f"[AUTO] Delivery: {os.path.basename(fbx_path)}\n"
@@ -365,7 +365,7 @@ class DeliveryBot:
             log.info(f"P4 submit OK: {depot_path}")
         finally:
             p4.disconnect()
-    
+
     def _write_manifest(self, fbx_path, nas_path):
         """Write a JSON manifest alongside the FBX for downstream tools."""
         manifest = {
@@ -378,7 +378,7 @@ class DeliveryBot:
         manifest_path = fbx_path.replace(".fbx", "_manifest.json")
         with open(manifest_path, 'w') as f:
             json.dump(manifest, f, indent=2)
-    
+
     def _notify_success(self, fbx_path):
         """Post to Slack."""
         webhook = self.config.get("slack_webhook")
@@ -386,7 +386,7 @@ class DeliveryBot:
             requests.post(webhook, json={
                 "text": f"✅ Delivered: `{os.path.basename(fbx_path)}`"
             })
-    
+
     def _notify_failure(self, fbx_path, reason):
         webhook = self.config.get("slack_webhook")
         if webhook:
@@ -413,11 +413,11 @@ log = logging.getLogger("postprod_qa")
 
 class PostProdChecker:
     """Validates a scene is ready for delivery after manual cleanup."""
-    
+
     def __init__(self, config):
         self.config = config
         self.results = []
-    
+
     def run_all(self):
         """Run the full checklist."""
         self.check_naming_conventions()
@@ -428,23 +428,23 @@ class PostProdChecker:
         self.check_scale()
         self.check_up_axis()
         return self.results
-    
+
     def _add_result(self, name, passed, detail=""):
         status = "✅ PASS" if passed else "❌ FAIL"
         self.results.append({"check": name, "passed": passed, "detail": detail})
         log.info(f"{status}: {name} — {detail}")
-    
+
     def check_naming_conventions(self):
         """All joints must match studio naming convention."""
         joints = cmds.ls(type="joint", shortNames=True)
         expected_pattern = self.config.get("joint_name_pattern", r'^[A-Z][a-zA-Z_]+$')
-        
+
         bad_names = [j for j in joints if not re.match(expected_pattern, j)]
         if bad_names:
             self._add_result("Naming", False, f"Bad names: {bad_names[:5]}")
         else:
             self._add_result("Naming", True, f"All {len(joints)} joints OK")
-    
+
     def check_skeleton_completeness(self):
         """All required joints exist."""
         required = set(self.config.get("required_joints", []))
@@ -454,24 +454,24 @@ class PostProdChecker:
             self._add_result("Skeleton", False, f"Missing: {missing}")
         else:
             self._add_result("Skeleton", True, "All required joints present")
-    
+
     def check_world_space(self):
         """Root joint should be at or near world origin at frame 0."""
         root = self.config.get("root_joint", "Hips")
         if not cmds.objExists(root):
             self._add_result("WorldSpace", False, f"Root '{root}' not found")
             return
-        
+
         cmds.currentTime(cmds.playbackOptions(q=True, min=True))
         pos = cmds.xform(root, q=True, ws=True, t=True)
         dist = (pos[0]**2 + pos[1]**2 + pos[2]**2) ** 0.5
-        
+
         if dist > 100:  # More than 1 meter from origin
             self._add_result("WorldSpace", False,
                 f"Root is {dist:.1f}cm from origin at frame 0")
         else:
             self._add_result("WorldSpace", True, f"Root at ({pos[0]:.1f}, {pos[1]:.1f}, {pos[2]:.1f})")
-    
+
     def check_scale(self):
         """Scene should be in centimeters."""
         unit = cmds.currentUnit(q=True, linear=True)
@@ -479,7 +479,7 @@ class PostProdChecker:
             self._add_result("Scale", False, f"Scene units: '{unit}', expected 'cm'")
         else:
             self._add_result("Scale", True, "Units: cm")
-    
+
     def check_up_axis(self):
         """Scene up-axis should be Y."""
         up = cmds.upAxis(q=True, axis=True)
@@ -487,26 +487,26 @@ class PostProdChecker:
             self._add_result("UpAxis", False, f"Up-axis: '{up}', expected 'y'")
         else:
             self._add_result("UpAxis", True, "Up-axis: Y")
-    
+
     def check_frame_range(self):
         """Frame range must be within sane bounds."""
         start = cmds.playbackOptions(q=True, min=True)
         end = cmds.playbackOptions(q=True, max=True)
         duration = end - start
-        
+
         if duration < 10:
             self._add_result("FrameRange", False, f"Only {duration} frames — truncated?")
         elif duration > 100000:
             self._add_result("FrameRange", False, f"{duration} frames — recording left on?")
         else:
             self._add_result("FrameRange", True, f"{int(duration)} frames ({start}-{end})")
-    
+
     def check_no_keyframes_on_root_translation(self):
         """Root should not have stray translation keys (common vendor artifact)."""
         root = self.config.get("root_joint", "Hips")
         if not cmds.objExists(root):
             return
-        
+
         # Check for animation on translateX/Y/Z
         for attr in ['tx', 'ty', 'tz']:
             keys = cmds.keyframe(f"{root}.{attr}", q=True, keyframeCount=True)
@@ -515,17 +515,17 @@ class PostProdChecker:
                 self._add_result("RootTranslation", True,
                     f"Root has {keys} translation keys — verify locomotion is intentional")
                 return
-        
+
         self._add_result("RootTranslation", True, "No root translation keys")</code></pre>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <h2>7. The Data Flow Diagram: Real Studio Pipeline</h2>
-    <p>This is the actual flow through Studio's capture studio, corrected from what we learned in the first three interviews:</p>
+    <h2>7. Production Data Flow Diagram</h2>
+    <p>This vendor-neutral example shows an end-to-end capture flow:</p>
 
     <div class="diagram">
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                    THE REAL Studio CAPTURE PIPELINE                          │
+│                    A PRODUCTION CAPTURE PIPELINE                          │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  STAGE (Physical)         VENDOR SOFTWARE (Automated)                    │
@@ -586,7 +586,7 @@ UP_AXIS_ROTATIONS = {
 def normalize_scene(source_unit="m", source_up="z", target_unit="cm", target_up="y"):
     """Normalize a Maya scene to studio standards."""
     import maya.cmds as cmds
-    
+
     # Scale conversion
     scale_factor = UNIT_SCALES[source_unit] / UNIT_SCALES[target_unit]
     if abs(scale_factor - 1.0) > 0.001:
@@ -596,20 +596,20 @@ def normalize_scene(source_unit="m", source_up="z", target_unit="cm", target_up=
                 current = cmds.getAttr(f"{node}.{attr}")
                 cmds.setAttr(f"{node}.{attr}", current * scale_factor)
         cmds.currentUnit(linear=target_unit)
-    
+
     # Up-axis conversion
     key = (source_up.lower(), target_up.lower())
     if key in UP_AXIS_ROTATIONS:
         rotation = UP_AXIS_ROTATIONS[key]
         cmds.upAxis(axis=target_up)
-    
+
     return scale_factor</code></pre>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <h2>Key Takeaways</h2>
     <ul>
-      <li><strong>Studio orchestrates, vendors execute:</strong> Proprietary software does the solving and scanning. Your value is in the data flow, validation, and automation between stages.</li>
+      <li><strong>Pipeline teams orchestrate specialized tools:</strong> Your value is in the data flow, validation, and automation between stages.</li>
       <li><strong>Post-production is manual and expensive:</strong> Naming fixes, bone cleanup, contact correction — all done by hand. Automating any part of this has huge ROI.</li>
       <li><strong>NAS = Network Drive:</strong> A NAS is just a dedicated file server. FBX files are delivered to artists via mapped network drives (SMB shares).</li>
       <li><strong>Layer your delivery:</strong> NAS for speed, Perforce for versioning, S3 for archival. Each layer serves a purpose.</li>

@@ -34,7 +34,7 @@
 
     <h2>2. Implementation: Automating P4 with Python</h2>
     <p>As a Technical Artist, you don't use the GUI. You write tools that manage the pipeline. You must know <strong>P4Python</strong>.</p>
-    
+
     <div class="code-block">
       <h3>Python: The "Unlocker" Tool</h3>
       <p><em>Scenario: "Artist A went on vacation but left a critical file Checked Out. Write a script to find and unlock it."</em></p>
@@ -44,25 +44,25 @@ def force_unlock_file(depot_path):
     p4 = P4()
     p4.user = "pipeline_admin"
     p4.password = "secret123"
-    
+
     try:
         p4.connect()
         # 1. Find who has the file
         # fstat returns a list of dictionaries
         info = p4.run_fstat(depot_path)[0]
-        
+
         if 'action' in info:
             user = info['otherOpen'][0] # User who has it open
             client = info['otherClient'][0] # Their workspace
-            
+
             print(f"File locked by {user} on {client}. Reverting...")
-            
+
             # 2. Impersonate the user to Revert (Admin privilege required)
             p4.client = client
             p4.user = user
             p4.run_revert(depot_path)
             print("File Unlocked!")
-            
+
     except P4Exception as e:
         print(e)
     finally:
@@ -98,7 +98,7 @@ def force_unlock_file(depot_path):
       <p>This script runs on the Perforce Server itself. If it returns <code>exit(1)</code>, the user's submit fails.</p>
       <pre><code class="language-python">import sys
 # Arguments passed by P4: [TriggerName, ChangelistID, User]
-changelist = sys.argv[2] 
+changelist = sys.argv[2]
 
 def validate_filename(filename):
     # Rule: Must be lowercase and no spaces
@@ -117,7 +117,7 @@ for file in files:
 
 sys.exit(0) # ALLOW THE SUBMIT</code></pre>
     </div>
-    
+
     <h3>The Typemap</h3>
     <p>The `p4 typemap` table tells the server how to handle file extensions. This is your first line of defense.</p>
     <pre><code>TypeMap:
@@ -140,8 +140,8 @@ sys.exit(0) # ALLOW THE SUBMIT</code></pre>
     </div>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance: action_project Destruction</div>
-      <p>Imagine <strong>action_project</strong> level destruction. A single building might have 500 destruction swatches (rubble, rebar, glass). That asset is 50GB. If you try to merge 50GB of binary data in Git, your repo explodes. Studio uses Perforce because we need to lock that file so two artists don't destroy the same building at the same time.</p>
+      <div class="callout-title">🎬 Production Relevance: Large-Scale Destruction</div>
+      <p>Imagine the destruction workload for a large-scale action game. A single building can produce hundreds of binary fragments for rubble, rebar, and glass. Perforce-style locking prevents two artists from changing the same large binary asset at once, while keeping source data out of a merge workflow it cannot support.</p>
     </div>
 
     <h2>5. Technical Drill: Interview Prep</h2>
@@ -154,7 +154,7 @@ sys.exit(0) # ALLOW THE SUBMIT</code></pre>
     write   group   Artists     //...
     read    group   Artists     //depot/Pipeline/...  (Code is Read-Only)
     super   user    admin       //...
-    
+
     # The Magic Line:
     list    group   Artists     -//...  (Cannot Delete/Obliterate)</code></pre>
 

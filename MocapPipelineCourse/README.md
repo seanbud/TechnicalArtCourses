@@ -1,6 +1,6 @@
 # Mocap Pipeline Engineering - Technical Artist Prep
 
-This course is designed to prepare you for the **Senior Technical Artist (Capture)** interview at Studio.
+This course is designed to prepare you for **Senior Technical Artist (Capture)** and mocap pipeline interviews.
 It balances **Conceptual Depth** (System Design) with **Technical Implementation** (Python/C++ APIs).
 
 ## The Philosophy

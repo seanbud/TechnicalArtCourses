@@ -26,7 +26,7 @@
 
     <div class="callout callout-warning">
       <div class="callout-title">⚠️ The 10-Minute Rule</div>
-      <p>Stage time is the most expensive resource in the capture studio. Actors, directors, cameramen, lighting, costumes — all burning money while the stage is live. If the pipeline breaks and the stage can't record, every minute of downtime costs thousands. The mandate from Studio leadership: <strong>build defensive resilience so no pipeline failure ever lasts more than 10 minutes of stage time.</strong></p>
+      <p>Stage time is expensive: performers, directors, camera crew, lighting, and costumes are all scheduled together. A resilient design should keep recording available during downstream failures and define a measurable recovery objective, such as restoring a degraded service within ten minutes.</p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -152,7 +152,7 @@ log = logging.getLogger("retry")
 def retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,)):
     """
     Retry a function on failure with exponential backoff.
-    
+
     Args:
         max_attempts: Total number of attempts (including the first).
         delay:        Initial delay in seconds between retries.
@@ -164,7 +164,7 @@ def retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,)):
         def wrapper(*args, **kwargs):
             current_delay = delay
             last_exception = None
-            
+
             for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
@@ -175,14 +175,14 @@ def retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,)):
                             f"{func.__name__} FAILED after {max_attempts} attempts: {e}"
                         )
                         raise
-                    
+
                     log.warning(
                         f"{func.__name__} attempt {attempt}/{max_attempts} "
                         f"failed: {e}. Retrying in {current_delay:.1f}s..."
                     )
                     time.sleep(current_delay)
                     current_delay *= backoff
-        
+
         return wrapper
     return decorator
 
@@ -224,11 +224,11 @@ class CircuitBreaker:
         self.name = name
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout  # seconds
-        
+
         self._failure_count = 0
         self._last_failure_time = 0
         self._state = "CLOSED"
-    
+
     @property
     def state(self):
         if self._state == "OPEN":
@@ -237,16 +237,16 @@ class CircuitBreaker:
                 self._state = "HALF_OPEN"
                 log.info(f"[{self.name}] Circuit HALF_OPEN — testing recovery")
         return self._state
-    
+
     def call(self, func, *args, **kwargs):
         """Execute a function through the circuit breaker."""
-        
+
         if self.state == "OPEN":
             raise CircuitOpenError(
                 f"[{self.name}] Circuit is OPEN. Service is down. "
                 f"Will retry in {self._time_until_retry():.0f}s."
             )
-        
+
         try:
             result = func(*args, **kwargs)
             self._on_success()
@@ -254,24 +254,24 @@ class CircuitBreaker:
         except Exception as e:
             self._on_failure()
             raise
-    
+
     def _on_success(self):
         if self._state == "HALF_OPEN":
             log.info(f"[{self.name}] Service recovered! Circuit CLOSED.")
         self._failure_count = 0
         self._state = "CLOSED"
-    
+
     def _on_failure(self):
         self._failure_count += 1
         self._last_failure_time = time.time()
-        
+
         if self._failure_count >= self.failure_threshold:
             self._state = "OPEN"
             log.error(
                 f"[{self.name}] Circuit OPEN after {self._failure_count} failures. "
                 f"Blocking requests for {self.recovery_timeout}s."
             )
-    
+
     def _time_until_retry(self):
         elapsed = time.time() - self._last_failure_time
         return max(0, self.recovery_timeout - elapsed)
@@ -332,14 +332,14 @@ class HealthMonitor:
     def __init__(self, config_path):
         with open(config_path) as f:
             self.config = json.load(f)
-        
+
         self.checks = []
         self.slack_webhook = self.config.get("slack_webhook", "")
         self._setup_checks()
-    
+
     def _setup_checks(self):
         """Register all health checks."""
-        
+
         # NAS accessibility
         for nas in self.config.get("nas_paths", []):
             self.checks.append(HealthCheck(
@@ -347,7 +347,7 @@ class HealthMonitor:
                 lambda p=nas: os.path.isdir(p) and os.access(p, os.W_OK),
                 severity="CRITICAL"
             ))
-        
+
         # Disk space on processing nodes
         for path in self.config.get("disk_paths", []):
             self.checks.append(HealthCheck(
@@ -355,34 +355,34 @@ class HealthMonitor:
                 lambda p=path: self._check_disk_space(p),
                 severity="HIGH"
             ))
-        
+
         # Perforce connectivity
         self.checks.append(HealthCheck(
             "Perforce Server",
             self._check_perforce,
             severity="HIGH"
         ))
-        
+
         # Deadline farm
         self.checks.append(HealthCheck(
             "Deadline Farm",
             self._check_deadline,
             severity="MEDIUM"
         ))
-        
+
         # File watcher process
         self.checks.append(HealthCheck(
             "File Watcher (Sweeper)",
             lambda: self._check_process_alive("sweeper"),
             severity="HIGH"
         ))
-    
+
     def _check_disk_space(self, path, min_free_gb=50):
         """Check that a disk has enough free space."""
         stat = os.statvfs(path)
         free_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
         return free_gb > min_free_gb
-    
+
     def _check_perforce(self):
         """Can we reach the Perforce server?"""
         host, port = self.config["p4_port"].replace("ssl:", "").split(":")
@@ -392,7 +392,7 @@ class HealthMonitor:
             return True
         except (socket.timeout, socket.error):
             return False
-    
+
     def _check_deadline(self):
         """Is the Deadline web service responding?"""
         url = self.config.get("deadline_api", "http://deadline:8081")
@@ -401,7 +401,7 @@ class HealthMonitor:
             return r.status_code == 200
         except:
             return False
-    
+
     def _check_process_alive(self, process_name):
         """Check if a named process is running."""
         import subprocess
@@ -410,7 +410,7 @@ class HealthMonitor:
             capture_output=True, text=True
         )
         return result.returncode == 0
-    
+
     def run_once(self):
         """Run all health checks once. Returns list of failures."""
         failures = []
@@ -420,7 +420,7 @@ class HealthMonitor:
             except Exception as e:
                 healthy = False
                 log.error(f"Health check '{check.name}' threw error: {e}")
-            
+
             if healthy:
                 if not check.last_status:  # Was down, now recovered
                     log.info(f"✅ RECOVERED: {check.name}")
@@ -430,25 +430,25 @@ class HealthMonitor:
             else:
                 check.consecutive_failures += 1
                 check.last_status = False
-                
+
                 if check.consecutive_failures == 1:
                     log.warning(f"⚠️ DEGRADED: {check.name}")
                 elif check.consecutive_failures == 3:
                     log.error(f"❌ DOWN: {check.name} (3 consecutive failures)")
                     self._alert(check.name, check.severity, "firing")
-                
+
                 failures.append(check)
-        
+
         return failures
-    
+
     def _alert(self, check_name, severity, status):
         """Send alert to Slack."""
         if not self.slack_webhook:
             return
-        
+
         emoji = "🔴" if status == "firing" else "🟢"
         color = "#FF0000" if status == "firing" else "#00FF00"
-        
+
         requests.post(self.slack_webhook, json={
             "attachments": [{
                 "color": color,
@@ -457,7 +457,7 @@ class HealthMonitor:
                 "ts": int(time.time())
             }]
         })
-    
+
     def run_forever(self, interval=30):
         """Main daemon loop. Check every `interval` seconds."""
         log.info(f"Health monitor started. Checking every {interval}s.")
@@ -485,36 +485,36 @@ log = logging.getLogger("failover")
 
 class ResilientStorage:
     """Writes to primary NAS. Falls back to local queue if NAS is down."""
-    
+
     def __init__(self, primary_path, fallback_path, circuit_breaker):
         self.primary = Path(primary_path)
         self.fallback = Path(fallback_path)
         self.circuit = circuit_breaker
-        
+
         self.fallback.mkdir(parents=True, exist_ok=True)
-    
+
     def write(self, src_path, dest_filename):
         """Write a file to storage. Primary NAS if up, local queue if down."""
         try:
             dest = self.primary / dest_filename
             self.circuit.call(shutil.copy2, src_path, dest)
             log.info(f"Written to PRIMARY: {dest}")
-            
+
             # If we just recovered, flush the queue
             self._flush_queue()
-            
+
         except CircuitOpenError:
             # NAS is down — queue locally
             fallback_dest = self.fallback / dest_filename
             shutil.copy2(src_path, fallback_dest)
             log.warning(f"NAS DOWN — queued locally: {fallback_dest}")
-    
+
     def _flush_queue(self):
         """Move queued files from local fallback back to primary NAS."""
         queued = list(self.fallback.iterdir())
         if not queued:
             return
-        
+
         log.info(f"Flushing {len(queued)} queued files to NAS...")
         for f in queued:
             try:
@@ -536,7 +536,7 @@ storage = ResilientStorage(
     </div>
 
     <div class="callout callout-tip">
-      <div class="callout-title">🎬 Studio Studio Relevance</div>
+      <div class="callout-title">🎬 Production Relevance</div>
       <p>This is exactly how you deliver on the "10-minute rule." The stage never stops recording. If the NAS dies, capture data queues to the stage machine's local SSD. When the NAS recovers, the queue flushes automatically. Total stage downtime: <strong>zero.</strong> The issue is invisible to the actors and directors on the stage floor.</p>
     </div>
 

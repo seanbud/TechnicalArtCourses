@@ -34,9 +34,9 @@ We control this robot with a YAML file (`.gitlab-ci.yml`). It defines stages:
 
 If any stage fails, the robot stops and emails the team. This "Fail Fast" philosophy catches bugs minutes after they are written, rather than weeks later during QA.
 
-## Studio Relevance: Live Service & seasonal_live_service_project
+## Production Relevance: Live Service & a seasonal live-service action game
 
-For a live service game like *seasonal_live_service_project*, we update the game constantly—sometimes weekly. We might have thousands of character skins. If we change a bone in the master rig, we risk breaking 500 skins.
+For a live service game like *a seasonal live-service action game*, we update the game constantly—sometimes weekly. We might have thousands of character skins. If we change a bone in the master rig, we risk breaking 500 skins.
 We cannot manually check 500 skins.
 Instead, we rely on CI. We have automated tests that load every single skin, play a test animation, and check for errors. We trust the robot to tell us if we broke the game. Without this automation, maintaining a modern Live Service game would be impossible.
 

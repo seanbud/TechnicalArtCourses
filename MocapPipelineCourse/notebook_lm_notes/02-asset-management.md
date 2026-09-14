@@ -8,7 +8,7 @@ If you're a programmer, you love Git. It's decentralized, flexible, and handles 
 But Art is different. Art is **Binary**.
 A ZBrush sculpt, a Photoshop file, or a Motion Capture take is a blob of binary data. You cannot "merge" pixels. If Artist A changes the left side of a texture, and Artist B changes the right side, you can't combine them. One person's work must be overwritten.
 
-At the scale of Studio—with thousands of artists working on *action_project* or *life_simulation_project*—this is a catastrophe waiting to happen. To solve it, we use **Perforce (Helix Core)**.
+At enterprise scale, large binary assets and many contributors make ordinary merge workflows unreliable. **Perforce (Helix Core)** addresses this with centralized storage and exclusive locking.
 
 ## Pessimistic Locking
 
@@ -50,9 +50,9 @@ For example, we might have a "Naming Convention Trigger." If an artist tries to 
 
 This prevents bad data from ever entering the pipeline in the first place.
 
-## Studio Relevance: Destruction Data
+## Production Relevance: Destruction Data
 
-Why is this so critical at Studio? Consider **action_project**. The destruction system requires massive pre-baked assets—shattered concrete, bent rebar, glass shards. A single building asset might resolve to 50GB of binary data.
+Why is this so critical at a large game studio? Consider **a large-scale action game**. The destruction system requires massive pre-baked assets—shattered concrete, bent rebar, glass shards. A single building asset might resolve to 50GB of binary data.
 Git would choke on a 50GB repo. Perforce handles Terabytes of binary data effortlessly. It is likely the single most important piece of infrastructure in the entire company.
 
 ## Key Takeaways
