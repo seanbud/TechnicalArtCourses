@@ -3,6 +3,8 @@
 This course is designed to prepare you for **Senior Technical Artist (Capture)** and mocap pipeline interviews.
 It balances **Conceptual Depth** (System Design) with **Technical Implementation** (Python/C++ APIs).
 
+All projects, clients, infrastructure, metrics, and interview scenarios are fictional or generalized for education. They are not representations of any employer's internal pipeline.
+
 ## The Philosophy
 
 We follow the "Pilot vs Engineer" model.

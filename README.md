@@ -2,6 +2,8 @@
 
 Welcome to the central repository for Technical Art training materials. This repo contains specialized courses designed for technical artists at different stages of their career.
 
+All project names, team structures, infrastructure addresses, metrics, and production scenarios in this repository are fictional or generalized educational examples. They do not document any employer's confidential systems, tools, or processes.
+
 ## 📚 Available Courses
 
 ### 1. Unity Technical Art Course
